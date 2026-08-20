@@ -1,0 +1,64 @@
+{
+  "contentSchemaVersion": 1,
+  "contentVersion": "0.1.0",
+  "rulesetId": "blood-bound-compatible",
+  "defaultLocale": "en",
+  "supportedLocales": ["en", "zh-Hans"],
+  "factions": [
+    {"id": "rose", "nameKey": "faction.rose", "descriptionKey": "faction.rose.description"},
+    {"id": "beast", "nameKey": "faction.beast", "descriptionKey": "faction.beast.description"},
+    {"id": "secret-order", "nameKey": "faction.secret-order", "descriptionKey": "faction.secret-order.description"}
+  ],
+  "resources": [
+    {"id": "quill", "nameKey": "resource.quill", "descriptionKey": "resource.quill.description"},
+    {"id": "shield", "nameKey": "resource.shield", "descriptionKey": "resource.shield.description"},
+    {"id": "sword", "nameKey": "resource.sword", "descriptionKey": "resource.sword.description"},
+    {"id": "staff", "nameKey": "resource.staff", "descriptionKey": "resource.staff.description"},
+    {"id": "fan", "nameKey": "resource.fan", "descriptionKey": "resource.fan.description"}
+  ],
+  "abilities": [
+    {"id": "ability.rank.01", "implementation": "grant-quill", "nameKey": "ability.rank.01", "descriptionKey": "ability.rank.01.description"},
+    {"id": "ability.rank.02", "implementation": "damage-two", "nameKey": "ability.rank.02", "descriptionKey": "ability.rank.02.description"},
+    {"id": "ability.rank.03", "implementation": "unimplemented", "nameKey": "ability.rank.03", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.04", "implementation": "unimplemented", "nameKey": "ability.rank.04", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.05", "implementation": "unimplemented", "nameKey": "ability.rank.05", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.06", "implementation": "unimplemented", "nameKey": "ability.rank.06", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.07", "implementation": "unimplemented", "nameKey": "ability.rank.07", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.08", "implementation": "unimplemented", "nameKey": "ability.rank.08", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.09", "implementation": "unimplemented", "nameKey": "ability.rank.09", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.inquisitor", "implementation": "curse-distribution", "nameKey": "ability.inquisitor", "descriptionKey": "ability.inquisitor.description"}
+  ],
+  "assets": [
+    {"id": "asset.token.placeholder", "kind": "css-token", "licenseId": "project-original-placeholder"},
+    {"id": "asset.board.placeholder", "kind": "css-board", "licenseId": "project-original-placeholder"},
+    {"id": "asset.icon.placeholder", "kind": "css-icon", "licenseId": "project-original-placeholder"}
+  ],
+  "units": [
+    {"id": "unit.rose.01", "factionId": "rose", "rank": 1, "abilityId": "ability.rank.01", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.02", "factionId": "rose", "rank": 2, "abilityId": "ability.rank.02", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.03", "factionId": "rose", "rank": 3, "abilityId": "ability.rank.03", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.04", "factionId": "rose", "rank": 4, "abilityId": "ability.rank.04", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.05", "factionId": "rose", "rank": 5, "abilityId": "ability.rank.05", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.06", "factionId": "rose", "rank": 6, "abilityId": "ability.rank.06", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.07", "factionId": "rose", "rank": 7, "abilityId": "ability.rank.07", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.08", "factionId": "rose", "rank": 8, "abilityId": "ability.rank.08", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.rose.09", "factionId": "rose", "rank": 9, "abilityId": "ability.rank.09", "assetId": "asset.token.placeholder", "nameKey": "unit.rose", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.01", "factionId": "beast", "rank": 1, "abilityId": "ability.rank.01", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.02", "factionId": "beast", "rank": 2, "abilityId": "ability.rank.02", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.03", "factionId": "beast", "rank": 3, "abilityId": "ability.rank.03", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.04", "factionId": "beast", "rank": 4, "abilityId": "ability.rank.04", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.05", "factionId": "beast", "rank": 5, "abilityId": "ability.rank.05", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.06", "factionId": "beast", "rank": 6, "abilityId": "ability.rank.06", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.07", "factionId": "beast", "rank": 7, "abilityId": "ability.rank.07", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.08", "factionId": "beast", "rank": 8, "abilityId": "ability.rank.08", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.beast.09", "factionId": "beast", "rank": 9, "abilityId": "ability.rank.09", "assetId": "asset.token.placeholder", "nameKey": "unit.beast", "descriptionKey": "unit.identity.description"},
+    {"id": "unit.secret-order.inquisitor", "factionId": "secret-order", "rank": "fleur-cross", "abilityId": "ability.inquisitor", "assetId": "asset.token.placeholder", "nameKey": "unit.inquisitor", "descriptionKey": "unit.identity.description"}
+  ],
+  "board": {
+    "zones": [
+      {"id": "board.supply", "assetId": "asset.board.placeholder", "nameKey": "board.supply", "descriptionKey": "board.supply.description"},
+      {"id": "board.table", "assetId": "asset.board.placeholder", "nameKey": "board.table", "descriptionKey": "board.table.description"},
+      {"id": "board.player-seat", "assetId": "asset.board.placeholder", "nameKey": "board.player-seat", "descriptionKey": "board.player-seat.description"}
+    ]
+  }
+}

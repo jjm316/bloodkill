@@ -1,0 +1,65 @@
+"""Deterministic, headless game-loop helpers used by fixtures and smoke tests."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .engine import Command, Event, RulesEngine
+
+
+@dataclass(frozen=True)
+class Replay:
+    game_id: str
+    seed: str
+    command_ids: tuple[str, ...]
+    event_types: tuple[str, ...]
+    final_revision: int
+    result: dict
+
+
+def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: str = "golden-seed") -> tuple[RulesEngine, Replay]:
+    """Run a complete no-UI game by repeatedly feeding legal commands.
+
+    The runner uses ordinary public commands only: it passes the dagger back to a
+    fixed attacker, attacks one victim, declines intervention, and declines skills.
+    It exists for golden replay and CI smoke coverage, not as an AI strategy.
+    """
+    engine = RulesEngine.new_game(game_id, seed, clock=lambda: 0.0)
+    commands: list[str] = []
+    events: list[Event] = []
+
+    def send(command_id: str, actor: str | None, command_type: str, **payload) -> None:
+        command = Command(command_id, game_id, actor, engine.state.revision, command_type, payload)
+        commands.append(command_id)
+        events.extend(engine.apply(command))
+
+    for index in range(player_count):
+        send(f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}")
+    send("start", None, "start-game")
+
+    attacker = engine.state.dagger_holder_id
+    assert attacker is not None
+    victim = next(player_id for player_id in engine.state.players if player_id != attacker)
+    turn = 0
+    while engine.state.status != "ended":
+        turn += 1
+        if turn > 100:
+            raise RuntimeError("deterministic runner exceeded turn budget")
+        holder = engine.state.dagger_holder_id
+        if holder != attacker:
+            send(f"pass-{turn}", holder, "pass-dagger", targetPlayerId=attacker)
+        send(f"attack-{turn}", attacker, "attack", targetPlayerId=victim)
+        if engine.state.pending and engine.state.pending.kind == "intervention":
+            send(f"decline-{turn}", victim, "decline-intervention")
+        if engine.state.pending and engine.state.pending.kind == "skill":
+            send(f"skill-decline-{turn}", victim, "choose-skill", use=False)
+
+    replay = Replay(
+        game_id=game_id,
+        seed=seed,
+        command_ids=tuple(commands),
+        event_types=tuple(event.event_type for event in events),
+        final_revision=engine.state.revision,
+        result=engine.state.result or {},
+    )
+    return engine, replay
