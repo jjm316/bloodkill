@@ -1,0 +1,130 @@
+"""Per-player and public projections of the authoritative engine state.
+
+The engine holds every hidden fact (identity, ranks, un-revealed tokens, curse
+assignments). A projection is the derived, visible slice for one viewer. It is
+never persisted as authority and never exposes another player's private data.
+
+Projection rules follow the domain contract (03):
+
+- a player sees every public fact plus only their own hidden identity;
+- a spectator sees only the public facts;
+- the RNG seed is never included (knowing it would let a viewer reproduce the
+  whole identity assignment);
+- the clue icon is only shown at setup to the left-hand neighbour, so it is not
+  part of the projection at all.
+"""
+
+from __future__ import annotations
+
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .engine import EngineState, Pending, Player
+
+
+def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
+    """Return actions derived from authority; a UI affordance, not a bypass of validation."""
+    if state.status == "ended" or player_id not in state.players:
+        return []
+    player = state.players[player_id]
+    pending = state.pending
+    if pending is not None:
+        if pending.actor_player_id != player_id:
+            return []
+        if pending.kind == "intervention":
+            actions: list[dict[str, Any]] = [{"type": "decline-intervention"}]
+            if pending.context.get("requested"):
+                actions.extend(
+                    {"type": "choose-intervention", "responderPlayerId": responder}
+                    for responder in pending.eligible_player_ids
+                )
+            else:
+                actions.insert(0, {"type": "request-intervention"})
+            return actions
+        if pending.kind == "skill":
+            actions = [{"type": "choose-skill", "use": False}]
+            if pending.rank == 2:
+                actions.extend(
+                    {"type": "choose-skill", "use": True, "targetPlayerId": target.player_id}
+                    for target in state.players.values()
+                    if target.player_id != player_id and not target.captured
+                )
+            else:
+                actions.append({"type": "choose-skill", "use": True})
+            return actions
+        return []
+    if state.status != "active":
+        return []
+    actions = []
+    if state.phase.get("kind") == "action" and state.dagger_holder_id == player_id:
+        actions.extend(
+            {"type": "pass-dagger", "targetPlayerId": target.player_id}
+            for target in state.players.values()
+            if target.player_id != player_id and not target.captured
+        )
+        actions.extend(
+            {"type": "attack", "targetPlayerId": target.player_id}
+            for target in state.players.values()
+            if target.player_id != player_id and not target.captured and not target.resources.get("shield", 0)
+        )
+    if state.curses and player.faction == "secret-order":
+        actions.append({"type": "distribute-curse"})
+    return actions
+
+
+def project_state(state: "EngineState", viewer_player_id: str | None = None) -> dict[str, Any]:
+    """Derive the visible projection for a player, or the public view for a spectator."""
+    viewer = state.players.get(viewer_player_id) if viewer_player_id else None
+    projection: dict[str, Any] = {
+        "gameId": state.game_id,
+        "revision": state.revision,
+        "status": state.status,
+        "players": [_public_player(player) for player in sorted(state.players.values(), key=lambda p: p.seat)],
+        "daggerHolderId": state.dagger_holder_id,
+        "phase": dict(state.phase),
+        "pending": _pending_view(state.pending),
+        "result": dict(state.result) if state.result else None,
+    }
+    if viewer is None:
+        projection["viewer"] = None
+        projection["legalActions"] = []
+    else:
+        projection["viewer"] = {
+            "playerId": viewer.player_id,
+            "identity": {"faction": viewer.faction, "rank": viewer.rank},
+            "resources": dict(viewer.resources),
+            "skillsUsed": sorted(viewer.skills_used),
+            "cursesToDistribute": list(state.curses) if viewer.faction == "secret-order" else [],
+        }
+        projection["legalActions"] = legal_actions(state, viewer_player_id)
+    return projection
+
+
+def _public_player(player: "Player") -> dict[str, Any]:
+    revealed: dict[str, Any] = {}
+    if "rank" in player.revealed:
+        revealed["rank"] = player.rank
+    if "affiliation" in player.revealed:
+        revealed["affiliation"] = player.faction
+    return {
+        "playerId": player.player_id,
+        "seat": player.seat,
+        "displayName": player.display_name,
+        "damage": player.damage,
+        "captured": player.captured,
+        "revealed": revealed,
+        "resources": dict(player.resources),
+    }
+
+
+def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:
+    if pending is None:
+        return None
+    return {
+        "kind": pending.kind,
+        "actorPlayerId": pending.actor_player_id,
+        "targetPlayerId": pending.target_player_id,
+        "eligiblePlayerIds": list(pending.eligible_player_ids),
+        "rank": pending.rank,
+        "trigger": pending.trigger,
+    }

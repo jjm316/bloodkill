@@ -1,0 +1,101 @@
+import unittest
+
+from blood_bound import Command, RulesEngine, project_state
+
+
+def command(engine, command_id, actor, kind, **payload):
+    return Command(command_id, engine.state.game_id, actor, engine.state.revision, kind, payload)
+
+
+class FixedClock:
+    def __call__(self):
+        return 1000.0
+
+
+class ProjectionTests(unittest.TestCase):
+    def started(self, count=6, game_id="g1", seed="fixed-seed"):
+        engine = RulesEngine.new_game(game_id, seed, clock=FixedClock())
+        for index in range(count):
+            engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}"))
+        engine.apply(command(engine, "start", None, "start-game"))
+        return engine
+
+    def test_spectator_sees_no_identity_or_seed(self):
+        engine = self.started()
+        view = project_state(engine.state)
+        self.assertIsNone(view["viewer"])
+        self.assertEqual(view["legalActions"], [])
+        self.assertNotIn("seed", view)
+        for player in view["players"]:
+            self.assertNotIn("faction", player)
+            self.assertNotIn("rank", player)
+            self.assertNotIn("clueIcon", player)
+
+    def test_player_sees_only_their_own_identity(self):
+        engine = self.started()
+        viewer = next(iter(engine.state.players))
+        view = project_state(engine.state, viewer)
+        self.assertEqual(view["viewer"]["playerId"], viewer)
+        self.assertIn("faction", view["viewer"]["identity"])
+        self.assertIn("rank", view["viewer"]["identity"])
+        # no other player's identity leaks through the public player list
+        for player in view["players"]:
+            self.assertNotIn("faction", player)
+            self.assertNotIn("rank", player)
+
+    def test_revealed_clues_appear_only_after_damage(self):
+        engine = self.started()
+        holder = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid != holder)
+        before = project_state(engine.state, holder)
+        self.assertEqual(before["players"][0]["revealed"], {})
+        engine.apply(command(engine, "attack", holder, "attack", targetPlayerId=target))
+        engine.apply(command(engine, "decline", target, "decline-intervention"))
+        after = project_state(engine.state, holder)
+        target_view = next(p for p in after["players"] if p["playerId"] == target)
+        self.assertIn("rank", target_view["revealed"])
+
+    def test_inquisitor_gets_private_curse_assignment_view(self):
+        engine = self.started(7)
+        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        other = next(pid for pid in engine.state.players if pid != inquisitor)
+        inquisitor_view = project_state(engine.state, inquisitor)
+        other_view = project_state(engine.state, other)
+        self.assertEqual(inquisitor_view["viewer"]["cursesToDistribute"], ["curse-1"])
+        self.assertEqual(other_view["viewer"]["cursesToDistribute"], [])
+        self.assertIn({"type": "distribute-curse"}, inquisitor_view["legalActions"])
+        self.assertNotIn({"type": "distribute-curse"}, other_view["legalActions"])
+
+    def test_dagger_holder_actions_are_derived_from_authority(self):
+        engine = self.started()
+        holder = engine.state.dagger_holder_id
+        actions = project_state(engine.state, holder)["legalActions"]
+        types = {action["type"] for action in actions}
+        self.assertIn("pass-dagger", types)
+        self.assertIn("attack", types)
+        # a non-holder has no actions in the action phase
+        other = next(pid for pid in engine.state.players if pid != holder)
+        self.assertEqual(project_state(engine.state, other)["legalActions"], [])
+
+    def test_rank_two_skill_window_offers_valid_targets(self):
+        engine = self.started(6)
+        rank_two = next(pid for pid, player in engine.state.players.items() if player.rank == 2)
+        attacker = next(pid for pid in engine.state.players if pid != rank_two)
+        holder = engine.state.dagger_holder_id
+        if holder != attacker:
+            engine.apply(command(engine, "pass", holder, "pass-dagger", targetPlayerId=attacker))
+        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=rank_two))
+        engine.apply(command(engine, "decline", rank_two, "decline-intervention"))
+        self.assertEqual(engine.state.pending.kind, "skill")
+        self.assertEqual(engine.state.pending.rank, 2)
+        actions = project_state(engine.state, rank_two)["legalActions"]
+        use_actions = [action for action in actions if action.get("use")]
+        self.assertTrue(use_actions)
+        for action in use_actions:
+            target = action["targetPlayerId"]
+            self.assertNotEqual(target, rank_two)
+            self.assertFalse(engine.state.players[target].captured)
+
+
+if __name__ == "__main__":
+    unittest.main()

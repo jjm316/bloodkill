@@ -1,2 +1,13 @@
 __pycache__/
 *.py[cod]
+
+# runtime data and build output
+saves/
+client/node_modules/
+client/dist/
+
+# local python venv
+.venv/
+
+# property-test failure artifacts (see tests/test_properties.py)
+.scratch/blood-oath-replica/test-failures/

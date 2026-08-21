@@ -1,0 +1,308 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #12141a;
+  color: #e8eaf0;
+}
+
+#root {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 12px;
+}
+
+button {
+  min-height: 40px;
+  padding: 6px 14px;
+  font-size: 15px;
+  border: 1px solid #4a4f5e;
+  border-radius: 8px;
+  background: #232837;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #2f3547;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+input,
+select {
+  min-height: 40px;
+  padding: 6px 10px;
+  font-size: 15px;
+  border: 1px solid #4a4f5e;
+  border-radius: 8px;
+  background: #1a1e29;
+  color: inherit;
+}
+
+h1,
+h2 {
+  margin: 8px 0;
+}
+
+.error,
+.action-error {
+  color: #ff8a80;
+  margin: 8px 0;
+}
+
+.hint {
+  color: #9aa0b4;
+  font-size: 14px;
+}
+
+.loading {
+  padding: 40px 0;
+  text-align: center;
+  color: #9aa0b4;
+}
+
+/* lobby */
+
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 380px;
+  margin: 40px auto;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* room */
+
+.room {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  color: #9aa0b4;
+}
+
+.roster {
+  padding-left: 20px;
+}
+
+/* board */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.seat {
+  flex: 1 1 150px;
+  border: 1px solid #4a4f5e;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #1a1e29;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.seat.dagger {
+  border-color: #f5c518;
+  box-shadow: 0 0 0 1px #f5c518 inset;
+}
+
+.seat.captured {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.seat-name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.dagger-icon {
+  margin-right: 4px;
+}
+
+.own-identity {
+  font-weight: 400;
+  color: #9aa0b4;
+}
+
+.damage {
+  display: flex;
+  gap: 4px;
+}
+
+.pip {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid #9aa0b4;
+  display: inline-block;
+}
+
+.pip.filled {
+  background: #e2574c;
+  border-color: #e2574c;
+}
+
+.revealed {
+  font-size: 13px;
+  color: #f0c060;
+}
+
+.resources {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  color: #9aa0b4;
+  flex-wrap: wrap;
+}
+
+.pending {
+  border: 1px solid #f5c518;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #2a2410;
+}
+
+.result {
+  border: 1px solid #4a4f5e;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #1a1e29;
+}
+
+.ranking {
+  margin: 6px 0 0;
+  padding-left: 22px;
+}
+
+/* actions */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-label {
+  font-size: 14px;
+  color: #9aa0b4;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.curse-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed #4a4f5e;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.curse-picker p {
+  margin: 0;
+  width: 100%;
+}
+
+/* log */
+
+.log {
+  font-size: 13px;
+  color: #9aa0b4;
+}
+
+.log ol {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-left: 20px;
+}
+
+/* replay */
+
+.replay-load {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+  margin: 40px auto;
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* banner */
+
+.banner {
+  max-width: 420px;
+  margin: 40px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 720px) {
+  .seat {
+    flex: 1 1 180px;
+  }
+}

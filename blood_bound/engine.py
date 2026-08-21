@@ -7,6 +7,8 @@ import random
 import time
 from typing import Any, Callable, Mapping
 
+from .projection import legal_actions as _legal_actions, project_state as _project_state
+
 
 Clock = Callable[[], float]
 
@@ -87,6 +89,12 @@ class EngineState:
     events: list[Event] = field(default_factory=list)
     commands: list[Command] = field(default_factory=list)
     command_results: dict[str, tuple[tuple[Event, ...], str]] = field(default_factory=dict)
+
+
+# Ranks whose reveal-triggered skill is implemented in this ruleset version.
+# Issue 14 expands this to ranks 1--9 as abilities land; the Inquisitor's
+# fleur-cross rank is a setup-phase curse ability, never a reveal-triggered skill.
+_IMPLEMENTED_SKILL_RANKS = frozenset({1, 2})
 
 
 class RulesEngine:
@@ -436,7 +444,13 @@ class RulesEngine:
                 events.append(self._event(state, command, "PlayerCaptured", {"playerId": target_id}))
                 events.append(self._end_game(state, command, target_id, active_player_id=active_player_id))
                 break
-        if target.damage < 4 and source == "attack" and trigger == "attack" and rank_revealed_by_this_damage:
+        if (
+            target.damage < 4
+            and source == "attack"
+            and trigger == "attack"
+            and rank_revealed_by_this_damage
+            and target.rank in _IMPLEMENTED_SKILL_RANKS
+        ):
             target_rank = target.rank
             state.pending = Pending("skill", target_id, target_id, rank=target_rank, trigger="attack")
             state.phase = {"kind": "skill", "activePlayerId": target_id}
@@ -521,36 +535,11 @@ class RulesEngine:
 
     def legal_actions(self, player_id: str) -> list[dict[str, Any]]:
         """Return actions derived from authority; this is safe to use for UI affordances."""
-        if self.state.status == "ended" or player_id not in self.state.players:
-            return []
-        if self.state.pending:
-            pending = self.state.pending
-            if pending.actor_player_id != player_id:
-                return []
-            if pending.kind == "intervention":
-                actions = [{"type": "decline-intervention"}]
-                if pending.context.get("requested"):
-                    actions.extend(
-                        {"type": "choose-intervention", "responderPlayerId": responder}
-                        for responder in pending.eligible_player_ids
-                    )
-                else:
-                    actions.insert(0, {"type": "request-intervention"})
-                return actions
-            if pending.kind == "skill":
-                return [{"type": "choose-skill", "use": False}, {"type": "choose-skill", "use": True}]
-            return []
-        if self.state.phase.get("kind") != "action" or self.state.dagger_holder_id != player_id:
-            return []
-        return [
-            {"type": "pass-dagger", "targetPlayerId": target.player_id}
-            for target in self.state.players.values()
-            if target.player_id != player_id and not target.captured
-        ] + [
-            {"type": "attack", "targetPlayerId": target.player_id}
-            for target in self.state.players.values()
-            if target.player_id != player_id and not target.captured and not target.resources.get("shield", 0)
-        ]
+        return _legal_actions(self.state, player_id)
+
+    def project_state(self, viewer_player_id: str | None = None) -> dict[str, Any]:
+        """Derive the visible projection for a player, or the public view for a spectator."""
+        return _project_state(self.state, viewer_player_id)
 
     @staticmethod
     def _command_hash(command: Command) -> str:

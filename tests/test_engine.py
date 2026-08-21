@@ -69,13 +69,33 @@ class RulesEngineTests(unittest.TestCase):
     def test_attack_decline_reveals_and_opens_skill_window(self):
         engine = self.started()
         attacker = engine.state.dagger_holder_id
-        target = next(pid for pid in engine.state.players if pid != attacker)
+        target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank in (1, 2))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         events = engine.apply(command(engine, "decline", target, "decline-intervention"))
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
         self.assertEqual(engine.state.pending.kind, "skill")
         engine.apply(command(engine, "skill-no", target, "choose-skill", use=False))
+        self.assertIsNone(engine.state.pending)
+
+    def test_unimplemented_rank_does_not_open_skill_window(self):
+        engine = self.started()
+        attacker = engine.state.dagger_holder_id
+        target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank not in (1, 2))
+        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        events = engine.apply(command(engine, "decline", target, "decline-intervention"))
+        self.assertIn("DamageApplied", [event.event_type for event in events])
+        self.assertEqual(engine.state.players[target].damage, 1)
+        self.assertIsNone(engine.state.pending)
+
+    def test_inquisitor_rank_reveal_does_not_open_skill_window(self):
+        engine = self.started(7)
+        attacker = engine.state.dagger_holder_id
+        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        self.assertNotEqual(attacker, inquisitor)
+        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=inquisitor))
+        engine.apply(command(engine, "decline", inquisitor, "decline-intervention"))
+        self.assertEqual(engine.state.players[inquisitor].damage, 1)
         self.assertIsNone(engine.state.pending)
 
     def test_intervention_requires_rank_in_supply(self):

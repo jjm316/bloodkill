@@ -22,9 +22,9 @@ Effort: `blood-oath-replica`
  │              ├─> 05 建局/回合/计分闭环
  │              ├─> 06 内容数据与占位素材
  │              └─> 07 回放/存档/迁移
- │                   └─> 08 本地热座 UI
- │                        └─> 09 联机同步与恢复
- └───────────────────────────────> 10 规则测试/平衡工具
+ │                   └─> 08 多客户端 UI 与最小权威服务
+ │                        └─> 09 联机同步与恢复硬化
+ └───────────────────────────────> 10 规则测试与性质测试
  08 + 09 + 10 ─> 11 可访问性、性能与发布
 ```
 
@@ -58,14 +58,21 @@ Effort: `blood-oath-replica`
 - 2026-08-20：05 已解决；新增无 UI 的 `run_deterministic_game()` smoke/golden replay runner，6--12 人均可从加入、行动、响应跑到捕获终局；结果含稳定排名和解释键，详见 [05 票据](issues/05-game-loop-scoring.md)。
 - 2026-08-20：06 已解决；新增版本化 `blood_bound/content/` 数据目录和构建期校验器，用稳定规则 ID、显示键、原创占位素材 ID 与许可证记录分离内容；中英文本齐备，未证实的能力明确保留为 `unimplemented`，详见 [06 票据](issues/06-content-data-pipeline.md) 与 [内容说明](../../blood_bound/content/README.md)。
 - 2026-08-20：07 已解决；摘要：v2 JSON/gzip 存档以事件哈希链、快照校验和和确定性命令回放交叉验证，支持暂停恢复、逐步回放、URL fragment 调试分享及 v1 fixture 迁移，详见 [07 票据](issues/07-save-replay-migration.md) 与 [持久化实现](../../blood_bound/persistence.py)。
+- 2026-08-21：用户确认直接实现本地主机、多浏览器客户端的正式版本，不再以单设备热座为 08 的交付边界。08 已认领：采用 Python FastAPI/uvicorn、React/TypeScript/Vite 与 WebSocket；同名新连接接管旧座位，房主本地凭据管理大厅，6 位房间码、多个房间、公共观战、自动存档和最近 20 局保留。LAN 使用 HTTP/WS，内网穿透要求 HTTPS/WSS。视觉设计后置，但手机竖屏必须完整可玩。
+- 2026-08-21：08 已解决；交付按玩家投影（`project_state`/`legal_actions`，不含 seed/clueIcon/他人身份/诅咒）、纯 stdlib 房间管理器 + FastAPI/uvicorn WebSocket 权威服务（同名接管、锁定、6–12 人开局、逐命令自动存档、终局保留 20 局、重启恢复）与 React/TS/Vite 客户端（大厅/等待室/对局/旁观/回放，行动按钮全部来自服务端合法行动投影，回放与对局共用 Board 组件），附协议与 LAN/HTTPS-WSS 启动说明，详见 [08 票据](issues/08-hotseat-ui.md)、[协议](../../server/PROTOCOL.md) 与 [服务端说明](../../server/README.md)。断线恢复硬化、浏览器集成测试与部署自动化后置 09。
+- 2026-08-21：12 已解决；本机 Python 3.11.4 venv 建成（`.venv`），全量 31 项测试在 3.11 下通过，此前 3.8 失败的 `test_paused_game_and_debug_link_round_trip` 复绿。
+- 2026-08-21：查语料确认 rank 3–9 能力语义齐全（来源 C），此前标 `unimplemented` 系实现延期而非规则缺失。拆分为两张票：13 抑制未实现位阶技能窗（10 之前做），14 实现全部能力与资源经济（10 之后做，借 10 测试网兜底）。
+- 2026-08-21：10 收缩为纯测试票——规则分支补全 + 手写 stdlib 性质测试 + 整局 replay；砍掉平衡模拟 CLI、性能基线/帧率预算、CI 与覆盖率；网络模拟与浏览器多窗口 E2E 后置 09。性质测试用纯 stdlib 随机 sweep，不引入 Hypothesis。
+- 2026-08-21：10 已解决；新增 49 项分支测试（[覆盖清单](../../docs/rule-branch-coverage.md)）、14 组 seed 的 stdlib 性质 sweep（确定性/恢复等价/幂等/投影保密/状态不变量，失败落盘 seed+命令序列）、6–12 人 golden replay fixtures（`tests/fixtures/`，规则变更导致漂移即失败），全量 91 项通过。测试网发现两个已实现规则缺陷并立案 15/16，详见 [10 票据](issues/10-testing-balance.md)。
 
 ## Fog
 
 - 目标已识别为 `Blood Bound` 基础 1–9 身份集合；出版方、印次、扩展和授权尚未确认。
 - 规则书正文确定首版实现 6–12 人；桌面优先 UI 必须支持 12 人房间的响应窗口与信息布局。
-- 02、03、04、05、06、07 已解决；下一 frontier 为 08 本地热座 UI。
+- 02、03、04、05、06、07、08、10、12、13 已解决；frontier 推进到 14「实现全部能力与资源经济」，之后回到 09「联机同步与恢复硬化」。15（rank 2 技能捕获后相位/匕首残留）与 16（干涉响应者未接过匕首）为 10 测试网发现的已实现规则缺陷，待修。
+- rank 3–9 能力语义已由来源 C 提供但引擎未实现；shield/sword/staff/fan 资源经济同样未实现，二者由 14 统一补齐。
 - 是否有权使用官方卡牌/插画/文字未知。
-- 尚无现成技术栈、构建脚本或测试基线；部署目标已确定为本地服务端 + 内网穿透，首轮以桌面浏览器为主。
+- 已引入 FastAPI/uvicorn + React/TypeScript/Vite 与单服务器构建模式；尚无浏览器端多窗口自动化测试基线（后置 09）。服务端运行需 Python 3.11+，已用本机 3.11.4 venv（`.venv`）解决。
 
 ## Tickets
 
@@ -76,7 +83,12 @@ Effort: `blood-oath-replica`
 - [05 建局、回合与终局计分闭环](issues/05-game-loop-scoring.md)
 - [06 内容数据与原创占位素材管线](issues/06-content-data-pipeline.md)
 - [07 存档、回放与版本迁移](issues/07-save-replay-migration.md)
-- [08 本地热座 UI](issues/08-hotseat-ui.md)
+- [08 多客户端 UI 与最小权威服务](issues/08-hotseat-ui.md)
 - [09 联机同步与断线恢复](issues/09-online-sync-recovery.md)
-- [10 规则测试、性质测试与平衡工具](issues/10-testing-balance.md)
+- [10 规则测试与性质测试](issues/10-testing-balance.md)
 - [11 可访问性、性能与发布](issues/11-accessibility-performance-release.md)
+- [12 venv 环境](issues/12-venv-environment.md)
+- [13 抑制未实现位阶技能窗](issues/13-unimplemented-skill-window.md)
+- [14 实现全部能力与资源经济](issues/14-abilities-resource-economy.md)
+- [15 rank 2 刺客技能捕获后的相位/匕首残留](issues/15-assassin-capture-phase.md)
+- [16 干涉响应者未接过匕首](issues/16-intervention-dagger-handoff.md)
