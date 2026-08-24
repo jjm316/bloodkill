@@ -64,13 +64,15 @@ Effort: `blood-oath-replica`
 - 2026-08-21：查语料确认 rank 3–9 能力语义齐全（来源 C），此前标 `unimplemented` 系实现延期而非规则缺失。拆分为两张票：13 抑制未实现位阶技能窗（10 之前做），14 实现全部能力与资源经济（10 之后做，借 10 测试网兜底）。
 - 2026-08-21：10 收缩为纯测试票——规则分支补全 + 手写 stdlib 性质测试 + 整局 replay；砍掉平衡模拟 CLI、性能基线/帧率预算、CI 与覆盖率；网络模拟与浏览器多窗口 E2E 后置 09。性质测试用纯 stdlib 随机 sweep，不引入 Hypothesis。
 - 2026-08-21：10 已解决；新增 49 项分支测试（[覆盖清单](../../docs/rule-branch-coverage.md)）、14 组 seed 的 stdlib 性质 sweep（确定性/恢复等价/幂等/投影保密/状态不变量，失败落盘 seed+命令序列）、6–12 人 golden replay fixtures（`tests/fixtures/`，规则变更导致漂移即失败），全量 91 项通过。测试网发现两个已实现规则缺陷并立案 15/16，详见 [10 票据](issues/10-testing-balance.md)。
+- 2026-08-22：14 已锁定产品方裁决（见票面「已裁决」）——身份标记模型 = 每玩家 1 等级 + 2 身份标记（1/5/6 红红·蓝蓝、2/3/4 ？？·？？、7/8/9 红？·蓝？；受伤自选揭示、第 3 点被迫亮 rank、挡刀被迫亮 rank 并开技能窗）；Elder 领袖 = 数字最大（覆盖来源 C「最小」）；Guardian 盾保留「可干涉」（覆盖来源 C「不能响应干涉」）；Mage 法杖 = 单效果「给一人 Staff、其身份标记全变问号」；Courtesan 扇 = 「他人不能干涉」。实现延后。
+- 2026-08-24：14 转为伞票并拆为顺序子票 [17](issues/17-identity-markers-reveal-flow.md)（标记模型与自选展示流程，地基，顺带修复 15/16）→ [18](issues/18-resource-economy-elder-leader.md)（资源经济骨架 + elder 领袖规则）→ [19](issues/19-targeted-abilities.md)（目标选择型能力 3/5/6/8/9）→ [20](issues/20-intervention-coupled-abilities.md)（干涉耦合型能力 4/7）。quill 按「消耗于改写继承顺序」建模（待产品方确认口径，见 18 票面）。
 
 ## Fog
 
 - 目标已识别为 `Blood Bound` 基础 1–9 身份集合；出版方、印次、扩展和授权尚未确认。
 - 规则书正文确定首版实现 6–12 人；桌面优先 UI 必须支持 12 人房间的响应窗口与信息布局。
-- 02、03、04、05、06、07、08、10、12、13 已解决；frontier 推进到 14「实现全部能力与资源经济」，之后回到 09「联机同步与恢复硬化」。15（rank 2 技能捕获后相位/匕首残留）与 16（干涉响应者未接过匕首）为 10 测试网发现的已实现规则缺陷，待修。
-- rank 3–9 能力语义已由来源 C 提供但引擎未实现；shield/sword/staff/fan 资源经济同样未实现，二者由 14 统一补齐。
+- 02、03、04、05、06、07、08、10、12、13 已解决；14 已拆分为 17 → 18 → 19 → 20 四张子票（见 14 票面「拆分」），frontier 推进到 17；14 全部子票关闭后回到 09「联机同步与恢复硬化」。15（rank 2 技能捕获后相位/匕首残留）与 16（干涉响应者未接过匕首）将由 17 的地基重构顺带修复并摘除 expectedFailure 标记。
+- rank 3–9 能力语义已由来源 C 提供但引擎未实现；shield/sword/staff/fan 资源经济同样未实现，二者由 14 统一补齐。14 已锁定能力语义与身份标记模型（见票面「已裁决」），实现延后；15/16 缺陷仍待修。
 - 是否有权使用官方卡牌/插画/文字未知。
 - 已引入 FastAPI/uvicorn + React/TypeScript/Vite 与单服务器构建模式；尚无浏览器端多窗口自动化测试基线（后置 09）。服务端运行需 Python 3.11+，已用本机 3.11.4 venv（`.venv`）解决。
 
@@ -92,3 +94,7 @@ Effort: `blood-oath-replica`
 - [14 实现全部能力与资源经济](issues/14-abilities-resource-economy.md)
 - [15 rank 2 刺客技能捕获后的相位/匕首残留](issues/15-assassin-capture-phase.md)
 - [16 干涉响应者未接过匕首](issues/16-intervention-dagger-handoff.md)
+- [17 身份标记模型与自选展示流程（14 子票：地基）](issues/17-identity-markers-reveal-flow.md)
+- [18 资源经济骨架与 elder 领袖规则（14 子票）](issues/18-resource-economy-elder-leader.md)
+- [19 目标选择型能力：rank 3/5/6/8/9（14 子票）](issues/19-targeted-abilities.md)
+- [20 干涉耦合型能力：rank 4 alchemist / rank 7 berserker（14 子票）](issues/20-intervention-coupled-abilities.md)
