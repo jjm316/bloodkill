@@ -25,7 +25,10 @@
       "captured": false,
       "clues": {
         "rank": {"state": "supply", "revealed": false},
-        "affiliation": {"state": "supply", "revealed": false}
+        "identityMarkers": [
+          {"color": "rose", "state": "supply", "revealed": false},
+          {"color": "unknown", "state": "supply", "revealed": false}
+        ]
       },
       "resources": {"quill": 0, "shield": 0, "sword": 0, "staff": 0, "fan": 0},
       "skills": {"elder": "available"}
@@ -38,7 +41,10 @@
   },
   "supply": {
     "rankTokens": [{"playerId": "p1", "rank": 1}],
-    "affiliationTokens": [{"playerId": "p1", "affiliation": "rose"}],
+    "identityMarkers": [
+      {"playerId": "p1", "color": "rose"},
+      {"playerId": "p1", "color": "unknown"}
+    ],
     "curses": [{"curseId": "curse-1", "state": "undistributed"}]
   },
   "daggerHolderId": "p1",
@@ -50,12 +56,14 @@
 
 The example is abbreviated to one player; a valid snapshot always has a complete player map and token inventory. `identity` and undisplayed token values are never included in a player projection.
 
+> 2026-08-22：线索模型由「1 rank + 1 affiliation」更正为「1 rank + 2 身份标记（红/蓝/？）」，随 [14](issues/14-abilities-resource-economy.md) 落地（含 schemaVersion 递增）。当前引擎代码仍是旧的单一 `affiliation` 形状，实现前不视为一致。
+
 ### Stable entity rules
 
 - `playerId`, `gameId`, `curseId` and token IDs are opaque stable strings. Seat numbers are unique integers from `0` through `playerCount - 1`.
 - `playerCount` is 6--12. Even games have `n/2` Rose and `n/2` Beast players. Odd games have `floor(n/2)` Rose, `floor(n/2)` Beast and exactly one Inquisitor.
 - Each family has unique ranks 1--9. An odd game has exactly one `inquisitor` identity and one `fleur-cross` rank token; the two possible Inquisitor clue icons are presentation data.
-- Every player has exactly one rank token and one affiliation token. A token is in exactly one of `supply`, `revealed`, or `returned`; `revealed` is terminal for that token except an explicit `alchemist` return event.
+- Every player has exactly one rank token and two identity markers (each `rose`, `beast`, or `unknown`; the composition is fixed by rank — 1/5/6 two faction colors, 2/3/4 two unknowns, 7/8/9 one faction + one unknown). A token is in exactly one of `supply`, `revealed`, or `returned`; `revealed` is terminal for that token except an explicit `alchemist` return event.
 - `damage` is an integer 0--4. `captured` is true iff damage is 4. A captured player cannot receive commands or be selected as a live target.
 - Exactly one live player holds the dagger while `status = active`; no dagger exists after `status = ended`.
 - `pending` is non-null only for an open response/choice window and includes the originating command event ID. At most one window is open.
@@ -68,7 +76,7 @@ The example is abbreviated to one player; a valid snapshot always has a complete
 `PlayerView` is derived per request from `EngineState` and `viewerPlayerId`. It may contain public player IDs, seats, display names, clue icons, damage, captured state, revealed token kinds/values, resources visible to that viewer, phase, pending window eligible actions, and result. It must omit:
 
 - every other player's hidden `identity`;
-- values of rank/affiliation tokens whose state is `supply` or `returned`;
+- values of rank/identity-marker tokens whose state is `supply` or `returned`;
 - the Inquisitor's private curse assignments and any private Harlequin inspection;
 - commands or choices for which the viewer is not eligible.
 
