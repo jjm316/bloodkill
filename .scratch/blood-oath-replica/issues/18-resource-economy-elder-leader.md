@@ -2,7 +2,7 @@
 
 Type: task
 Blocked by: 17
-Status: open
+Status: resolved
 
 问题：资源经济只有 rank 1 发放 quill 的雏形，`ResourceSpent`/`ResourceReturned` 两条事件路径不存在；elder 的「本家族领袖改为数字最大者」规则未实现，`_is_leader` 始终按最小 rank 判定。本票落地资源事件词汇与 elder 完整行为，为 19（guardian/mage/courtesan 的发放与归还）提供公共路径。
 
@@ -20,6 +20,15 @@ Status: open
 - `ResourceGranted`/`ResourceSpent` 在 elder 路径上成对出现，事件 payload 含稳定字段；
 - elder 使用技能后，其家族按最大 rank 判定领袖的终局测试通过（翻转前后各一条）；
 - 全量 `.venv\Scripts\python.exe -m unittest discover -v` 通过。
+
+## Answer
+
+已完成资源经济与 elder 领袖规则：
+
+- rank 1 技能按 `ResourceGranted` 后立即 `ResourceSpent(reason=leader-succession)` 记录 quill 消耗，最终 quill 持有量归零。
+- `EngineState.max_leader_factions` 持久记录已经发生继承翻转的家族；翻转前领袖按最小 rank 判定，翻转后按最大 rank 判定。
+- 存档快照、内容 catalog/双语说明和 golden fixtures 已同步；新增负资源状态校验。
+- 新增 elder 事件序列、净持有归零、翻转前后终局分支测试；全量 `.venv\\Scripts\\python.exe -m unittest discover -v` 通过 92 项。
 
 ## Comments
 

@@ -275,9 +275,13 @@ def _state_to_dict(state: EngineState) -> dict[str, Any]:
                 "faction": player.faction,
                 "rank": player.rank,
                 "clueIcon": player.clue_icon,
+                "identityMarkers": list(player.identity_markers),
                 "damage": player.damage,
                 "captured": player.captured,
                 "revealed": sorted(player.revealed),
+                "revealedValues": deepcopy(player.revealed_values),
+                "inspections": deepcopy(player.inspections),
+                "shieldWardId": player.shield_ward_id,
                 "resources": deepcopy(player.resources),
                 "skillsUsed": sorted(player.skills_used),
             }
@@ -288,6 +292,7 @@ def _state_to_dict(state: EngineState) -> dict[str, Any]:
         "pending": _pending_to_dict(state.pending),
         "result": deepcopy(state.result),
         "curses": list(state.curses),
+        "maxLeaderFactions": sorted(state.max_leader_factions),
         "lastEventRevision": state.revision,
     }
 

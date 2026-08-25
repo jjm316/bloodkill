@@ -34,7 +34,9 @@ function Resources({ resources }: { resources: Record<string, number> }) {
 function Seat({ player, dagger, identity }: { player: PlayerView; dagger: boolean; identity?: Identity }) {
   const clues: string[] = [];
   if (player.revealed.rank !== undefined) clues.push(displayRank(player.revealed.rank));
-  if (player.revealed.affiliation !== undefined) clues.push(displayFaction(player.revealed.affiliation));
+  player.revealed.markers.forEach((marker) => {
+    if (marker !== null) clues.push(displayFaction(marker));
+  });
   return (
     <div className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`}>
       <div className="seat-name">
@@ -78,6 +80,13 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
       <div className="pending">
         <strong>{nameOf(players, pending.actorPlayerId)}</strong>&rsquo;s skill window is open
         {typeof pending.rank === "number" ? ` (rank ${pending.rank})` : ""}.
+      </div>
+    );
+  }
+  if (pending.kind === "reveal") {
+    return (
+      <div className="pending">
+        <strong>{nameOf(players, pending.actorPlayerId)}</strong> must reveal one identity marker.
       </div>
     );
   }

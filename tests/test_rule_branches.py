@@ -12,6 +12,7 @@ Two tests document known defects found by the property net and are marked
 `expectedFailure`; the referenced tickets remove the marker when fixed.
 """
 
+from copy import deepcopy
 import unittest
 
 from blood_bound import Command, RuleError, RulesEngine, legal_actions, project_state, run_deterministic_game
@@ -51,14 +52,19 @@ def started_with_ranks(count, *ranks, max_probes=200):
 def give_dagger_to(engine, player_id):
     holder = engine.state.dagger_holder_id
     if holder != player_id:
-        engine.apply(command(engine, f"pass-to-{player_id}", holder, "pass-dagger", targetPlayerId=player_id))
+        engine.apply(command(engine, f"pass-to-{player_id}-{engine.state.revision}", holder, "pass-dagger", targetPlayerId=player_id))
 
 
 def mark_three_damage(engine, player_id):
     """Set a player to 3 damage with both clues revealed, as two resolved attacks would."""
     player = engine.state.players[player_id]
     player.damage = 3
-    player.revealed = {"rank", "affiliation"}
+    player.revealed = {"rank", "marker-0", "marker-1"}
+
+
+def reveal_rank(engine, player_id, command_id="reveal-rank"):
+    if engine.state.pending and engine.state.pending.kind == "reveal" and "rank" in {"rank", "marker-0", "marker-1"} - engine.state.players[player_id].revealed:
+        engine.apply(command(engine, command_id, player_id, "choose-reveal", token="rank"))
 
 
 class SetupBranchTests(unittest.TestCase):
@@ -267,7 +273,7 @@ class AttackBranchTests(unittest.TestCase):
         self.assertNotIn("InterventionOpened", [event.event_type for event in events])
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
-        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.pending.kind, "reveal")
 
     def test_wrong_actor_cannot_request_or_decline_intervention(self):
         engine = started()
@@ -315,14 +321,14 @@ class AttackBranchTests(unittest.TestCase):
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         engine.apply(command(engine, "request", target, "request-intervention"))
         events = engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=responder))
+        reveal_rank(engine, responder)
         damage = next(event for event in events if event.event_type == "DamageApplied")
         self.assertEqual(damage.payload["source"], "intervention")
         self.assertEqual(engine.state.players[responder].damage, 1)
         self.assertIn("rank", engine.state.players[responder].revealed)
-        # skill windows only open for attack damage, never intervention damage
-        self.assertIsNone(engine.state.pending)
+        # intervention's forced rank reveal opens the rank's one-time skill window.
+        self.assertEqual(engine.state.pending.kind, "skill")
 
-    @unittest.expectedFailure  # issue 16: the responder should take the dagger
     def test_intervention_responder_takes_the_dagger(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
@@ -332,11 +338,17 @@ class AttackBranchTests(unittest.TestCase):
         engine.apply(command(engine, "request", target, "request-intervention"))
         engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=responder))
         # corpus scenario intervention/selected-responder: "C 接过匕首并承受该点伤害"
+        if engine.state.pending and engine.state.pending.kind == "skill":
+            engine.apply(command(engine, "decline-responder-skill", responder, "choose-skill", use=False))
         self.assertEqual(engine.state.dagger_holder_id, responder)
         self.assertEqual(engine.state.phase, {"kind": "action", "activePlayerId": responder})
 
 
 class SkillBranchTests(unittest.TestCase):
+    def open_skill(self, engine, player):
+        engine.state.pending = Pending("skill", player.player_id, player.player_id, rank=player.rank, trigger="attack")
+        engine.state.phase = {"kind": "skill", "activePlayerId": player.player_id}
+
     def test_choose_skill_without_window_is_rejected(self):
         engine = started()
         with self.assertRaises(RuleError) as error:
@@ -352,6 +364,7 @@ class SkillBranchTests(unittest.TestCase):
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=elder.player_id))
         engine.apply(command(engine, "decline", elder.player_id, "decline-intervention"))
+        reveal_rank(engine, elder.player_id)
         bystander = next(pid for pid in engine.state.players if pid != elder.player_id)
         with self.assertRaises(RuleError) as error:
             engine.apply(command(engine, "steal", bystander, "choose-skill", use=True))
@@ -366,11 +379,94 @@ class SkillBranchTests(unittest.TestCase):
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=elder.player_id))
         engine.apply(command(engine, "decline", elder.player_id, "decline-intervention"))
+        reveal_rank(engine, elder.player_id)
         events = engine.apply(command(engine, "use", elder.player_id, "choose-skill", use=True))
         self.assertIn("SkillUsed", [event.event_type for event in events])
         self.assertIn("ResourceGranted", [event.event_type for event in events])
-        self.assertEqual(engine.state.players[elder.player_id].resources["quill"], 1)
+        self.assertIn("ResourceSpent", [event.event_type for event in events])
+        spent = next(event for event in events if event.event_type == "ResourceSpent")
+        self.assertEqual(spent.payload, {"playerId": elder.player_id, "resource": "quill", "amount": 1, "reason": "leader-succession"})
+        self.assertEqual(engine.state.players[elder.player_id].resources["quill"], 0)
+        self.assertIn(elder.faction, engine.state.max_leader_factions)
         self.assertIn("1", engine.state.players[elder.player_id].skills_used)
+
+    def test_elder_succession_changes_leader_to_highest_rank(self):
+        engine, found = started_with_ranks(6, 1)
+        elder = found[1]
+        family = elder.faction
+        captured_elder = deepcopy(elder)
+        captured_elder.captured = True
+        captured_elder.damage = 4
+        self.assertTrue(engine._is_leader(engine.state, captured_elder))
+        engine.state.max_leader_factions.add(family)
+        highest = max(
+            (player for player in engine.state.players.values() if player.faction == family and player.player_id != elder.player_id and isinstance(player.rank, int)),
+            key=lambda player: player.rank,
+        )
+        self.assertFalse(engine._is_leader(engine.state, captured_elder))
+        captured_highest = deepcopy(highest)
+        captured_highest.captured = True
+        captured_highest.damage = 4
+        self.assertTrue(engine._is_leader(engine.state, captured_highest))
+
+    def test_harlequin_inspects_two_targets_with_private_feedback(self):
+        engine, found = started_with_ranks(6, 3)
+        owner = found[3]
+        targets = [player for player in engine.state.players.values() if player.player_id != owner.player_id][:2]
+        self.open_skill(engine, owner)
+        events = engine.apply(command(engine, "inspect", owner.player_id, "choose-skill", use=True, targetPlayerIds=[p.player_id for p in targets]))
+        self.assertEqual(events[1].event_type, "HarlequinInspected")
+        self.assertNotIn("faction", events[1].payload)
+        owner = engine.state.players[owner.player_id]
+        self.assertEqual(set(owner.inspections), {p.player_id for p in targets})
+        self.assertEqual(project_state(engine.state, owner.player_id)["viewer"]["inspections"][targets[0].player_id]["rank"], engine.state.players[targets[0].player_id].rank)
+
+    def test_mentalist_damages_target_and_hands_dagger(self):
+        engine, found = started_with_ranks(6, 5)
+        owner = found[5]
+        target = next(player for player in engine.state.players.values() if player.player_id != owner.player_id)
+        self.open_skill(engine, owner)
+        engine.apply(command(engine, "mentalist", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
+        self.assertEqual(engine.state.players[target.player_id].damage, 1)
+        self.assertEqual(engine.state.dagger_holder_id, target.player_id)
+
+    def test_guardian_grants_ward_resources_and_returns_them_at_three_damage(self):
+        engine, found = started_with_ranks(6, 6)
+        owner = found[6]
+        target = next(player for player in engine.state.players.values() if player.player_id != owner.player_id)
+        self.open_skill(engine, owner)
+        events = engine.apply(command(engine, "guardian", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
+        self.assertEqual(engine.state.players[target.player_id].resources["shield"], 1)
+        self.assertEqual(engine.state.players[owner.player_id].resources["sword"], 1)
+        target = engine.state.players[target.player_id]
+        owner = engine.state.players[owner.player_id]
+        owner.damage = 3
+        owner.revealed = {"rank", "marker-0", "marker-1"}
+        returned = engine._after_damage(engine.state, command(engine, "return-ward", owner.player_id, "choose-skill", use=False), owner, {"trigger": None})
+        self.assertEqual([event.event_type for event in returned], ["ResourceReturned", "ResourceReturned"])
+        self.assertEqual(target.resources["shield"], 0)
+        self.assertEqual(engine.state.players[owner.player_id].resources["sword"], 0)
+
+    def test_mage_obscures_markers_and_grants_staff(self):
+        engine, found = started_with_ranks(6, 8)
+        owner = found[8]
+        target = next(player for player in engine.state.players.values() if player.player_id != owner.player_id)
+        target.revealed = {"marker-0"}
+        target.revealed_values["marker-0"] = "rose"
+        self.open_skill(engine, owner)
+        events = engine.apply(command(engine, "mage", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
+        self.assertEqual(engine.state.players[target.player_id].resources["staff"], 1)
+        self.assertEqual(engine.state.players[target.player_id].identity_markers, ["unknown", "unknown"])
+        self.assertIn("IdentityMarkersObscured", [event.event_type for event in events])
+        self.assertEqual(engine.state.players[target.player_id].revealed_values["marker-0"], "unknown")
+
+    def test_courtesan_grants_fan_and_blocks_intervention(self):
+        engine, found = started_with_ranks(6, 9)
+        owner = found[9]
+        target = next(player for player in engine.state.players.values() if player.player_id != owner.player_id)
+        self.open_skill(engine, owner)
+        engine.apply(command(engine, "courtesan", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
+        self.assertEqual(engine.state.players[target.player_id].resources["fan"], 1)
 
     def test_assassin_skill_deals_two_damage_hands_dagger_and_opens_no_new_window(self):
         engine, found = started_with_ranks(6, 2)
@@ -385,6 +481,7 @@ class SkillBranchTests(unittest.TestCase):
         )
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=assassin.player_id))
         engine.apply(command(engine, "decline", assassin.player_id, "decline-intervention"))
+        reveal_rank(engine, assassin.player_id)
         events = engine.apply(
             command(engine, "use", assassin.player_id, "choose-skill", use=True, targetPlayerId=victim)
         )
@@ -405,6 +502,7 @@ class SkillBranchTests(unittest.TestCase):
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=assassin.player_id))
         engine.apply(command(engine, "decline", assassin.player_id, "decline-intervention"))
+        reveal_rank(engine, assassin.player_id)
         with self.assertRaises(RuleError) as error:
             engine.apply(
                 command(engine, "use", assassin.player_id, "choose-skill", use=True, targetPlayerId=assassin.player_id)
@@ -432,15 +530,17 @@ class SkillBranchTests(unittest.TestCase):
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack-1", attacker, "attack", targetPlayerId=elder.player_id))
         engine.apply(command(engine, "decline-1", elder.player_id, "decline-intervention"))
+        reveal_rank(engine, elder.player_id, "reveal-1")
         self.assertEqual(engine.state.pending.kind, "skill")
         engine.apply(command(engine, "skill-decline", elder.player_id, "choose-skill", use=False))
         # second resolved attack reveals affiliation, not rank: no new window
         give_dagger_to(engine, attacker)
         engine.apply(command(engine, "attack-2", attacker, "attack", targetPlayerId=elder.player_id))
         engine.apply(command(engine, "decline-2", elder.player_id, "decline-intervention"))
+        if engine.state.pending and engine.state.pending.kind == "reveal":
+            engine.apply(command(engine, "reveal-2", elder.player_id, "choose-reveal", token="marker-0"))
         self.assertIsNone(engine.state.pending)
 
-    @unittest.expectedFailure  # issue 15: phase/dagger residue after a capturing rank-2 skill
     def test_assassin_skill_capture_leaves_ended_phase(self):
         engine, found = started_with_ranks(6, 2)
         assassin = found[2]
@@ -451,13 +551,17 @@ class SkillBranchTests(unittest.TestCase):
         )
         for _ in range(2):
             give_dagger_to(engine, attacker.player_id)
-            engine.apply(command(engine, "hit", attacker.player_id, "attack", targetPlayerId=victim.player_id))
-            engine.apply(command(engine, "take", victim.player_id, "decline-intervention"))
+            engine.apply(command(engine, f"hit-{_}", attacker.player_id, "attack", targetPlayerId=victim.player_id))
+            engine.apply(command(engine, f"take-{_}", victim.player_id, "decline-intervention"))
+            reveal_rank(engine, victim.player_id, f"reveal-{_}")
+            if engine.state.pending and engine.state.pending.kind == "reveal":
+                engine.apply(command(engine, f"reveal-marker-{_}", victim.player_id, "choose-reveal", token="marker-0"))
             if engine.state.pending and engine.state.pending.kind == "skill":
-                engine.apply(command(engine, "no-skill", victim.player_id, "choose-skill", use=False))
+                engine.apply(command(engine, f"no-skill-{_}", victim.player_id, "choose-skill", use=False))
         give_dagger_to(engine, attacker.player_id)
         engine.apply(command(engine, "attack-ass", attacker.player_id, "attack", targetPlayerId=assassin.player_id))
         engine.apply(command(engine, "decline-ass", assassin.player_id, "decline-intervention"))
+        reveal_rank(engine, assassin.player_id, "reveal-ass")
         engine.apply(
             command(engine, "use-ass", assassin.player_id, "choose-skill", use=True, targetPlayerId=victim.player_id)
         )
@@ -603,6 +707,7 @@ class ProjectionBranchTests(unittest.TestCase):
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=elder.player_id))
         engine.apply(command(engine, "decline", elder.player_id, "decline-intervention"))
+        reveal_rank(engine, elder.player_id)
         actions = legal_actions(engine.state, elder.player_id)
         self.assertEqual(
             actions,

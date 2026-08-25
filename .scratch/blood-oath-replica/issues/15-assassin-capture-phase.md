@@ -2,7 +2,7 @@
 
 Type: task
 Blocked by: 10
-Status: open
+Status: resolved
 
 问题：10 的性质测试网络发现：`RulesEngine._choose_skill` 的 rank 2 分支在 `_apply_damage` 返回后无条件写回 `dagger_holder_id` 与 `phase = action`。当刺客技能的 2 点伤害造成目标第 4 点伤害时，`_end_game` 已把状态置为 `status=ended`/`phase=ended`，随后这两行又把相位改回 `action`、匕首指向已捕获玩家。违反领域契约「`status = ended` 后不存在匕首」；`project_state` 会向 UI 展示一个不存在的 action 相位与已捕获的匕首持有者。正常攻击路径由 `_end_game` 最后写入相位，不受影响——该残留仅由 rank 2 技能路径引入。
 
@@ -13,5 +13,9 @@ Status: open
 完成条件：rank 2 技能捕获后 `phase.kind == "ended"`；`status=ended` 时匕首不指向已捕获玩家（或为空）；相关测试正常通过。
 
 ## Comments
+
+## Answer
+
+Resolved as part of issue 17: terminal capture now clears the dagger holder and leaves `phase.kind == "ended"`.
 
 - 2026-08-21：由 10 的性质测试网络（`tests/test_properties.py` 状态不变量 sweep）发现并立案；10 以 `@unittest.expectedFailure` 回归测试记录现状。

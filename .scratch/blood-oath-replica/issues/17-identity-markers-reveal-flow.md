@@ -2,7 +2,7 @@
 
 Type: task
 Blocked by: 10、13
-Status: open
+Status: resolved
 
 问题：引擎当前是「1 rank + 1 affiliation」的旧线索模型，伤害结算自动按 rank → affiliation 顺序展示，不符合 [14](14-abilities-resource-economy.md) 已裁决的身份标记模型（每名玩家 3 张标记 = 1 等级 + 2 身份标记，受伤**自选**展示身份或 rank；第 3 点被迫亮 rank；挡刀被迫亮 rank 并开技能窗，decline = 永久失去技能）。技能窗无一次性闩锁，且仅在 attack 触发时开启。这是 14 全部能力票的地基：18/19/20 的资源与能力语义都建立在新标记模型和新结算流程之上。
 
@@ -23,6 +23,10 @@ Status: open
 - 闩锁行为有测试：rank 第二次展示不开窗；decline 后不再开窗；
 - 15/16 断言正常通过（无 expectedFailure），15/16 票面标 resolved；
 - 全量 `.venv\Scripts\python.exe -m unittest discover -v` 通过，golden 重生成后双向验证通过。
+
+## Answer
+
+已完成身份标记与自选揭示重构：`Player.identity_markers` 按 rank 生成两张身份标记，`revealed` 使用 `rank`、`marker-0`、`marker-1` token 集合并保存已公开值；伤害逐点结算并支持 `choose-reveal`，第三点和挡刀强制 rank，wild 标记要求颜色。schema 升至 2、ruleset 升至 0.2，投影、持久化、确定性 runner 与 golden fixtures 已同步。技能窗口仅由 attack/intervention 的首次 rank 揭示触发，decline 锁定技能。终局清空匕首并固定 ended phase；干预响应者接管匕首。15/16 expectedFailure 已移除并标记 resolved。
 
 ## Comments
 

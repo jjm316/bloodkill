@@ -51,8 +51,15 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
         send(f"attack-{turn}", attacker, "attack", targetPlayerId=victim)
         if engine.state.pending and engine.state.pending.kind == "intervention":
             send(f"decline-{turn}", victim, "decline-intervention")
+        while engine.state.pending and engine.state.pending.kind == "reveal":
+            target = engine.state.pending.actor_player_id
+            token = engine.state.pending.context["eligibleTokens"][0]
+            payload = {"token": token}
+            if token.startswith("marker-") and engine.state.players[target].identity_markers[int(token[-1])] == "wild":
+                payload["color"] = "rose"
+            send(f"reveal-{turn}-{engine.state.revision}", target, "choose-reveal", **payload)
         if engine.state.pending and engine.state.pending.kind == "skill":
-            send(f"skill-decline-{turn}", victim, "choose-skill", use=False)
+            send(f"skill-decline-{turn}", engine.state.pending.actor_player_id, "choose-skill", use=False)
 
     replay = Replay(
         game_id=game_id,

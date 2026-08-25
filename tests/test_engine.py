@@ -36,6 +36,11 @@ def command(engine, command_id, actor, kind, **payload):
     return Command(command_id, engine.state.game_id, actor, engine.state.revision, kind, payload)
 
 
+def reveal_rank(engine, player_id, command_id="reveal-rank"):
+    if engine.state.pending and engine.state.pending.kind == "reveal":
+        engine.apply(command(engine, command_id, player_id, "choose-reveal", token="rank"))
+
+
 class RulesEngineTests(unittest.TestCase):
     def started(self, count=6):
         engine = RulesEngine.new_game("g1", "fixed-seed", clock=FixedClock())
@@ -72,6 +77,7 @@ class RulesEngineTests(unittest.TestCase):
         target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank in (1, 2))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         events = engine.apply(command(engine, "decline", target, "decline-intervention"))
+        reveal_rank(engine, target)
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
         self.assertEqual(engine.state.pending.kind, "skill")
@@ -84,6 +90,7 @@ class RulesEngineTests(unittest.TestCase):
         target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank not in (1, 2))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         events = engine.apply(command(engine, "decline", target, "decline-intervention"))
+        reveal_rank(engine, target)
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
         self.assertIsNone(engine.state.pending)
@@ -95,6 +102,7 @@ class RulesEngineTests(unittest.TestCase):
         self.assertNotEqual(attacker, inquisitor)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=inquisitor))
         engine.apply(command(engine, "decline", inquisitor, "decline-intervention"))
+        reveal_rank(engine, inquisitor)
         self.assertEqual(engine.state.players[inquisitor].damage, 1)
         self.assertIsNone(engine.state.pending)
 
@@ -106,6 +114,7 @@ class RulesEngineTests(unittest.TestCase):
         engine.apply(command(engine, "request", target, "request-intervention"))
         responder = engine.state.pending.eligible_player_ids[0]
         engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=responder))
+        reveal_rank(engine, responder)
         self.assertEqual(engine.state.players[responder].damage, 1)
         self.assertIn("rank", engine.state.players[responder].revealed)
 

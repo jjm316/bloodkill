@@ -47,10 +47,34 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
                 actions.extend(
                     {"type": "choose-skill", "use": True, "targetPlayerId": target.player_id}
                     for target in state.players.values()
-                    if target.player_id != player_id and not target.captured
+                    if target.player_id != player_id and not target.captured and not target.resources.get("shield", 0)
+                )
+            elif pending.rank in {3}:
+                live_targets = [target.player_id for target in state.players.values() if target.player_id != player_id and not target.captured]
+                actions.extend(
+                    {"type": "choose-skill", "use": True, "targetPlayerIds": [first, second]}
+                    for index, first in enumerate(live_targets)
+                    for second in live_targets[index + 1 :]
+                )
+            elif pending.rank in {5, 6, 8, 9}:
+                actions.extend(
+                    {"type": "choose-skill", "use": True, "targetPlayerId": target.player_id}
+                    for target in state.players.values()
+                    if not target.captured and (pending.rank != 5 or (target.player_id != player_id and not target.resources.get("shield", 0)))
                 )
             else:
                 actions.append({"type": "choose-skill", "use": True})
+            return actions
+        if pending.kind == "reveal":
+            target = state.players[pending.actor_player_id]
+            tokens = {"rank", "marker-0", "marker-1"} - target.revealed
+            if pending.context.get("forceRank") and "rank" in tokens:
+                tokens = {"rank"}
+            actions = [{"type": "choose-reveal", "token": token} for token in sorted(tokens)]
+            for token in sorted(tokens):
+                if token.startswith("marker-") and target.identity_markers[int(token[-1])] == "wild":
+                    actions = [action for action in actions if action["token"] != token]
+                    actions.extend({"type": "choose-reveal", "token": token, "color": color} for color in ("rose", "beast"))
             return actions
         return []
     if state.status != "active":
@@ -92,8 +116,10 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
         projection["viewer"] = {
             "playerId": viewer.player_id,
             "identity": {"faction": viewer.faction, "rank": viewer.rank},
+            "identityMarkers": list(viewer.identity_markers),
             "resources": dict(viewer.resources),
             "skillsUsed": sorted(viewer.skills_used),
+            "inspections": {target_id: dict(value) for target_id, value in viewer.inspections.items()},
             "cursesToDistribute": list(state.curses) if viewer.faction == "secret-order" else [],
         }
         projection["legalActions"] = legal_actions(state, viewer_player_id)
@@ -101,11 +127,13 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
 
 
 def _public_player(player: "Player") -> dict[str, Any]:
-    revealed: dict[str, Any] = {}
+    revealed: dict[str, Any] = {"markers": [None, None]}
     if "rank" in player.revealed:
-        revealed["rank"] = player.rank
-    if "affiliation" in player.revealed:
-        revealed["affiliation"] = player.faction
+        revealed["rank"] = player.revealed_values.get("rank", player.rank)
+    for index in range(2):
+        token = f"marker-{index}"
+        if token in player.revealed:
+            revealed["markers"][index] = player.revealed_values.get(token, player.identity_markers[index])
     return {
         "playerId": player.player_id,
         "seat": player.seat,
@@ -113,6 +141,7 @@ def _public_player(player: "Player") -> dict[str, Any]:
         "damage": player.damage,
         "captured": player.captured,
         "revealed": revealed,
+        "identityMarkers": [None, None],
         "resources": dict(player.resources),
     }
 
@@ -127,4 +156,6 @@ def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:
         "eligiblePlayerIds": list(pending.eligible_player_ids),
         "rank": pending.rank,
         "trigger": pending.trigger,
+        "eligibleTokens": list(getattr(pending, "context", {}).get("eligibleTokens", [])) if pending.kind == "reveal" else [],
+        "forceRank": bool(getattr(pending, "context", {}).get("forceRank")) if pending.kind == "reveal" else False,
     }

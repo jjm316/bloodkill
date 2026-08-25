@@ -40,9 +40,13 @@ class Player:
     faction: str | None = None
     rank: int | str | None = None
     clue_icon: str | None = None
+    identity_markers: list[str] = field(default_factory=lambda: ["unknown", "unknown"])
     damage: int = 0
     captured: bool = False
     revealed: set[str] = field(default_factory=set)
+    revealed_values: dict[str, str | int] = field(default_factory=dict)
+    inspections: dict[str, dict[str, str | int | None]] = field(default_factory=dict)
+    shield_ward_id: str | None = None
     resources: dict[str, int] = field(
         default_factory=lambda: {name: 0 for name in ("quill", "shield", "sword", "staff", "fan")}
     )
@@ -86,6 +90,7 @@ class EngineState:
     pending: Pending | None = None
     result: dict[str, Any] | None = None
     curses: list[str] = field(default_factory=list)
+    max_leader_factions: set[str] = field(default_factory=set)
     events: list[Event] = field(default_factory=list)
     commands: list[Command] = field(default_factory=list)
     command_results: dict[str, tuple[tuple[Event, ...], str]] = field(default_factory=dict)
@@ -94,7 +99,19 @@ class EngineState:
 # Ranks whose reveal-triggered skill is implemented in this ruleset version.
 # Issue 14 expands this to ranks 1--9 as abilities land; the Inquisitor's
 # fleur-cross rank is a setup-phase curse ability, never a reveal-triggered skill.
-_IMPLEMENTED_SKILL_RANKS = frozenset({1, 2})
+_IMPLEMENTED_SKILL_RANKS = frozenset({1, 2, 3, 5, 6, 8, 9})
+
+
+def _markers_for(rank: int | str | None, faction: str | None) -> list[str]:
+    if rank == "fleur-cross" or faction == "secret-order":
+        return ["wild", "wild"]
+    if not isinstance(rank, int) or faction not in {"rose", "beast"}:
+        return ["unknown", "unknown"]
+    if rank in {1, 5, 6}:
+        return [faction, faction]
+    if rank in {2, 3, 4}:
+        return ["unknown", "unknown"]
+    return [faction, "unknown"]
 
 
 class RulesEngine:
@@ -110,9 +127,9 @@ class RulesEngine:
             raise ValueError("game_id and seed are required")
         return cls(
             EngineState(
-                schema_version=1,
+                schema_version=2,
                 ruleset_id="blood-bound-compatible",
-                ruleset_version="0.1",
+                ruleset_version="0.2",
                 game_id=game_id,
                 seed=seed,
             ),
@@ -125,7 +142,7 @@ class RulesEngine:
 
     @classmethod
     def resume_from_checkpoint(cls, checkpoint: EngineState, *, clock: Clock | None = None) -> "RulesEngine":
-        if checkpoint.schema_version != 1:
+        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.2":
             raise RuleError("state.invalid", reason="unsupported schema version")
         engine = cls(deepcopy(checkpoint), clock=clock)
         cls._validate(engine.state)
@@ -183,6 +200,7 @@ class RulesEngine:
             "choose-intervention": self._choose_intervention,
             "decline-intervention": self._decline_intervention,
             "choose-skill": self._choose_skill,
+            "choose-reveal": self._choose_reveal,
             "distribute-curse": self._distribute_curse,
         }
         try:
@@ -242,6 +260,9 @@ class RulesEngine:
             else:
                 player.rank = "fleur-cross"
                 player.clue_icon = rng.choice(("rose", "beast"))
+            player.identity_markers = _markers_for(player.rank, player.faction)
+            if player.rank == 3 and player.faction in {"rose", "beast"}:
+                player.clue_icon = "beast" if player.faction == "rose" else "rose"
         holder = rng.choice(ordered)
         state.status = "active"
         state.dagger_holder_id = holder.player_id
@@ -313,6 +334,7 @@ class RulesEngine:
             raise RuleError("intervention.not-eligible", player_id=responder.player_id)
         active_player_id = pending.context.get("attackerPlayerId", command.actor_player_id)
         state.pending = None
+        state.dagger_holder_id = responder.player_id
         state.phase = {"kind": "action", "activePlayerId": responder.player_id}
         events = [self._event(state, command, "InterventionSelected", {"responderPlayerId": responder.player_id})]
         events.extend(
@@ -349,6 +371,7 @@ class RulesEngine:
         state.pending = None
         state.phase = {"kind": "action", "activePlayerId": state.dagger_holder_id}
         if not use:
+            owner.skills_used.add(str(owner.rank))
             return [self._event(state, command, "SkillDeclined", {"playerId": owner.player_id, "rank": owner.rank})]
         skill_id = str(owner.rank)
         if skill_id in owner.skills_used:
@@ -358,14 +381,84 @@ class RulesEngine:
         if owner.rank == 1:
             owner.resources["quill"] += 1
             events.append(self._event(state, command, "ResourceGranted", {"playerId": owner.player_id, "resource": "quill", "amount": 1}))
+            owner.resources["quill"] -= 1
+            events.append(
+                self._event(
+                    state,
+                    command,
+                    "ResourceSpent",
+                    {"playerId": owner.player_id, "resource": "quill", "amount": 1, "reason": "leader-succession"},
+                )
+            )
+            if owner.faction in {"rose", "beast"}:
+                state.max_leader_factions.add(owner.faction)
         elif owner.rank == 2:
             target = self._live_player(state, command.payload.get("targetPlayerId"))
             if target.player_id == owner.player_id:
                 raise RuleError("skill.invalid-target")
             events.extend(self._apply_damage(state, command, target.player_id, 2, "skill", trigger=None))
-            state.dagger_holder_id = target.player_id
-            state.phase = {"kind": "action", "activePlayerId": target.player_id}
+            if state.status == "active" and state.pending is None:
+                state.dagger_holder_id = target.player_id
+                state.phase = {"kind": "action", "activePlayerId": target.player_id}
+        elif owner.rank == 3:
+            target_ids = command.payload.get("targetPlayerIds")
+            if not isinstance(target_ids, (list, tuple)) or len(target_ids) != 2 or not all(isinstance(target_id, str) for target_id in target_ids) or len(set(target_ids)) != 2:
+                raise RuleError("skill.invalid-target")
+            targets = [self._live_player(state, target_id) for target_id in target_ids]
+            if any(target.player_id == owner.player_id for target in targets):
+                raise RuleError("skill.invalid-target")
+            for target in targets:
+                owner.inspections[target.player_id] = {"faction": target.faction, "rank": target.rank}
+            events.append(self._event(state, command, "HarlequinInspected", {"playerId": owner.player_id, "targetPlayerIds": [target.player_id for target in targets]}))
+        elif owner.rank == 5:
+            target = self._live_player(state, command.payload.get("targetPlayerId"))
+            if target.player_id == owner.player_id or target.resources.get("shield", 0):
+                raise RuleError("skill.invalid-target")
+            events.extend(self._apply_damage(state, command, target.player_id, 1, "skill", trigger=None, active_player_id=owner.player_id))
+            if state.status == "active" and state.pending is None:
+                state.dagger_holder_id = target.player_id
+                state.phase = {"kind": "action", "activePlayerId": target.player_id}
+        elif owner.rank == 6:
+            target = self._live_player(state, command.payload.get("targetPlayerId"))
+            owner.shield_ward_id = target.player_id
+            events.extend(self._grant_resource(state, command, target, "shield"))
+            events.extend(self._grant_resource(state, command, owner, "sword"))
+        elif owner.rank == 8:
+            target = self._live_player(state, command.payload.get("targetPlayerId"))
+            events.extend(self._grant_resource(state, command, target, "staff"))
+            target.identity_markers = ["unknown", "unknown"]
+            for token in ("marker-0", "marker-1"):
+                if token in target.revealed:
+                    target.revealed_values[token] = "unknown"
+            events.append(self._event(state, command, "IdentityMarkersObscured", {"playerId": target.player_id}))
+        elif owner.rank == 9:
+            target = self._live_player(state, command.payload.get("targetPlayerId"))
+            events.extend(self._grant_resource(state, command, target, "fan"))
         return events
+
+    def _grant_resource(self, state: EngineState, command: Command, player: Player, resource: str, amount: int = 1) -> list[Event]:
+        player.resources[resource] += amount
+        return [self._event(state, command, "ResourceGranted", {"playerId": player.player_id, "resource": resource, "amount": amount})]
+
+    def _return_resource(self, state: EngineState, command: Command, player: Player, resource: str, amount: int, reason: str) -> list[Event]:
+        if amount <= 0 or player.resources.get(resource, 0) < amount:
+            return []
+        player.resources[resource] -= amount
+        return [self._event(state, command, "ResourceReturned", {"playerId": player.player_id, "resource": resource, "amount": amount, "reason": reason})]
+
+    def _choose_reveal(self, state: EngineState, command: Command) -> list[Event]:
+        pending = self._require_pending(state, command, "reveal")
+        if pending.actor_player_id != command.actor_player_id:
+            raise RuleError("player.not-actor")
+        token = str(command.payload.get("token", ""))
+        target = state.players[pending.actor_player_id]
+        allowed = {"rank", "marker-0", "marker-1"} - target.revealed
+        if token not in allowed:
+            raise RuleError("reveal.not-eligible", token=token)
+        if pending.context.get("forceRank") and token != "rank" and "rank" in allowed:
+            raise RuleError("reveal.rank-required")
+        color = command.payload.get("color")
+        return self._reveal_token(state, command, target, token, dict(pending.context), color=color)
 
     def _distribute_curse(self, state: EngineState, command: Command) -> list[Event]:
         if state.status != "active" or not state.curses:
@@ -432,29 +525,109 @@ class RulesEngine:
         if target.resources.get("shield", 0) and source in {"attack", "skill", "reaction"}:
             raise RuleError("target.shielded", player_id=target_id)
         events = [self._event(state, command, "DamageApplied", {"targetPlayerId": target_id, "amount": amount, "source": source, "triggerContext": trigger})]
-        rank_revealed_by_this_damage = False
-        for _ in range(amount):
-            target.damage += 1
-            clue = "rank" if "rank" not in target.revealed else "affiliation"
-            target.revealed.add(clue)
-            rank_revealed_by_this_damage = rank_revealed_by_this_damage or clue == "rank"
-            events.append(self._event(state, command, "ClueRevealed", {"playerId": target_id, "kind": clue, "value": target.rank if clue == "rank" else target.faction}))
-            if target.damage >= 4:
-                target.captured = True
-                events.append(self._event(state, command, "PlayerCaptured", {"playerId": target_id}))
-                events.append(self._end_game(state, command, target_id, active_player_id=active_player_id))
-                break
+        context = {
+            "attackerPlayerId": active_player_id,
+            "protectedPlayerId": target_id,
+            "remaining": amount,
+            "source": source,
+            "trigger": trigger,
+            "forceRank": trigger == "intervention",
+            "followup": None,
+            "rankRevealed": False,
+        }
+        events.extend(self._continue_damage(state, command, target, context))
+        return events
+
+    def _continue_damage(self, state: EngineState, command: Command, target: Player, context: dict[str, Any]) -> list[Event]:
+        if not context.get("remaining") or state.status == "ended":
+            return self._after_damage(state, command, target, context)
+        target.damage += 1
+        context["remaining"] = int(context["remaining"]) - 1
+        if target.damage >= 4:
+            target.captured = True
+            return [
+                self._event(state, command, "PlayerCaptured", {"playerId": target.player_id}),
+                self._end_game(state, command, target.player_id, active_player_id=context.get("attackerPlayerId")),
+            ]
+        available = {"rank", "marker-0", "marker-1"} - target.revealed
+        force_rank = bool(context.get("forceRank")) or target.damage >= 3
+        if context.get("source") == "skill":
+            token = "rank" if "rank" in available else next(iter(available))
+            return self._reveal_token(state, command, target, token, context, color="rose")
+        if force_rank and "rank" in available:
+            return self._reveal_token(state, command, target, "rank", context)
+        if len(available) == 1:
+            only = next(iter(available))
+            if only.startswith("marker-") and target.identity_markers[int(only[-1])] == "wild":
+                context["eligibleTokens"] = [only]
+                state.pending = Pending("reveal", target.player_id, target.player_id, tuple(), context=context)
+                state.phase = {"kind": "reveal", "activePlayerId": target.player_id}
+                return [self._event(state, command, "RevealWindowOpened", {"playerId": target.player_id, "eligibleTokens": [only], "forceRank": force_rank})]
+            return self._reveal_token(state, command, target, only, context)
+        if not available:
+            return self._after_damage(state, command, target, context)
+        context["eligibleTokens"] = sorted(available)
+        state.pending = Pending("reveal", target.player_id, target.player_id, tuple(), context=context)
+        state.phase = {"kind": "reveal", "activePlayerId": target.player_id}
+        return [self._event(state, command, "RevealWindowOpened", {"playerId": target.player_id, "eligibleTokens": sorted(available), "forceRank": force_rank})]
+
+    def _reveal_token(self, state: EngineState, command: Command, target: Player, token: str, context: dict[str, Any], *, color: str | None = None) -> list[Event]:
+        if token not in {"rank", "marker-0", "marker-1"} - target.revealed:
+            raise RuleError("reveal.not-eligible", token=token)
+        if token.startswith("marker-"):
+            index = int(token[-1])
+            marker = target.identity_markers[index]
+            if marker == "wild":
+                if color not in {"rose", "beast"}:
+                    state.pending = Pending("reveal", target.player_id, target.player_id, context=context)
+                    state.phase = {"kind": "reveal", "activePlayerId": target.player_id}
+                    raise RuleError("reveal.color-required")
+                value = color
+            else:
+                value = marker
+        else:
+            value = target.rank
+        target.revealed.add(token)
+        target.revealed_values[token] = value
+        if token == "rank":
+            context["rankRevealed"] = True
+        events = [self._event(state, command, "ClueRevealed", {"playerId": target.player_id, "kind": token, "value": value})]
+        if target.damage >= 4:
+            target.captured = True
+            events.append(self._event(state, command, "PlayerCaptured", {"playerId": target.player_id}))
+            events.append(self._end_game(state, command, target.player_id, active_player_id=context.get("attackerPlayerId")))
+            return events
+        if context.get("remaining"):
+            events.extend(self._continue_damage(state, command, target, context))
+        else:
+            events.extend(self._after_damage(state, command, target, context))
+        return events
+
+    def _after_damage(self, state: EngineState, command: Command, target: Player, context: dict[str, Any]) -> list[Event]:
+        trigger = context.get("trigger")
+        events: list[Event] = []
+        if target.rank == 6 and target.damage >= 3 and target.shield_ward_id:
+            ward = state.players.get(target.shield_ward_id)
+            target.shield_ward_id = None
+            if ward:
+                events.extend(self._return_resource(state, command, target, "sword", 1, "guardian-ward-complete"))
+                events.extend(self._return_resource(state, command, ward, "shield", 1, "guardian-ward-complete"))
         if (
-            target.damage < 4
-            and source == "attack"
-            and trigger == "attack"
-            and rank_revealed_by_this_damage
+            state.status == "active"
+            and trigger in {"attack", "intervention"}
+            and context.get("rankRevealed")
             and target.rank in _IMPLEMENTED_SKILL_RANKS
+            and str(target.rank) not in target.skills_used
         ):
-            target_rank = target.rank
-            state.pending = Pending("skill", target_id, target_id, rank=target_rank, trigger="attack")
-            state.phase = {"kind": "skill", "activePlayerId": target_id}
-            events.append(self._event(state, command, "SkillWindowOpened", {"playerId": target_id, "rank": target_rank, "trigger": "attack"}))
+            state.pending = Pending("skill", target.player_id, target.player_id, rank=target.rank, trigger=trigger, context=context)
+            state.phase = {"kind": "skill", "activePlayerId": target.player_id}
+            return events + [self._event(state, command, "SkillWindowOpened", {"playerId": target.player_id, "rank": target.rank, "trigger": trigger})]
+        state.pending = None
+        if state.status == "active":
+            holder = target.player_id if context.get("source") == "intervention" else (context.get("attackerPlayerId") or target.player_id)
+            if holder in state.players and not state.players[holder].captured:
+                state.dagger_holder_id = holder
+                state.phase = {"kind": "action", "activePlayerId": holder}
         return events
 
     def _end_game(
@@ -479,6 +652,7 @@ class RulesEngine:
             winner = "draw"
             branch = "inquisitor-captured"
         state.status = "ended"
+        state.dagger_holder_id = None
         state.pending = None
         state.phase = {"kind": "ended"}
         ranking = self._ranking(state, winner)
@@ -508,8 +682,15 @@ class RulesEngine:
     @staticmethod
     def _is_leader(state: EngineState, captured: Player) -> bool:
         family = captured.faction
-        ranks = [p.rank for p in state.players.values() if p.faction == family and not p.captured and isinstance(p.rank, int)]
-        return isinstance(captured.rank, int) and captured.rank == min(ranks + [captured.rank])
+        if family not in {"rose", "beast"} or not isinstance(captured.rank, int):
+            return False
+        ranks = [
+            p.rank
+            for p in state.players.values()
+            if p.faction == family and (p.player_id == captured.player_id or not p.captured) and isinstance(p.rank, int)
+        ]
+        leader_rank = max(ranks) if family in state.max_leader_factions else min(ranks)
+        return captured.rank == leader_rank
 
     def _require_action_actor(self, state: EngineState, command: Command) -> None:
         if state.phase.get("kind") != "action":
@@ -558,5 +739,9 @@ class RulesEngine:
         for player in state.players.values():
             if not 0 <= player.damage <= 4 or player.captured != (player.damage == 4):
                 raise RuleError("state.invalid", reason="damage/capture", player_id=player.player_id)
-            if len(player.revealed) > 2:
+            if len(player.revealed) > 3:
                 raise RuleError("state.invalid", reason="revealed clues", player_id=player.player_id)
+            if not isinstance(player.identity_markers, list) or len(player.identity_markers) != 2:
+                raise RuleError("state.invalid", reason="identity markers", player_id=player.player_id)
+            if any(not isinstance(amount, int) or amount < 0 for amount in player.resources.values()):
+                raise RuleError("state.invalid", reason="negative resource", player_id=player.player_id)

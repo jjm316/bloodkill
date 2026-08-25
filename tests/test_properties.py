@@ -97,35 +97,12 @@ def generate_walk(count: int, seed: str, *, max_turns: int = 500) -> tuple[tuple
                 send(f"pass-{turn}", holder, "pass-dagger", {"targetPlayerId": target})
             continue
         actor = pending.actor_player_id
-        if pending.kind == "intervention":
-            if rng.random() < 0.4 or not pending.eligible_player_ids:
-                send(f"decline-{turn}", actor, "decline-intervention", {})
-            else:
-                send(f"request-{turn}", actor, "request-intervention", {})
-                after_request = engine.state.pending
-                if (
-                    after_request is not None
-                    and after_request.kind == "intervention"
-                    and after_request.context.get("requested")
-                    and after_request.eligible_player_ids
-                    and rng.random() < 0.8
-                ):
-                    responder = rng.choice(list(after_request.eligible_player_ids))
-                    send(f"choose-{turn}", actor, "choose-intervention", {"responderPlayerId": responder})
-        else:  # skill window for the damaged player's rank
-            owner = engine.state.players[actor]
-            can_use = owner.rank in (1, 2) and str(owner.rank) not in owner.skills_used
-            if can_use and rng.random() < 0.6:
-                payload = {"use": True}
-                if owner.rank == 2:
-                    targets = [player.player_id for player in engine.state.players.values() if player.player_id != actor and not player.captured]
-                    if targets:
-                        payload["targetPlayerId"] = rng.choice(targets)
-                    else:
-                        payload = {"use": False}
-                send(f"skill-use-{turn}", actor, "choose-skill", payload)
-            else:
-                send(f"skill-decline-{turn}", actor, "choose-skill", {"use": False})
+        actions = engine.legal_actions(actor)
+        if not actions:
+            raise AssertionError(f"pending window without legal action: {pending.kind}")
+        action = rng.choice(actions)
+        payload = {key: value for key, value in action.items() if key != "type"}
+        send(f"pending-{turn}", actor, action["type"], payload)
 
     walk = tuple(commands)
     _WALK_CACHE[(count, seed)] = walk
@@ -176,8 +153,8 @@ def assert_state_invariants(testcase: unittest.TestCase, state) -> None:
     for player in state.players.values():
         testcase.assertIn(player.damage, range(5), player.player_id)
         testcase.assertEqual(player.captured, player.damage == 4, player.player_id)
-        testcase.assertLessEqual(len(player.revealed), 2, player.player_id)
-        testcase.assertTrue(player.revealed <= {"rank", "affiliation"}, player.player_id)
+        testcase.assertLessEqual(len(player.revealed), 3, player.player_id)
+        testcase.assertTrue(player.revealed <= {"rank", "marker-0", "marker-1"}, player.player_id)
     if state.status == "active":
         testcase.assertTrue(6 <= len(state.players) <= 12)
         testcase.assertIsNotNone(state.dagger_holder_id)
@@ -189,8 +166,8 @@ def assert_state_invariants(testcase: unittest.TestCase, state) -> None:
         testcase.assertIn(state.result["winner"], {"rose", "beast", "draw"})
         testcase.assertIn("branch", state.result)
         testcase.assertEqual(len(state.result["ranking"]), len(state.players))
-        # phase == {"kind": "ended"} is intentionally NOT asserted here: a
-        # capturing rank-2 skill leaves phase at "action" (issue 15).
+        testcase.assertEqual(state.phase, {"kind": "ended"})
+        testcase.assertIsNone(state.dagger_holder_id)
 
 
 class DeterminismPropertyTests(unittest.TestCase):
@@ -270,7 +247,7 @@ class ProjectionSecrecyPropertyTests(unittest.TestCase):
                         for entry in view["players"]:
                             for private_key in ("faction", "rank", "clueIcon"):
                                 self.assertNotIn(private_key, entry)
-                            self.assertTrue(set(entry.get("revealed", {})) <= {"rank", "affiliation"})
+                            self.assertTrue(set(entry.get("revealed", {})) <= {"rank", "markers"})
                         # pending views never expose the private context dict
                         self.assertNotIn("context", view["pending"] or {})
                         if view["viewer"] is None:

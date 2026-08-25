@@ -7,6 +7,11 @@ def command(engine, command_id, actor, kind, **payload):
     return Command(command_id, engine.state.game_id, actor, engine.state.revision, kind, payload)
 
 
+def reveal_rank(engine, player_id, command_id="reveal-rank"):
+    if engine.state.pending and engine.state.pending.kind == "reveal":
+        engine.apply(command(engine, command_id, player_id, "choose-reveal", token="rank"))
+
+
 class FixedClock:
     def __call__(self):
         return 1000.0
@@ -48,9 +53,10 @@ class ProjectionTests(unittest.TestCase):
         holder = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != holder)
         before = project_state(engine.state, holder)
-        self.assertEqual(before["players"][0]["revealed"], {})
+        self.assertEqual(before["players"][0]["revealed"], {"markers": [None, None]})
         engine.apply(command(engine, "attack", holder, "attack", targetPlayerId=target))
         engine.apply(command(engine, "decline", target, "decline-intervention"))
+        reveal_rank(engine, target)
         after = project_state(engine.state, holder)
         target_view = next(p for p in after["players"] if p["playerId"] == target)
         self.assertIn("rank", target_view["revealed"])
@@ -86,6 +92,7 @@ class ProjectionTests(unittest.TestCase):
             engine.apply(command(engine, "pass", holder, "pass-dagger", targetPlayerId=attacker))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=rank_two))
         engine.apply(command(engine, "decline", rank_two, "decline-intervention"))
+        reveal_rank(engine, rank_two)
         self.assertEqual(engine.state.pending.kind, "skill")
         self.assertEqual(engine.state.pending.rank, 2)
         actions = project_state(engine.state, rank_two)["legalActions"]

@@ -43,6 +43,12 @@ Effort: `blood-oath-replica`
 
 ## Decisions-so-far
 
+- 2026-08-25：19 已完成：目标型能力统一复用 `choose-skill`；harlequin 的身份反馈仅写入施法者投影，guardian 的 shield/sword 以 ward 关系和 `ResourceReturned` 事件闭环，mage 遮蔽已公开 marker 值，fan 继续作为干涉资格门槛。frontier 推进至 20。
+
+- 2026-08-25：18 已完成：rank 1 elder 的 quill 按 `ResourceGranted` 后立即 `ResourceSpent(reason=leader-succession)` 建模；家族领袖默认取最小 rank，使用 elder 后仅该家族切换为最大 rank，状态写入 `maxLeaderFactions` 并纳入存档/golden replay。
+
+- 2026-08-25：17 已完成：身份标记按 rank 生成并通过逐点 reveal 窗口自选公开，schema/ruleset 升级到 2/0.2；15/16 的终局匕首与干预交接残留一并修复。
+
 - 2026-08-19：采用“先规则引擎、后界面”的分层路线；理由是桌游复杂度主要来自状态转换和边界结算。
 - 2026-08-19：产品方确认必须支持多人联机；客户端采用浏览器网页，不提供安装包；服务端由用户本地启动并通过内网穿透供他人访问。首轮开发先以桌面网页为主，同时约束响应式布局以兼容手机（含 iPhone）和平板。
 - 2026-08-19：01 身份研究未能从一手资料识别“鲜血盟约”的唯一桌游版本；在用户提供官方产品/规则/版权或授权入口前，规则、内容和 IP 身份均不可推断，详见 [研究笔记](research-01-identity-version-ip.md)。

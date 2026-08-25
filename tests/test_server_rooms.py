@@ -11,6 +11,16 @@ def command(engine, command_id, actor, kind, **payload):
     return Command(command_id, engine.state.game_id, actor, engine.state.revision, kind, payload)
 
 
+def resolve_reveal_windows(manager, room, actor, prefix):
+    while room.engine.state.pending and room.engine.state.pending.kind == "reveal":
+        pending = room.engine.state.pending
+        token = pending.context["eligibleTokens"][0]
+        payload = {"token": token}
+        if token.startswith("marker-") and room.engine.state.players[actor].identity_markers[int(token[-1])] == "wild":
+            payload["color"] = "rose"
+        manager.apply_command(room, command(room.engine, f"{prefix}-{room.engine.state.revision}", actor, "choose-reveal", **payload))
+
+
 class RoomManagerTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -107,6 +117,7 @@ class RoomManagerTests(unittest.TestCase):
                     self.manager.apply_command(
                         room, command(room.engine, f"decline-{turn}", victim, "decline-intervention")
                     )
+                resolve_reveal_windows(self.manager, room, victim, f"reveal-{turn}")
                 if room.engine.state.pending and room.engine.state.pending.kind == "skill":
                     self.manager.apply_command(
                         room, command(room.engine, f"skill-{turn}", victim, "choose-skill", use=False)
@@ -137,6 +148,7 @@ class RoomManagerTests(unittest.TestCase):
                 self.manager.apply_command(
                     room, command(room.engine, f"decline-{turn}", victim, "decline-intervention")
                 )
+            resolve_reveal_windows(self.manager, room, victim, f"reveal-{turn}")
             if room.engine.state.pending and room.engine.state.pending.kind == "skill":
                 self.manager.apply_command(
                     room, command(room.engine, f"skill-{turn}", victim, "choose-skill", use=False)

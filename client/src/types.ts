@@ -5,8 +5,11 @@ export type RoomStatus = "waiting" | "playing" | "ended";
 export interface Action {
   type: string;
   targetPlayerId?: string;
+  targetPlayerIds?: string[];
   responderPlayerId?: string;
   use?: boolean;
+  token?: string;
+  color?: string;
 }
 
 export interface Identity {
@@ -20,15 +23,18 @@ export interface PlayerView {
   displayName: string;
   damage: number;
   captured: boolean;
-  revealed: { rank?: number | string; affiliation?: string };
+  revealed: { rank?: number | string; markers: [string | null, string | null] };
+  identityMarkers: [string | null, string | null];
   resources: Record<string, number>;
 }
 
 export interface ViewerView {
   playerId: string;
   identity: Identity;
+  identityMarkers: string[];
   resources: Record<string, number>;
   skillsUsed: string[];
+  inspections: Record<string, { faction: string | null; rank: number | string | null }>;
   cursesToDistribute: string[];
 }
 
@@ -39,6 +45,8 @@ export interface PendingView {
   eligiblePlayerIds: string[];
   rank: number | string | null;
   trigger: string | null;
+  eligibleTokens?: string[];
+  forceRank?: boolean;
 }
 
 export interface GameResult {

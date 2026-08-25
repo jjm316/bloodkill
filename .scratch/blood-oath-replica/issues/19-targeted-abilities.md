@@ -2,7 +2,7 @@
 
 Type: task
 Blocked by: 18
-Status: open
+Status: resolved
 
 问题：harlequin / mentalist / guardian / mage / courtesan 五个能力在 catalog 中仍标 `unimplemented`。这五个能力模式相同——技能窗内选择一个目标并施加一次性效果——依赖 17 的技能窗/结算上下文与 18 的资源事件词汇。
 
@@ -25,6 +25,17 @@ Status: open
 - harlequin 反馈保密有投影测试（含事件日志不含身份值的断言）；
 - 性质测试随机走法能自然走到新分支（`generate_walk` 经 `legal_actions` 已覆盖），不变量在全量 sweep 下成立；
 - 全量 `.venv\Scripts\python.exe -m unittest discover -v` 通过。
+
+## Answer
+
+已完成五个目标选择型能力：
+
+- rank 3 harlequin 支持两个存活目标，公开 `HarlequinInspected` 事件，身份反馈仅写入施法者私有投影。
+- rank 5 mentalist 对非自身、非护盾目标造成一点技能伤害，自动亮 rank 并将匕首交给目标。
+- rank 6 guardian 发放 shield/sword ward 资源，并在 guardian 达到第三点伤害时通过两个 `ResourceReturned` 事件归还。
+- rank 8 mage 发放 staff 并将目标身份标记及已显示值遮蔽为 `unknown`；rank 9 courtesan 发放 fan，fan 继续阻断干涉响应者。
+- `_IMPLEMENTED_SKILL_RANKS`、`legal_actions`、存档快照、客户端协议类型、catalog 双语说明与 golden replay 已同步；新增五个能力分支和私有投影测试。
+- 全量 `.venv\\Scripts\\python.exe -m unittest discover -v` 通过 97 项。
 
 ## Comments
 
