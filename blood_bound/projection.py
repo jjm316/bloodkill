@@ -42,7 +42,18 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
                 actions.insert(0, {"type": "request-intervention"})
             return actions
         if pending.kind == "skill":
+            owner = state.players[player_id]
             actions = [{"type": "choose-skill", "use": False}]
+            if pending.rank == 7 and owner.resources.get("shield", 0):
+                return actions
+            if pending.rank == 4 and pending.trigger != "intervention":
+                return actions
+            if pending.rank == 4:
+                actions.append({"type": "choose-skill", "use": True, "mode": "harm"})
+                protected = state.players.get(pending.context.get("protectedPlayerId"))
+                if protected and protected.damage >= 1 and protected.revealed:
+                    actions.append({"type": "choose-skill", "use": True, "mode": "heal"})
+                return actions
             if pending.rank == 2:
                 actions.extend(
                     {"type": "choose-skill", "use": True, "targetPlayerId": target.player_id}
@@ -65,6 +76,11 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
             else:
                 actions.append({"type": "choose-skill", "use": True})
             return actions
+        if pending.kind == "token-return":
+            return [
+                {"type": "choose-return", "token": token}
+                for token in pending.eligible_player_ids
+            ]
         if pending.kind == "reveal":
             target = state.players[pending.actor_player_id]
             tokens = {"rank", "marker-0", "marker-1"} - target.revealed
@@ -156,6 +172,6 @@ def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:
         "eligiblePlayerIds": list(pending.eligible_player_ids),
         "rank": pending.rank,
         "trigger": pending.trigger,
-        "eligibleTokens": list(getattr(pending, "context", {}).get("eligibleTokens", [])) if pending.kind == "reveal" else [],
+        "eligibleTokens": list(pending.eligible_player_ids) if pending.kind == "token-return" else (list(getattr(pending, "context", {}).get("eligibleTokens", [])) if pending.kind == "reveal" else []),
         "forceRank": bool(getattr(pending, "context", {}).get("forceRank")) if pending.kind == "reveal" else False,
     }

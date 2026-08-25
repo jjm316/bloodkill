@@ -84,10 +84,10 @@ class RulesEngineTests(unittest.TestCase):
         engine.apply(command(engine, "skill-no", target, "choose-skill", use=False))
         self.assertIsNone(engine.state.pending)
 
-    def test_unimplemented_rank_does_not_open_skill_window(self):
+    def test_alchemist_attack_trigger_does_not_open_skill_window(self):
         engine = self.started()
         attacker = engine.state.dagger_holder_id
-        target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank not in (1, 2))
+        target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank == 4)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         events = engine.apply(command(engine, "decline", target, "decline-intervention"))
         reveal_rank(engine, target)

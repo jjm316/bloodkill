@@ -2,7 +2,7 @@
 
 Type: task
 Blocked by: 19
-Status: open
+Status: resolved
 
 问题：alchemist 与 berserker 的效果上下文来自干涉/攻击流程（被干涉者、刚刚攻击自己的玩家），需要 17 的结算上下文携带 `protectedPlayerId` / `attackerPlayerId` 进入技能窗；alchemist 还需新增退标记窗口。放最后实现是因为它们对地基的上下文传递要求最高。
 
@@ -26,5 +26,9 @@ Status: open
 - 完成后在 [14](14-abilities-resource-economy.md) 伞票 Comments 回报，由伞票按原完成条件整票验收。
 
 ## Comments
+
+## Answer
+
+Implemented and verified rank 4 alchemist and rank 7 berserker. Intervention resolution now carries the original attacker and protected-player context. Alchemist rank 4 is offered only for intervention-triggered windows: harm applies one skill damage to the protected player without opening another skill window; heal requires existing damage and opens a token-return window for the healed player, emitting DamageHealed and TokenReturned while preserving the rank skill lock. Berserker rank 7 applies one self-damage with source reaction on attack or intervention triggers, with no follow-up skill window. choose-return is wired through the engine, projection, persistence-compatible pending state, protocol, catalog, and localized text. Ranks 1--9 are implemented and covered by branch, property, and golden replay tests.
 
 - 2026-08-24：由 14 拆分。berserker 的 `source = "reaction"` 沿用契约事件表中的既有枚举值，不是新增语义。

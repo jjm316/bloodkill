@@ -20,10 +20,10 @@
     {"id": "ability.rank.01", "implementation": "grant-quill-leader-max", "nameKey": "ability.rank.01", "descriptionKey": "ability.rank.01.description"},
     {"id": "ability.rank.02", "implementation": "damage-two", "nameKey": "ability.rank.02", "descriptionKey": "ability.rank.02.description"},
     {"id": "ability.rank.03", "implementation": "inspect-two", "nameKey": "ability.rank.03", "descriptionKey": "ability.rank.03.description"},
-    {"id": "ability.rank.04", "implementation": "unimplemented", "nameKey": "ability.rank.04", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.04", "implementation": "heal-or-harm", "nameKey": "ability.rank.04", "descriptionKey": "ability.rank.04.description"},
     {"id": "ability.rank.05", "implementation": "damage-one-reveal-rank", "nameKey": "ability.rank.05", "descriptionKey": "ability.rank.05.description"},
     {"id": "ability.rank.06", "implementation": "grant-shield-sword", "nameKey": "ability.rank.06", "descriptionKey": "ability.rank.06.description"},
-    {"id": "ability.rank.07", "implementation": "unimplemented", "nameKey": "ability.rank.07", "descriptionKey": "ability.placeholder.description"},
+    {"id": "ability.rank.07", "implementation": "counter-one", "nameKey": "ability.rank.07", "descriptionKey": "ability.rank.07.description"},
     {"id": "ability.rank.08", "implementation": "grant-staff-obscure", "nameKey": "ability.rank.08", "descriptionKey": "ability.rank.08.description"},
     {"id": "ability.rank.09", "implementation": "grant-fan", "nameKey": "ability.rank.09", "descriptionKey": "ability.rank.09.description"},
     {"id": "ability.inquisitor", "implementation": "curse-distribution", "nameKey": "ability.inquisitor", "descriptionKey": "ability.inquisitor.description"}

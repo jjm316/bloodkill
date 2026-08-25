@@ -11,6 +11,15 @@
   测试直接写入权威状态以验证防御闸门；对应发放路径由 issue 14 落地后转为自然触发。
 - `@expectedFailure` = 已知缺陷的回归测试，由 issue 15/16 修复后去掉标记。
 
+Issue 20 branch additions:
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| rank 4 direct attack | no skill window | `SkillBranchTests.test_alchemist_does_not_open_from_direct_attack` |
+| rank 4 intervention harm | protected player takes skill damage without a new skill window | `SkillBranchTests.test_alchemist_harm_targets_protected_player_without_skill_window` |
+| rank 4 intervention heal | token-return window heals damage and returns a revealed token | `SkillBranchTests.test_alchemist_heal_opens_token_return_and_returns_marker` |
+| rank 7 reaction | self damage with `source=reaction`, no follow-up skill window | `SkillBranchTests.test_berserker_reaction_takes_one_damage_without_new_window` |
+
 ## 引擎分支
 
 | 分支 | 行为 | 覆盖测试 |
@@ -64,7 +73,7 @@
 | `distribute-curse` 合法 | `CurseDistributed`、诅咒清空 | `RulesEngineTests.test_curse_distribution_is_private_to_the_inquisitor_command` |
 | `_apply_damage` 首伤展示 rank / 后续展示 affiliation | `ClueRevealed` 种类 | `ProjectionTests.test_revealed_clues_appear_only_after_damage`；`SkillBranchTests.test_skill_window_only_opens_once_per_rank_reveal` |
 | `_apply_damage` 第 4 伤 | `PlayerCaptured` + `GameEnded`、立即终局 | `EndGameBranchTests` 四项；golden 全部 |
-| `_apply_damage` 攻击伤害开技能窗 | 仅 rank 1/2、仅 `source=attack` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_unimplemented_rank_does_not_open_skill_window`、`test_inquisitor_rank_reveal_does_not_open_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_without_skill_window` |
+| `_apply_damage` 攻击伤害开技能窗 | rank 1--9（rank 4 仅 intervention），仅 `source=attack`/`source=intervention` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_does_not_open_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_without_skill_window` |
 | `_end_game` 捕获家族领袖 | `captured-leader`，攻击方胜 | `EndGameBranchTests.test_captured_leader_branch` |
 | `_end_game` 捕获普通成员 | `captured-player`，攻击方负 | `EndGameBranchTests.test_captured_non_leader_branch` |
 | `_end_game` 审判官被捕获 | `inquisitor-captured`，平局 | `EndGameBranchTests.test_inquisitor_captured_is_draw` |

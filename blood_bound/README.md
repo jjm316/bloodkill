@@ -13,7 +13,7 @@ engine.apply(Command("join-1", "game-1", None, 0, "join-game", {
 
 The engine deep-copies authority before dispatching a command. A rejected command leaves the prior state untouched. Accepted commands append an ordered event batch, advance `revision`, and remember the command body hash for idempotent retries. Event timestamps come from an injectable clock; event IDs and revisions are assigned at commit time, so deterministic comparisons can ignore timestamps.
 
-Implemented command paths cover setup, deterministic faction/rank assignment, dagger passing, attack resolution, intervention request/selection/decline, attack-triggered skill windows, the first two resource-producing/damaging skill paths, curse distribution, stable rule errors, and end-game branches. `legal_actions(player_id)` is derived from authority and is intended only as a client affordance; it does not bypass validation.
+Implemented command paths cover setup, deterministic faction/rank assignment, dagger passing, attack resolution, intervention request/selection/decline, attack/intervention-triggered skill windows, all rank 1--9 abilities, resource lifecycle events, alchemist token return, curse distribution, stable rule errors, and end-game branches. `legal_actions(player_id)` is derived from authority and is intended only as a client affordance; it does not bypass validation.
 
 `run_deterministic_game()` is a headless smoke/golden-replay runner. It submits only legal public commands to finish a fixture game without UI or human input. It is not an AI player and its fixed strategy is only for proving the command loop, event ordering, terminal result, and ranking are closed.
 

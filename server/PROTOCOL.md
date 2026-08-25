@@ -56,7 +56,8 @@
 | `request-intervention` | `{}` | 受攻击者申请干预 |
 | `choose-intervention` | `{"responderPlayerId"}` | 匕首持有者选择干预响应人 |
 | `decline-intervention` | `{}` | 受攻击者放弃干预 |
-| `choose-skill` | `{"use": true\|false, "targetPlayerId"?, "targetPlayerIds"?}` | 技能窗口；2/5/6/8/9 使用单目标，3 使用两个目标 |
+| `choose-skill` | `{"use": true\|false, "targetPlayerId"?, "targetPlayerIds"?, "mode"?}` | 技能窗口；2/5/6/8/9 使用单目标，3 使用两个目标，4 使用 `mode=heal|harm` |
+| `choose-return` | `{"token": "rank|marker-0|marker-1"}` | rank 4 治疗窗口，治疗者退回一张已展示标记 |
 | `distribute-curse` | `{"assignments": {"curseId": "playerId"}}` | 仅审判官；数量/重复校验由引擎完成 |
 
 ### 服务器 → 客户端

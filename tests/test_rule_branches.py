@@ -345,6 +345,96 @@ class AttackBranchTests(unittest.TestCase):
 
 
 class SkillBranchTests(unittest.TestCase):
+    def test_berserker_reaction_takes_one_damage_without_new_window(self):
+        engine, found = started_with_ranks(6, 7)
+        berserker = found[7]
+        attacker = engine.state.dagger_holder_id
+        if attacker == berserker.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != berserker.player_id))
+            attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "attack-7", attacker, "attack", targetPlayerId=berserker.player_id))
+        engine.apply(command(engine, "decline-7", berserker.player_id, "decline-intervention"))
+        reveal_rank(engine, berserker.player_id)
+        self.assertEqual(engine.state.pending.rank, 7)
+        events = engine.apply(command(engine, "use-7", berserker.player_id, "choose-skill", use=True))
+        self.assertEqual(engine.state.players[berserker.player_id].damage, 2)
+        self.assertIn("DamageApplied", [event.event_type for event in events])
+        self.assertEqual(next(event for event in events if event.event_type == "DamageApplied").payload["source"], "reaction")
+        if engine.state.pending and engine.state.pending.kind == "reveal":
+            engine.apply(command(engine, "reveal-reaction", berserker.player_id, "choose-reveal", token="marker-0"))
+        self.assertIsNone(engine.state.pending)
+
+    def test_berserker_reaction_capture_uses_berserker_as_active_player(self):
+        engine, found = started_with_ranks(6, 7)
+        berserker = found[7]
+        berserker.damage = 2
+        berserker.revealed = {"marker-0", "marker-1"}
+        attacker = engine.state.dagger_holder_id
+        if attacker == berserker.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != berserker.player_id))
+            attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "attack-7-capture", attacker, "attack", targetPlayerId=berserker.player_id))
+        engine.apply(command(engine, "decline-7-capture", berserker.player_id, "decline-intervention"))
+        events = engine.apply(command(engine, "use-7-capture", berserker.player_id, "choose-skill", use=True))
+        self.assertEqual(engine.state.status, "ended")
+        ended = next(event for event in events if event.event_type == "GameEnded")
+        self.assertEqual(ended.payload["activePlayerId"], berserker.player_id)
+
+    def test_alchemist_harm_targets_protected_player_without_skill_window(self):
+        engine, found = started_with_ranks(6, 4)
+        alchemist = found[4]
+        attacker = engine.state.dagger_holder_id
+        if attacker == alchemist.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != alchemist.player_id))
+            attacker = engine.state.dagger_holder_id
+        protected = next(player for player in engine.state.players.values() if player.player_id not in {attacker, alchemist.player_id})
+        protected.revealed = {"marker-0"}
+        protected.revealed_values["marker-0"] = protected.identity_markers[0]
+        engine.apply(command(engine, "attack-4", attacker, "attack", targetPlayerId=protected.player_id))
+        engine.apply(command(engine, "request-4", protected.player_id, "request-intervention"))
+        engine.apply(command(engine, "choose-4", protected.player_id, "choose-intervention", responderPlayerId=alchemist.player_id))
+        reveal_rank(engine, alchemist.player_id, "reveal-alchemist")
+        events = engine.apply(command(engine, "harm-4", alchemist.player_id, "choose-skill", use=True, mode="harm"))
+        self.assertEqual(engine.state.players[protected.player_id].damage, 1)
+        self.assertIsNone(engine.state.pending)
+        self.assertNotIn("SkillWindowOpened", [event.event_type for event in events])
+
+    def test_alchemist_heal_opens_token_return_and_returns_marker(self):
+        engine, found = started_with_ranks(6, 4)
+        alchemist = found[4]
+        attacker = engine.state.dagger_holder_id
+        if attacker == alchemist.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != alchemist.player_id))
+            attacker = engine.state.dagger_holder_id
+        protected = next(player for player in engine.state.players.values() if player.player_id not in {attacker, alchemist.player_id})
+        protected.damage = 1
+        protected.revealed = {"marker-0"}
+        protected.revealed_values["marker-0"] = protected.identity_markers[0]
+        engine.apply(command(engine, "attack-heal", attacker, "attack", targetPlayerId=protected.player_id))
+        engine.apply(command(engine, "request-heal", protected.player_id, "request-intervention"))
+        engine.apply(command(engine, "choose-heal", protected.player_id, "choose-intervention", responderPlayerId=alchemist.player_id))
+        reveal_rank(engine, alchemist.player_id, "reveal-heal-alchemist")
+        engine.apply(command(engine, "heal", alchemist.player_id, "choose-skill", use=True, mode="heal"))
+        self.assertEqual(engine.state.pending.kind, "token-return")
+        self.assertEqual(legal_actions(engine.state, protected.player_id), [{"type": "choose-return", "token": "marker-0"}])
+        events = engine.apply(command(engine, "return", protected.player_id, "choose-return", token="marker-0"))
+        protected_after = engine.state.players[protected.player_id]
+        self.assertEqual(protected_after.damage, 0)
+        self.assertNotIn("marker-0", protected_after.revealed)
+        self.assertEqual([event.event_type for event in events], ["DamageHealed", "TokenReturned", "PhaseChanged"])
+
+    def test_alchemist_does_not_open_from_direct_attack(self):
+        engine, found = started_with_ranks(6, 4)
+        alchemist = found[4]
+        attacker = engine.state.dagger_holder_id
+        if attacker == alchemist.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != alchemist.player_id))
+            attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "attack-direct-4", attacker, "attack", targetPlayerId=alchemist.player_id))
+        engine.apply(command(engine, "decline-direct-4", alchemist.player_id, "decline-intervention"))
+        reveal_rank(engine, alchemist.player_id, "reveal-direct-4")
+        self.assertIsNone(engine.state.pending)
+
     def open_skill(self, engine, player):
         engine.state.pending = Pending("skill", player.player_id, player.player_id, rank=player.rank, trigger="attack")
         engine.state.phase = {"kind": "skill", "activePlayerId": player.player_id}

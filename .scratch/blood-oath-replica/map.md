@@ -43,6 +43,8 @@ Effort: `blood-oath-replica`
 
 ## Decisions-so-far
 
+- 2026-08-26: Issues 20 and 14 resolved. Rank 4 alchemist and rank 7 berserker are fully implemented with intervention context, `choose-return`, reaction damage, resource/event semantics, projection/protocol/catalog updates, and regression coverage. The rank 1--9 ability/resource scope is now complete.
+
 - 2026-08-25：19 已完成：目标型能力统一复用 `choose-skill`；harlequin 的身份反馈仅写入施法者投影，guardian 的 shield/sword 以 ward 关系和 `ResourceReturned` 事件闭环，mage 遮蔽已公开 marker 值，fan 继续作为干涉资格门槛。frontier 推进至 20。
 
 - 2026-08-25：18 已完成：rank 1 elder 的 quill 按 `ResourceGranted` 后立即 `ResourceSpent(reason=leader-succession)` 建模；家族领袖默认取最小 rank，使用 elder 后仅该家族切换为最大 rank，状态写入 `maxLeaderFactions` 并纳入存档/golden replay。

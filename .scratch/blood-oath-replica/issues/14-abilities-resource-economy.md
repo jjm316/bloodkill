@@ -2,7 +2,7 @@
 
 Type: task
 Blocked by: 17、18、19、20
-Status: open
+Status: resolved
 
 问题：rank 3–9 的能力语义已由来源 C 提供（见 [rules-corpus-user-extract.md](../rules-corpus-user-extract.md)），当前在 `content/catalog.json` 中标 `unimplemented`；rank 1 `elder` 的「本家族领袖改为等级最高者」规则、以及 `shield`/`sword`/`staff`/`fan` 资源的发放与消耗也未实现。[spec.md](../spec.md) 的 MVP 边界明确包含「能力触发、资源变化」。
 
@@ -43,5 +43,9 @@ Status: open
 依赖链 17 → 18 → 19 → 20。各子票 resolved 后，本票按上方完成条件整票验收关闭。
 
 ## Comments
+
+## Answer
+
+All rank 1--9 abilities and the resource economy are implemented and accepted through dependent tickets 17, 18, 19, and 20. Identity markers and reveal locks are in the v2/0.2 state contract; ResourceGranted, ResourceSpent, and ResourceReturned cover the resource lifecycle; elder succession uses the decided highest-rank rule. Targeted abilities and intervention-coupled abilities are command-triggerable, projected through legal actions, persisted in pending state, and covered by branch, property, and golden replay tests. Catalog implementations and bilingual descriptions are no longer placeholders, and the protocol documents choose-return and rank 4 modes. Full unittest discovery passes.
 
 - 2026-08-24：拆分理由——全部能力都踩在「标记模型 + 自选展示结算」这一共同地基上，按 rank 平切会产生伪中间态；地基之外的能力彼此独立，故按「一个地基 + 三批能力」拆分。quill 的消耗语义按「羽毛消耗于改写继承顺序」建模（18 票面第 3 条），如产品方改判需回到 18 调整。
