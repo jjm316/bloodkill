@@ -67,7 +67,7 @@ class ProjectionTests(unittest.TestCase):
         other = next(pid for pid in engine.state.players if pid != inquisitor)
         inquisitor_view = project_state(engine.state, inquisitor)
         other_view = project_state(engine.state, other)
-        self.assertEqual(inquisitor_view["viewer"]["cursesToDistribute"], ["curse-1"])
+        self.assertEqual(inquisitor_view["viewer"]["cursesToDistribute"], ["true-curse-1", "false-curse-1"])
         self.assertEqual(other_view["viewer"]["cursesToDistribute"], [])
         self.assertIn({"type": "distribute-curse"}, inquisitor_view["legalActions"])
         self.assertNotIn({"type": "distribute-curse"}, other_view["legalActions"])

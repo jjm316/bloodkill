@@ -28,7 +28,7 @@
   "ability.rank.06": "Rank 6 ability",
   "ability.rank.06.description": "Place a shield on a target and hold a sword as its guardian ward.",
   "ability.rank.07": "Rank 7 ability",
-  "ability.rank.07.description": "When attacked or chosen as an intervention responder, take one reaction damage.",
+  "ability.rank.07.description": "When attacked or chosen as an intervention responder, the original attacker takes one reaction damage.",
   "ability.rank.08": "Rank 8 ability",
   "ability.rank.08.description": "Grant a staff and obscure a target's identity markers.",
   "ability.rank.09": "Rank 9 ability",

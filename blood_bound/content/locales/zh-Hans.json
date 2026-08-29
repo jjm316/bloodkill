@@ -28,7 +28,7 @@
   "ability.rank.06": "等级 6 能力",
   "ability.rank.06.description": "为目标放置护盾，并持有作为守护标记的剑。",
   "ability.rank.07": "等级 7 能力",
-  "ability.rank.07.description": "受到攻击或成为干预响应者时承受1点反击伤害。",
+  "ability.rank.07.description": "受到攻击或成为干预响应者时，原攻击者承受1点反击伤害。",
   "ability.rank.08": "等级 8 能力",
   "ability.rank.08.description": "授予法杖并遮蔽目标的身份标记。",
   "ability.rank.09": "等级 9 能力",

@@ -3,10 +3,9 @@ test_engine / test_projection.
 
 A few branches are defensive gates whose triggers are not grantable through
 public commands yet (shield/fan are granted by ranks 6/9 in issue 14, a second
-skill window needs the alchemist's token return, multi-curse games need a
-versioned curse table). Those tests inject the trigger directly into the
-authority state and are commented as such; they prove the gate, not the
-granting path.
+skill window needs the alchemist's token return). Those tests inject the
+trigger directly into the authority state and are commented as such; they
+prove the gate, not the granting path.
 
 Two tests document known defects found by the property net and are marked
 `expectedFailure`; the referenced tickets remove the marker when fixed.
@@ -345,7 +344,7 @@ class AttackBranchTests(unittest.TestCase):
 
 
 class SkillBranchTests(unittest.TestCase):
-    def test_berserker_reaction_takes_one_damage_without_new_window(self):
+    def test_berserker_reaction_damages_attacker_without_new_window(self):
         engine, found = started_with_ranks(6, 7)
         berserker = found[7]
         attacker = engine.state.dagger_holder_id
@@ -357,28 +356,32 @@ class SkillBranchTests(unittest.TestCase):
         reveal_rank(engine, berserker.player_id)
         self.assertEqual(engine.state.pending.rank, 7)
         events = engine.apply(command(engine, "use-7", berserker.player_id, "choose-skill", use=True))
-        self.assertEqual(engine.state.players[berserker.player_id].damage, 2)
-        self.assertIn("DamageApplied", [event.event_type for event in events])
-        self.assertEqual(next(event for event in events if event.event_type == "DamageApplied").payload["source"], "reaction")
-        if engine.state.pending and engine.state.pending.kind == "reveal":
-            engine.apply(command(engine, "reveal-reaction", berserker.player_id, "choose-reveal", token="marker-0"))
+        self.assertEqual(engine.state.players[berserker.player_id].damage, 1)
+        self.assertEqual(engine.state.players[attacker].damage, 1)
+        self.assertNotIn("SkillWindowOpened", [event.event_type for event in events])
+        reaction = next(event for event in events if event.event_type == "DamageApplied")
+        self.assertEqual(reaction.payload, {"targetPlayerId": attacker, "amount": 1, "source": "reaction", "triggerContext": None})
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        engine.apply(command(engine, "reveal-reaction", attacker, "choose-reveal", token="marker-0"))
         self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.dagger_holder_id, berserker.player_id)
 
     def test_berserker_reaction_capture_uses_berserker_as_active_player(self):
         engine, found = started_with_ranks(6, 7)
         berserker = found[7]
-        berserker.damage = 2
-        berserker.revealed = {"marker-0", "marker-1"}
         attacker = engine.state.dagger_holder_id
         if attacker == berserker.player_id:
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != berserker.player_id))
             attacker = engine.state.dagger_holder_id
+        engine.state.players[attacker].damage = 3
         engine.apply(command(engine, "attack-7-capture", attacker, "attack", targetPlayerId=berserker.player_id))
         engine.apply(command(engine, "decline-7-capture", berserker.player_id, "decline-intervention"))
+        reveal_rank(engine, berserker.player_id)
         events = engine.apply(command(engine, "use-7-capture", berserker.player_id, "choose-skill", use=True))
         self.assertEqual(engine.state.status, "ended")
         ended = next(event for event in events if event.event_type == "GameEnded")
         self.assertEqual(ended.payload["activePlayerId"], berserker.player_id)
+        self.assertEqual(engine.state.result["capturedPlayerId"], attacker)
 
     def test_alchemist_harm_targets_protected_player_without_skill_window(self):
         engine, found = started_with_ranks(6, 4)
@@ -664,7 +667,7 @@ class CurseBranchTests(unittest.TestCase):
     def test_distribute_curse_without_curses_is_rejected(self):
         engine = started()
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", "p0", "distribute-curse", assignments={"curse-1": "p1"}))
+            engine.apply(command(engine, "curse", "p0", "distribute-curse", assignments={"true-curse-1": "p1"}))
         self.assertEqual(error.exception.code, "curse.invalid-count")
 
     def test_distribute_curse_by_non_inquisitor_is_rejected(self):
@@ -672,13 +675,14 @@ class CurseBranchTests(unittest.TestCase):
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
         other = next(pid for pid in engine.state.players if pid != inquisitor)
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", other, "distribute-curse", assignments={"curse-1": inquisitor}))
+            engine.apply(command(engine, "curse", other, "distribute-curse", assignments={"true-curse-1": other, "false-curse-1": inquisitor}))
         self.assertEqual(error.exception.code, "player.not-eligible")
 
     def test_distribute_curse_with_wrong_assignment_keys_is_rejected(self):
         engine = started(7)
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
-        for assignments in ({"curse-2": inquisitor}, ["p0"]):
+        other = next(pid for pid in engine.state.players if pid != inquisitor)
+        for assignments in ({"true-curse-1": other}, ["p0"]):
             with self.subTest(assignments=assignments):
                 with self.assertRaises(RuleError) as error:
                     engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments=assignments))
@@ -687,29 +691,30 @@ class CurseBranchTests(unittest.TestCase):
     def test_distribute_curse_to_unknown_recipient_is_rejected(self):
         engine = started(7)
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        other = next(pid for pid in engine.state.players if pid != inquisitor)
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments={"curse-1": "ghost"}))
+            engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments={"true-curse-1": "ghost", "false-curse-1": other}))
         self.assertEqual(error.exception.code, "target.not-found")
 
     def test_distribute_curse_to_captured_recipient_is_rejected(self):
         engine = started(7)
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
         victim = next(pid for pid in engine.state.players if pid != inquisitor)
+        other = next(pid for pid in engine.state.players if pid not in {inquisitor, victim})
         engine.state.players[victim].captured = True  # synthetic: captures end games, so this never occurs live
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments={"curse-1": victim}))
+            engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments={"true-curse-1": victim, "false-curse-1": other}))
         self.assertEqual(error.exception.code, "target.captured")
 
     def test_distribute_curse_duplicate_recipient_is_rejected(self):
-        # versioned curse tables may place more than one curse (map note);
-        # current rules always place one, so inject the second curse directly
+        # odd-player games deal one true and one false curse per inquisitor,
+        # so assigning both to the same recipient trips the duplicate gate
         engine = started(7)
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
         victim = next(pid for pid in engine.state.players if pid != inquisitor)
-        engine.state.curses = ["curse-1", "curse-2"]
         with self.assertRaises(RuleError) as error:
             engine.apply(
-                command(engine, "curse", inquisitor, "distribute-curse", assignments={"curse-1": victim, "curse-2": victim})
+                command(engine, "curse", inquisitor, "distribute-curse", assignments={"true-curse-1": victim, "false-curse-1": victim})
             )
         self.assertEqual(error.exception.code, "curse.duplicate-recipient")
 

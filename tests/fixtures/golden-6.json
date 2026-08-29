@@ -229,6 +229,7 @@
       "explanationKey": "game.end.captured-player"
     },
     "curses": [],
+    "curseAssignments": {},
     "maxLeaderFactions": [],
     "lastEventRevision": 42
   },
@@ -1225,6 +1226,6 @@
   "integrity": {
     "algorithm": "sha256",
     "eventHead": "89e50d3be385839494bbf9e0d6f7441c2155d768b72e5eaa7fe251851a24a9a7",
-    "snapshotHash": "744d2ee029eace819663523f78ecf48fb8a3d34469382f802641d15ded7ff4cc"
+    "snapshotHash": "23bb2823061cde729bcf5aef5f5e526fc37cf1a139a5606bf746dd1b085054dd"
   }
 }

@@ -49,14 +49,16 @@ class RulesEngineTests(unittest.TestCase):
         engine.apply(command(engine, "start", None, "start-game"))
         return engine
 
-    def test_setup_is_deterministic_and_odd_games_have_one_curse(self):
+    def test_setup_is_deterministic_and_odd_games_deal_true_and_false_curses(self):
         left = self.started(7)
         right = self.started(7)
         self.assertEqual(
             [(p.player_id, p.faction, p.rank) for p in left.state.players.values()],
             [(p.player_id, p.faction, p.rank) for p in right.state.players.values()],
         )
-        self.assertEqual(left.state.curses, ["curse-1"])
+        self.assertEqual(left.state.curses, ["true-curse-1", "false-curse-1"])
+        inquisitor_count = sum(player.faction == "secret-order" for player in left.state.players.values())
+        self.assertEqual(len(left.state.curses), inquisitor_count * 2)
 
     def test_pass_dagger_and_idempotency(self):
         engine = self.started()
@@ -127,10 +129,12 @@ class RulesEngineTests(unittest.TestCase):
     def test_curse_distribution_is_private_to_the_inquisitor_command(self):
         engine = self.started(7)
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
-        recipient = next(pid for pid in engine.state.players if pid != inquisitor)
-        events = engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments={"curse-1": recipient}))
-        self.assertEqual([event.event_type for event in events], ["CurseDistributed"])
+        recipients = [pid for pid in engine.state.players if pid != inquisitor][: len(engine.state.curses)]
+        assignments = dict(zip(engine.state.curses, recipients))
+        events = engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments=assignments))
+        self.assertEqual([event.event_type for event in events], ["CurseDistributed"] * len(assignments))
         self.assertEqual(engine.state.curses, [])
+        self.assertEqual(engine.state.curse_assignments, assignments)
 
     def test_deterministic_runner_closes_even_and_odd_games(self):
         even_engine, even_replay = run_deterministic_game(6)
