@@ -1,7 +1,7 @@
 # 完成可访问性、性能、安全与发布
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 08, 09, 10
 
 问题：做最终体验与交付：加载/存档性能、低端设备、键盘导航、色觉/字号、读屏文本、错误恢复、隐私与日志脱敏、版本发布和回滚。
@@ -21,3 +21,4 @@ Blocked by: 08, 09, 10
 
 - 2026-08-29：完成 issue11 交付；系统 Python 未安装 uvicorn，使用仓库 `.venv` 在临时端口完成服务 smoke 验证。
 - 2026-08-29：code review 发现全量测试基线失败及终局回放 smoke 缺口，状态退回 claimed；在门禁转绿前不提交、不推送。
+- 2026-08-29：Python 全量测试已转绿（106/106，含 WebSocket）；按用户指示跳过 code review，直接标记 resolved 并推送。
