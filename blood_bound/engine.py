@@ -90,6 +90,7 @@ class EngineState:
     pending: Pending | None = None
     result: dict[str, Any] | None = None
     curses: list[str] = field(default_factory=list)
+    curse_assignments: dict[str, str] = field(default_factory=dict)
     max_leader_factions: set[str] = field(default_factory=set)
     events: list[Event] = field(default_factory=list)
     commands: list[Command] = field(default_factory=list)
@@ -268,8 +269,8 @@ class RulesEngine:
         state.status = "active"
         state.dagger_holder_id = holder.player_id
         state.phase = {"kind": "action", "activePlayerId": holder.player_id}
-        if count % 2:
-            state.curses = ["curse-1"]
+        inquisitor_count = sum(player.faction == "secret-order" for player in ordered)
+        state.curses = [curse_id for index in range(1, inquisitor_count + 1) for curse_id in (f"true-curse-{index}", f"false-curse-{index}")]
         return [
             self._event(
                 state,
@@ -457,8 +458,10 @@ class RulesEngine:
         elif owner.rank == 7:
             if owner.resources.get("shield", 0):
                 raise RuleError("target.shielded", player_id=owner.player_id)
+            attacker_id = pending.context.get("attackerPlayerId")
+            attacker = self._live_player(state, attacker_id)
             events.extend(self._apply_damage(
-                state, command, owner.player_id, 1, "reaction", trigger=None,
+                state, command, attacker.player_id, 1, "reaction", trigger=None,
                 active_player_id=owner.player_id,
             ))
         return events
@@ -530,6 +533,7 @@ class RulesEngine:
             )
             for curse_id in state.curses
         ]
+        state.curse_assignments.update({str(curse_id): str(recipient_id) for curse_id, recipient_id in assignments.items()})
         state.curses = []
         return events
 
@@ -700,6 +704,9 @@ class RulesEngine:
         else:
             winner = "draw"
             branch = "inquisitor-captured"
+        if winner in {"rose", "beast"} and self._winning_leader_has_true_curse(state, winner):
+            winner = "secret-order"
+            branch = "inquisitor-true-curse"
         state.status = "ended"
         state.dagger_holder_id = None
         state.pending = None
@@ -740,6 +747,18 @@ class RulesEngine:
         ]
         leader_rank = max(ranks) if family in state.max_leader_factions else min(ranks)
         return captured.rank == leader_rank
+
+    @staticmethod
+    def _winning_leader_has_true_curse(state: EngineState, faction: str) -> bool:
+        leaders = [
+            player for player in state.players.values()
+            if player.faction == faction and not player.captured and isinstance(player.rank, int)
+            and RulesEngine._is_leader(state, player)
+        ]
+        return any(
+            any(curse_id.startswith("true-curse-") and recipient == leader.player_id for curse_id, recipient in state.curse_assignments.items())
+            for leader in leaders
+        )
 
     def _require_action_actor(self, state: EngineState, command: Command) -> None:
         if state.phase.get("kind") != "action":

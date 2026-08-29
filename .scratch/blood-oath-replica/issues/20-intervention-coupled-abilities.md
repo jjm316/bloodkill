@@ -10,7 +10,7 @@ Status: resolved
 
 输出：
 
-1. **rank 7 berserker**：技能窗 context 取 `attackerPlayerId`（attack 触发即攻击者，intervention 触发仍为原攻击者）；`use=True` → 该玩家承受 1 点伤害，`source = "reaction"`（盾可挡，报 `target.shielded`，`legal_actions` 此时只给 decline）；可造成第 4 点捕获（终局 active = berserker）；不开新技能窗。catalog slug：`counter-one`。
+1. **rank 7 berserker**：技能窗 context 取 `attackerPlayerId`（attack 触发即攻击者，intervention 触发仍为原攻击者）；`use=True` → 原攻击者承受 1 点伤害，`source = "reaction"`（盾可挡，报 `target.shielded`）；可造成第 4 点捕获（终局 active = berserker）；反伤正常走线索展示和后续技能窗口。catalog slug：`counter-one`。
 2. **rank 4 alchemist**：仅 `trigger == "intervention"` 的技能窗携带 `protectedPlayerId`（被干涉者）；`use=True` + `mode ∈ {"heal", "harm"}`：
    - `harm`：被干涉者承受 1 点伤害，`source = "skill"`，走 17 的自选展示流程，不开新技能窗；
    - `heal`：被干涉者需 `damage ≥ 1`（否则 `skill.invalid-target`）；开新 pending `token-return`（actor = 被治疗者）+ 新命令 `choose-return {token}`；结算：`damage − 1`（事件 `DamageHealed {playerId, amount, source: "skill"}`）并退回所选已展示标记（事件 `TokenReturned {playerId, token}`）；退回 rank 后二次展示不再开窗（17 闩锁）；审判官标记退回后恢复 `wild`。窗口开启事件 `TokenReturnOpened {playerId}`。
@@ -29,6 +29,6 @@ Status: resolved
 
 ## Answer
 
-Implemented and verified rank 4 alchemist and rank 7 berserker. Intervention resolution now carries the original attacker and protected-player context. Alchemist rank 4 is offered only for intervention-triggered windows: harm applies one skill damage to the protected player without opening another skill window; heal requires existing damage and opens a token-return window for the healed player, emitting DamageHealed and TokenReturned while preserving the rank skill lock. Berserker rank 7 applies one self-damage with source reaction on attack or intervention triggers, with no follow-up skill window. choose-return is wired through the engine, projection, persistence-compatible pending state, protocol, catalog, and localized text. Ranks 1--9 are implemented and covered by branch, property, and golden replay tests.
+Implemented and verified rank 4 alchemist and rank 7 berserker. Intervention resolution now carries the original attacker and protected-player context. Alchemist rank 4 is offered only for intervention-triggered windows: harm applies one skill damage to the protected player without opening another skill window; heal requires existing damage and opens a token-return window for the healed player, emitting DamageHealed and TokenReturned while preserving the rank skill lock. Berserker rank 7 applies one reaction damage to the original attacker on attack or intervention triggers; the damage follows normal reveal, skill-window, and capture rules. choose-return is wired through the engine, projection, persistence-compatible pending state, protocol, catalog, and localized text. Ranks 1--9 are implemented and covered by branch, property, and golden replay tests.
 
 - 2026-08-24：由 14 拆分。berserker 的 `source = "reaction"` 沿用契约事件表中的既有枚举值，不是新增语义。

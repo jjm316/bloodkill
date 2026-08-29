@@ -1,5 +1,5 @@
 import type { GameState, Identity, PendingView, PlayerView } from "./types";
-import { displayFaction, displayRank } from "./types";
+import { displayFaction, displayRank, displayResource } from "./types";
 
 // The shared projection component: the live game and the replay render the
 // exact same projection shape through this board.
@@ -23,7 +23,7 @@ function Resources({ resources }: { resources: Record<string, number> }) {
   return (
     <div className="resources">
       {held.map(([name, count]) => (
-        <span key={name} title={name}>
+        <span key={name} title={displayResource(name)}>
           {RESOURCE_ICONS[name] ?? name}×{count}
         </span>
       ))}
@@ -41,7 +41,7 @@ function Seat({ player, dagger, identity }: { player: PlayerView; dagger: boolea
     <div className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`}>
       <div className="seat-name">
         {dagger && (
-          <span className="dagger-icon" title="holds the dagger">
+          <span className="dagger-icon" title="持有匕首">
             🗡️
           </span>
         )}
@@ -53,7 +53,7 @@ function Seat({ player, dagger, identity }: { player: PlayerView; dagger: boolea
           </span>
         )}
       </div>
-      <div className="damage" aria-label={`${player.damage} damage`}>
+      <div className="damage" aria-label={`受到 ${player.damage} 点伤害`}>
         {[0, 1, 2, 3].map((i) => (
           <span key={i} className={i < player.damage ? "pip filled" : "pip"} />
         ))}
@@ -70,23 +70,22 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
     const eligible = pending.eligiblePlayerIds.map((id) => nameOf(players, id)).join(", ");
     return (
       <div className="pending">
-        <strong>{target}</strong> was attacked and may ask someone to intervene or decline. Eligible
-        responders: {eligible || "nobody"}.
+        <strong>{target}</strong> 被攻击，可以请求他人干预或拒绝干预。可响应玩家：{eligible || "无"}。
       </div>
     );
   }
   if (pending.kind === "skill") {
     return (
       <div className="pending">
-        <strong>{nameOf(players, pending.actorPlayerId)}</strong>&rsquo;s skill window is open
-        {typeof pending.rank === "number" ? ` (rank ${pending.rank})` : ""}.
+        <strong>{nameOf(players, pending.actorPlayerId)}</strong> 的技能窗口已开启
+        {typeof pending.rank === "number" ? `（${displayRank(pending.rank)}）` : ""}。
       </div>
     );
   }
   if (pending.kind === "reveal") {
     return (
       <div className="pending">
-        <strong>{nameOf(players, pending.actorPlayerId)}</strong> must reveal one identity marker.
+        <strong>{nameOf(players, pending.actorPlayerId)}</strong> 必须展示一个身份标记。
       </div>
     );
   }
@@ -94,9 +93,15 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
 }
 
 function ResultBanner({ result, players }: { result: NonNullable<GameState["result"]>; players: PlayerView[] }) {
+  const explanation = ({
+    "game.end.captured-leader": "敌方领袖被捕获",
+    "game.end.captured-player": "普通玩家被捕获",
+    "game.end.inquisitor-captured": "审判者被捕获",
+    "game.end.inquisitor-active-capture": "审判者主动捕获目标",
+  } as Record<string, string>)[result.explanationKey] ?? "规则结算";
   return (
     <div className="result">
-      <strong>Game over — {displayFaction(result.winner)} wins</strong> ({result.explanationKey})
+      <strong>对局结束，{displayFaction(result.winner)}获胜</strong>（{explanation}）
       {result.ranking.length > 0 && (
         <ol className="ranking">
           {result.ranking.map((entry) => (

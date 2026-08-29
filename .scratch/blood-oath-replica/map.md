@@ -43,6 +43,8 @@ Effort: `blood-oath-replica`
 
 ## Decisions-so-far
 
+- 2026-08-29：09 已解决；WebSocket 现以稳定 `commandId`/`expectedRevision`/`ack` 实现确认与幂等重传，客户端退避重连后以完整权威投影收敛，过期命令收到冲突与新状态。房主离开不终止房间，持 token 重连恢复管理权；协议版本不匹配显式拒绝，`/metrics` 仅提供无身份运行计数。详见 [09 票据](issues/09-online-sync-recovery.md)、[协议](../../server/PROTOCOL.md) 与 [恢复测试](../../tests/test_server_sync.py)。
+
 - 2026-08-26: Issues 20 and 14 resolved. Rank 4 alchemist and rank 7 berserker are fully implemented with intervention context, `choose-return`, reaction damage, resource/event semantics, projection/protocol/catalog updates, and regression coverage. The rank 1--9 ability/resource scope is now complete.
 
 - 2026-08-25：19 已完成：目标型能力统一复用 `choose-skill`；harlequin 的身份反馈仅写入施法者投影，guardian 的 shield/sword 以 ward 关系和 `ResourceReturned` 事件闭环，mage 遮蔽已公开 marker 值，fan 继续作为干涉资格门槛。frontier 推进至 20。
@@ -57,7 +59,7 @@ Effort: `blood-oath-replica`
 - 2026-08-19：用户提供的规则摘录已将目标锁定为 `Blood Bound`：6–12 人、Rose/Beast 各 1–9 身份，以及奇数局的一名 Secret Order 审判官。出版方、印次和授权仍未核验。
 - 2026-08-19：第二份用户规则来源补充奇数人数使用中立身份、并澄清法师为双方获得法杖；它与第一份来源在治疗后技能重发和护卫盾牌效果上冲突。02 只将两份来源一致的条款作为暂定规范，冲突项待产品方裁决。
 - 2026-08-19：用户补充的规则书正文已裁决人数、中立审判官、羽毛、炼金治疗、护卫盾牌和法师法杖。02 只缺规则书第 8 页的诅咒卡设置比例表；该表在实现奇数局时作为版本化设置数据处理。
-- 2026-08-19：用户随后确认 7/9/11 人局均使用 1 张诅咒卡，并裁决两张审判官仅 clue icon 不同、共用 fleur cross；审判官主动造成第 4 点伤害时独立判负。
+- 2026-08-29：用户更新诅咒规则为每名审判者对应 1 张真诅咒和 1 张假诅咒；狂战士反伤改为施加给原攻击者，且反伤正常触发线索、技能和第 4 点捕获。
 - 2026-08-19：用户提供的英文规则书正文（来源 C）优先于此前中文摘录与社区解读；前述关于羽毛、治疗、护卫、法杖和干涉资格的冲突已按 C 解决。来源 C 未覆盖之处不从低优先级来源猜测补齐。
 - 2026-08-19：02 的三项 needs-info 已由产品方回答，票据现为 `resolved`；可推进 03 领域模型与状态契约。
 - 2026-08-19：frontier 已推进到 03；开始设计支持 6–12 人、Rose/Beast、Secret Order 审判官、私有线索、诅咒卡和独立终局分支的状态契约。

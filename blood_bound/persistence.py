@@ -292,6 +292,7 @@ def _state_to_dict(state: EngineState) -> dict[str, Any]:
         "pending": _pending_to_dict(state.pending),
         "result": deepcopy(state.result),
         "curses": list(state.curses),
+        "curseAssignments": dict(sorted(state.curse_assignments.items())),
         "maxLeaderFactions": sorted(state.max_leader_factions),
         "lastEventRevision": state.revision,
     }

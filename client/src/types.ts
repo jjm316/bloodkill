@@ -10,6 +10,7 @@ export interface Action {
   use?: boolean;
   token?: string;
   color?: string;
+  mode?: string;
 }
 
 export interface Identity {
@@ -114,17 +115,41 @@ export function actionToCommand(action: Action): { command: string; payload: Rec
 }
 
 export function displayFaction(faction: string): string {
-  if (faction === "rose") return "Rose";
-  if (faction === "beast") return "Beast";
-  if (faction === "secret-order") return "Secret Order";
+  if (faction === "rose") return "玫瑰家族";
+  if (faction === "beast") return "野兽家族";
+  if (faction === "secret-order") return "审判者";
+  if (faction === "draw") return "平局";
   return faction;
 }
 
 export function displayRank(rank: number | string): string {
-  if (rank === "fleur-cross") return "Fleur Cross";
-  return `Rank ${rank}`;
+  if (rank === "fleur-cross") return "审判者";
+  const names: Record<number, string> = {
+    1: "长老",
+    2: "刺客",
+    3: "小丑",
+    4: "炼金术师",
+    5: "占卜师",
+    6: "守护者",
+    7: "狂战士",
+    8: "法师",
+    9: "交际花",
+  };
+  return typeof rank === "number" && names[rank] ? `等级${rank}·${names[rank]}` : String(rank);
 }
 
 export function playerLabel(player: PlayerView): string {
-  return `${player.displayName}${player.captured ? " (captured)" : ""}`;
+  return `${player.displayName}${player.captured ? "（已捕获）" : ""}`;
+}
+
+export function displayStatus(status: string): string {
+  return ({ waiting: "等待开始", playing: "进行中", ended: "已结束" } as Record<string, string>)[status] ?? status;
+}
+
+export function displayPhase(phase: string): string {
+  return ({ action: "行动阶段", intervention: "干预阶段", skill: "技能阶段", reveal: "展示身份", "token-return": "归还标记", ended: "已结束" } as Record<string, string>)[phase] ?? phase;
+}
+
+export function displayResource(resource: string): string {
+  return ({ quill: "羽毛笔", shield: "盾牌", sword: "剑", staff: "法杖", fan: "扇子" } as Record<string, string>)[resource] ?? resource;
 }

@@ -45,7 +45,10 @@
       {"playerId": "p1", "color": "rose"},
       {"playerId": "p1", "color": "unknown"}
     ],
-    "curses": [{"curseId": "curse-1", "state": "undistributed"}]
+    "curses": [
+      {"curseId": "true-curse-1", "kind": "true", "state": "undistributed"},
+      {"curseId": "false-curse-1", "kind": "false", "state": "undistributed"}
+    ]
   },
   "daggerHolderId": "p1",
   "phase": {"kind": "action", "activePlayerId": "p1"},
@@ -61,7 +64,7 @@ The example is abbreviated to one player; a valid snapshot always has a complete
 ### Stable entity rules
 
 - `playerId`, `gameId`, `curseId` and token IDs are opaque stable strings. Seat numbers are unique integers from `0` through `playerCount - 1`.
-- `playerCount` is 6--12. Even games have `n/2` Rose and `n/2` Beast players. Odd games have `floor(n/2)` Rose, `floor(n/2)` Beast and exactly one Inquisitor.
+- `playerCount` is 6--12. Even games have `n/2` Rose and `n/2` Beast players. Odd games have `floor(n/2)` Rose, `floor(n/2)` Beast and exactly one Inquisitor; each Inquisitor receives one True Curse and one False Curse for distribution.
 - Each family has unique ranks 1--9. An odd game has exactly one `inquisitor` identity and one `fleur-cross` rank token; the two possible Inquisitor clue icons are presentation data.
 - Every player has exactly one rank token and two identity markers (each `rose`, `beast`, or `unknown`; the composition is fixed by rank — 1/5/6 two faction colors, 2/3/4 two unknowns, 7/8/9 one faction + one unknown). A token is in exactly one of `supply`, `revealed`, or `returned`; `revealed` is terminal for that token except an explicit `alchemist` return event.
 - `damage` is an integer 0--4. `captured` is true iff damage is 4. A captured player cannot receive commands or be selected as a live target.
@@ -156,4 +159,3 @@ The validator returns a stable machine code and structured details. Suggested co
 ```
 
 The fixture is intentionally identity-neutral: tests that need a specific rank use explicit player identities and token inventory, then validate the same invariants.
-
