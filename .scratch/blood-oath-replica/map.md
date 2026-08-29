@@ -43,6 +43,10 @@ Effort: `blood-oath-replica`
 
 ## Decisions-so-far
 
+- 2026-08-30：21 已解决：开局"向左邻展示阵营徽记"上线——`_start` 追加单条 `ClueIconsShown` 公开事件（仅 `pairs` 展示关系，无徽记内容，无 schema/ruleset 版本变更，golden fixtures 按预期漂移后重新生成）；投影 `viewer` 块下发本人 `clueIcon` 与右邻 `seenNeighbourClue`，`players[]`/旁观者/回放零徽记；前端自己座位渲染中文徽记文案，事件日志一行"全员已向左邻展示阵营徽记"；补投影保密、审判官徽记必错与 rank 3 反转测试，全量 110/110 通过。双轴 code review 无违规。详见 [21 票据](issues/21-clue-icon-neighbour-reveal.md)。
+
+- 2026-08-30：`setup.clue-icon` grilling 定案：补上开局"向左邻展示阵营徽记"环节——纯投影（viewer 块加本人 `clueIcon` 与右邻徽记，无 setup 阶段、无 schema bump）；新增一条批量公开事件 `ClueIconsShown` 记录展示关系（内容不进事件）；方向约定俯视顺时针=座位号递增，UI 文案不出现左右；中文术语"阵营徽记"（rank 3 敌对家族、审判官随机家族特例保留，审判官徽记必与真实所属不符，补测试钉死）。已立案 [21](issues/21-clue-icon-neighbour-reveal.md)（ready-for-agent），待产品方审阅后实现。CONTEXT.md 新增"阵营徽记""左邻/右邻"词条。
+
 - 2026-08-29：内网穿透选型定案（见 [调研笔记 research-02](research-02-public-access-tunnel.md)）：默认 cloudflared 快速隧道（本机 winget 已装并完成端到端实测：协议全链路通、自动 HTTPS/WSS、手机零安装；代价是 URL 每次重启随机变、WSS 指令往返实测约 0.8–1 秒）；备选 frp + 国内轻量 VPS 明文转发（预期几十毫秒级、约百元/年）、PC 圈子 Radmin VPN（本机已装，仅 Windows 客户端、手机出局）；花生壳（5 并发<6 人下限）、natapp（HTTP 隧道人脸识别+域名强制轮换）、ngrok（拦截页+1GB/月）、ZeroTier/Tailscale 组网（免费档容量不足）不采用。用户裁定明文可接受、便利性优先，`docs/deployment-lan.md` 的强制 TLS 条款同步降级为建议。
 
 - 2026-08-29：用户裁定产品决策：仅个人学习/非商业使用，不对外公开发布；目标版本为用户提供图片对应的出版版本（基础完整版，不涉及扩展）；允许使用官方素材（个人学习用途，素材来源待调研）；手机/平板支持为后续计划（尽量全支持，排期靠后）；部署为家用机自托管 + 内网穿透，方案待调研优缺点后选定（无域名、无 HTTPS 证书）。
@@ -116,3 +120,4 @@ Effort: `blood-oath-replica`
 - [18 资源经济骨架与 elder 领袖规则（14 子票）](issues/18-resource-economy-elder-leader.md)
 - [19 目标选择型能力：rank 3/5/6/8/9（14 子票）](issues/19-targeted-abilities.md)
 - [20 干涉耦合型能力：rank 4 alchemist / rank 7 berserker（14 子票）](issues/20-intervention-coupled-abilities.md)
+- [21 设置环节：阵营徽记定向展示（setup.clue-icon）](issues/21-clue-icon-neighbour-reveal.md)

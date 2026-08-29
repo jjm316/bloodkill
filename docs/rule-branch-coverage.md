@@ -11,6 +11,15 @@
   测试直接写入权威状态以验证防御闸门；对应发放路径由 issue 14 落地后转为自然触发。
 - `@expectedFailure` = 已知缺陷的回归测试，由 issue 15/16 修复后去掉标记。
 
+Issue 21 branch additions:
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| `start` 徽记展示事件 | 追加 `ClueIconsShown`：`pairs` 为 seat 环序"每人 → 左邻"，payload 无徽记内容 | `RulesEngineTests.test_start_logs_clue_icon_showing_pairs_without_icons` |
+| 徽记不变量 | rank 3 徽记恒为敌对家族；审判官徽记 ∈ {rose, beast} 而真实所属为 `wild`（必不符） | `RulesEngineTests.test_rank_three_icon_is_hostile_and_inquisitor_icon_contradicts_affiliation` |
+| 徽记投影 | viewer 块含本人 `clueIcon` 与右邻 `seenNeighbourClue`，仅此两枚 | `ProjectionTests.test_viewer_sees_own_clue_icon_and_right_neighbours_icon` |
+| 徽记保密 | `players[]` 条目无徽记字段；旁观者与回放投影（`viewer=None`）无徽记 | `ProjectionTests.test_projection_hides_clue_icons_of_anyone_but_self_and_right_neighbour`；`RoomManagerTests.test_replay_returns_public_spectator_steps`；性质 `ProjectionSecrecyPropertyTests` |
+
 Issue 20 branch additions:
 
 | Branch | Behavior | Coverage |

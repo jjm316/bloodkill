@@ -41,6 +41,7 @@
 - 部署环境：家用机自托管 + 内网穿透；无域名、无 HTTPS 证书。2026-08-29 完成选型调研（见 [research-02](research-02-public-access-tunnel.md)）：默认方案为 cloudflared 快速隧道（免费、免账号、自动 HTTPS/WSS、手机零安装开 URL；本机实测协议全链路通，操作延迟约 1 秒）；想要更流畅再升级 frp + 国内轻量服务器（约百元/年，预期几十毫秒级）。用户裁定明文暴露在个人学习定位下可接受，TLS 由"必须"降级为"建议优先"。
 - 语言、引擎、前端与部署模式：Python 标准库 + FastAPI/uvicorn + React/TypeScript/Vite + 单服务器自托管（已定）。
 - 审判官局诅咒卡：每名审判者对应 1 张真诅咒和 1 张假诅咒；当前奇数局各有 1 名审判者，因此放置 2 张。
+- 设置环节"向左邻展示阵营徽记"（`setup.clue-icon`）线上化：纯投影定向下发（每人可见自己的徽记与右邻的徽记），不加 setup 阶段；展示关系以一条批量公开事件记录，徽记内容不进事件。中文术语定为"阵营徽记"。2026-08-30 grilling 裁决，详见 [21](issues/21-clue-icon-neighbour-reveal.md)。
 
 ## Open questions
 

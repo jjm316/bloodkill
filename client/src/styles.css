@@ -195,6 +195,12 @@ h2 {
   color: #9aa0b4;
 }
 
+.own-clue-icon {
+  font-size: 13px;
+  color: #9aa0b4;
+  word-break: break-word;
+}
+
 .damage {
   display: flex;
   gap: 4px;

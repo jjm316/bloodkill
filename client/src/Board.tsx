@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { GameState, Identity, PendingView, PlayerView } from "./types";
-import { displayFaction, displayRank, displayResource } from "./types";
+import { displayClueIcon, displayFaction, displayRank, displayResource } from "./types";
 
 // The shared projection component: the live game and the replay render the
 // exact same projection shape through this board.
@@ -32,7 +32,7 @@ function Resources({ resources }: { resources: Record<string, number> }) {
   );
 }
 
-const Seat = memo(function Seat({ player, dagger, identity }: { player: PlayerView; dagger: boolean; identity?: Identity }) {
+const Seat = memo(function Seat({ player, dagger, identity, clueLine }: { player: PlayerView; dagger: boolean; identity?: Identity; clueLine?: string }) {
   const clues: string[] = [];
   if (player.revealed.rank !== undefined) clues.push(displayRank(player.revealed.rank));
   player.revealed.markers.forEach((marker) => {
@@ -54,6 +54,7 @@ const Seat = memo(function Seat({ player, dagger, identity }: { player: PlayerVi
           </span>
         )}
       </div>
+      {identity && clueLine && <div className="own-clue-icon">{clueLine}</div>}
       <div className="damage" role="img" aria-label={`${player.displayName}受到 ${player.damage} 点伤害`}>
         {[0, 1, 2, 3].map((i) => (
           <span key={i} className={i < player.damage ? "pip filled" : "pip"} />
@@ -115,7 +116,13 @@ function ResultBanner({ result, players }: { result: NonNullable<GameState["resu
 }
 
 export function Board({ game }: { game: GameState }) {
-  const viewerId = game.viewer?.playerId ?? null;
+  const viewer = game.viewer;
+  const viewerId = viewer?.playerId ?? null;
+  const clueLine = viewer
+    ? `你的徽记：${displayClueIcon(viewer.clueIcon)}${
+        viewer.seenNeighbourClue ? ` · 已看到 ${nameOf(game.players, viewer.seenNeighbourClue.playerId)} 的：${displayClueIcon(viewer.seenNeighbourClue.icon)}` : ""
+      }`
+    : undefined;
   return (
     <section className="board" aria-label="对局桌面">
       {game.status === "ended" && game.result && <ResultBanner result={game.result} players={game.players} />}
@@ -126,7 +133,8 @@ export function Board({ game }: { game: GameState }) {
             key={player.playerId}
             player={player}
             dagger={game.daggerHolderId === player.playerId}
-            identity={viewerId === player.playerId ? game.viewer?.identity : undefined}
+            identity={viewerId === player.playerId ? viewer?.identity : undefined}
+            clueLine={viewerId === player.playerId ? clueLine : undefined}
           />
         ))}
       </div>

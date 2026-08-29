@@ -76,7 +76,7 @@ The example is abbreviated to one player; a valid snapshot always has a complete
 
 ## Player projection
 
-`PlayerView` is derived per request from `EngineState` and `viewerPlayerId`. It may contain public player IDs, seats, display names, clue icons, damage, captured state, revealed token kinds/values, resources visible to that viewer, phase, pending window eligible actions, and result. It must omit:
+`PlayerView` is derived per request from `EngineState` and `viewerPlayerId`. It may contain public player IDs, seats, display names, clue icons, damage, captured state, revealed token kinds/values, resources visible to that viewer, phase, pending window eligible actions, and result. Clue icons reach only the viewer who saw them at setup: the `viewer` block carries the viewer's own clue icon plus the right-hand neighbour's icon (`seenNeighbourClue`), and no other view — including spectator projections and replay steps — contains any icon field. It must omit:
 
 - every other player's hidden `identity`;
 - values of rank/identity-marker tokens whose state is `supply` or `returned`;
@@ -109,7 +109,9 @@ All events carry `{eventId, eventType, gameId, revision, timestamp, commandId, p
 
 Core event types:
 
-`GameCreated`, `PlayerJoined`, `GameStarted`, `DaggerPassed`, `AttackDeclared`, `InterventionOpened`, `InterventionSelected`, `InterventionDeclined`, `DamageApplied`, `ClueRevealed`, `SkillWindowOpened`, `SkillUsed`, `SkillDeclined`, `ResourceGranted`, `ResourceSpent`, `ResourceReturned`, `CurseViewed`, `CurseDistributed`, `PlayerCaptured`, `GameEnded`.
+`GameCreated`, `PlayerJoined`, `GameStarted`, `ClueIconsShown`, `DaggerPassed`, `AttackDeclared`, `InterventionOpened`, `InterventionSelected`, `InterventionDeclined`, `DamageApplied`, `ClueRevealed`, `SkillWindowOpened`, `SkillUsed`, `SkillDeclined`, `ResourceGranted`, `ResourceSpent`, `ResourceReturned`, `CurseViewed`, `CurseDistributed`, `PlayerCaptured`, `GameEnded`.
+
+`ClueIconsShown` is appended once per game immediately after `GameStarted`; its payload records only the showing pairs (`{fromPlayerId, toPlayerId}` per player, seat order), never the icon values themselves.
 
 `DamageApplied` records `source` (`attack`, `intervention`, `skill`, `reaction`), `amount`, `targetPlayerId`, and `triggerContext`; it never silently mutates damage. `GameEnded` records a discriminated `result` with `winner` (`rose`, `beast`, `secret-order`, or `draw`), `branch`, `capturedPlayerId`, `activePlayerId`, and a human-readable explanation key plus structured arguments.
 

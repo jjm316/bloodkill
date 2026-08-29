@@ -258,6 +258,15 @@ class ProjectionSecrecyPropertyTests(unittest.TestCase):
                             view["viewer"]["identity"],
                             {"faction": viewer_player.faction, "rank": viewer_player.rank},
                         )
+                        # the viewer block carries exactly two clue icons: their own
+                        # and the right-hand neighbour's (previous seat, cyclically)
+                        ordered = sorted(state.players.values(), key=lambda player: player.seat)
+                        neighbour = ordered[ordered.index(viewer_player) - 1]
+                        self.assertEqual(view["viewer"]["clueIcon"], viewer_player.clue_icon)
+                        self.assertEqual(
+                            view["viewer"]["seenNeighbourClue"],
+                            {"playerId": neighbour.player_id, "icon": neighbour.clue_icon},
+                        )
                         if viewer_player.faction != "secret-order":
                             self.assertEqual(view["viewer"]["cursesToDistribute"], [])
 

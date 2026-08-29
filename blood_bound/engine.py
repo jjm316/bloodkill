@@ -271,6 +271,13 @@ class RulesEngine:
         state.phase = {"kind": "action", "activePlayerId": holder.player_id}
         inquisitor_count = sum(player.faction == "secret-order" for player in ordered)
         state.curses = [curse_id for index in range(1, inquisitor_count + 1) for curse_id in (f"true-curse-{index}", f"false-curse-{index}")]
+        # Each player shows their clue icon to their left neighbour (next seat in
+        # clockwise order). The event records who showed to whom; icon values stay
+        # private and reach only the involved players through the projection.
+        pairs = [
+            {"fromPlayerId": player.player_id, "toPlayerId": ordered[(index + 1) % len(ordered)].player_id}
+            for index, player in enumerate(ordered)
+        ]
         return [
             self._event(
                 state,
@@ -281,7 +288,8 @@ class RulesEngine:
                     "daggerHolderId": holder.player_id,
                     "curseCount": len(state.curses),
                 },
-            )
+            ),
+            self._event(state, command, "ClueIconsShown", {"pairs": pairs}),
         ]
 
     def _pass_dagger(self, state: EngineState, command: Command) -> list[Event]:

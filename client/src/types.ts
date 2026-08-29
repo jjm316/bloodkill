@@ -37,6 +37,8 @@ export interface ViewerView {
   skillsUsed: string[];
   inspections: Record<string, { faction: string | null; rank: number | string | null }>;
   cursesToDistribute: string[];
+  clueIcon: string | null;
+  seenNeighbourClue: { playerId: string; icon: string | null } | null;
 }
 
 export interface PendingView {
@@ -120,6 +122,12 @@ export function displayFaction(faction: string): string {
   if (faction === "secret-order") return "审判者";
   if (faction === "draw") return "平局";
   return faction;
+}
+
+export function displayClueIcon(icon: string | null | undefined): string {
+  if (icon === "rose") return "玫瑰";
+  if (icon === "beast") return "野兽";
+  return "未知";
 }
 
 export function displayRank(rank: number | string): string {

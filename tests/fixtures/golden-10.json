@@ -14,7 +14,7 @@
     "rulesetVersion": "0.2",
     "gameId": "golden-10",
     "seed": "golden-seed-10",
-    "revision": 46,
+    "revision": 47,
     "status": "ended",
     "players": {
       "p0": {
@@ -355,7 +355,7 @@
     "curses": [],
     "curseAssignments": {},
     "maxLeaderFactions": [],
-    "lastEventRevision": 46
+    "lastEventRevision": 47
   },
   "events": [
     {
@@ -538,9 +538,65 @@
     {
       "event": {
         "eventId": "golden-10:12",
-        "eventType": "PhaseChanged",
+        "eventType": "ClueIconsShown",
         "gameId": "golden-10",
         "revision": 12,
+        "timestamp": 0.0,
+        "commandId": "start",
+        "payload": {
+          "pairs": [
+            {
+              "fromPlayerId": "p0",
+              "toPlayerId": "p1"
+            },
+            {
+              "fromPlayerId": "p1",
+              "toPlayerId": "p2"
+            },
+            {
+              "fromPlayerId": "p2",
+              "toPlayerId": "p3"
+            },
+            {
+              "fromPlayerId": "p3",
+              "toPlayerId": "p4"
+            },
+            {
+              "fromPlayerId": "p4",
+              "toPlayerId": "p5"
+            },
+            {
+              "fromPlayerId": "p5",
+              "toPlayerId": "p6"
+            },
+            {
+              "fromPlayerId": "p6",
+              "toPlayerId": "p7"
+            },
+            {
+              "fromPlayerId": "p7",
+              "toPlayerId": "p8"
+            },
+            {
+              "fromPlayerId": "p8",
+              "toPlayerId": "p9"
+            },
+            {
+              "fromPlayerId": "p9",
+              "toPlayerId": "p0"
+            }
+          ]
+        }
+      },
+      "previousHash": "0b0121cfb4c34bc1930f5ec5efcd0b502fca504ecb4cf8dd229182965245327a",
+      "hash": "d9f61932afa20fd0e1978e2f7757bda2fd71f97719a7d791c9e5893fceaa5c04"
+    },
+    {
+      "event": {
+        "eventId": "golden-10:13",
+        "eventType": "PhaseChanged",
+        "gameId": "golden-10",
+        "revision": 13,
         "timestamp": 0.0,
         "commandId": "start",
         "payload": {
@@ -553,15 +609,15 @@
           }
         }
       },
-      "previousHash": "0b0121cfb4c34bc1930f5ec5efcd0b502fca504ecb4cf8dd229182965245327a",
-      "hash": "4267f5d88ef51ef0dd41667d6efe2598f58eec6858d5a0d03d4a4fbd1cf7a98a"
+      "previousHash": "d9f61932afa20fd0e1978e2f7757bda2fd71f97719a7d791c9e5893fceaa5c04",
+      "hash": "c3f57ff8e3499836311412613b5a8baa9f241668b42e70020c5cb04fc5491bd2"
     },
     {
       "event": {
-        "eventId": "golden-10:13",
+        "eventId": "golden-10:14",
         "eventType": "AttackDeclared",
         "gameId": "golden-10",
-        "revision": 13,
+        "revision": 14,
         "timestamp": 0.0,
         "commandId": "attack-1",
         "payload": {
@@ -569,15 +625,15 @@
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "4267f5d88ef51ef0dd41667d6efe2598f58eec6858d5a0d03d4a4fbd1cf7a98a",
-      "hash": "51674bb45e10aa44d5dda45beb1fbd16ba8752dcd425bc0adc6b1153e7c2edd5"
+      "previousHash": "c3f57ff8e3499836311412613b5a8baa9f241668b42e70020c5cb04fc5491bd2",
+      "hash": "6adbbdc2a6469ab4808d4886501e6f4550a2dc2bebfe3ceb9c8543a551e5bea1"
     },
     {
       "event": {
-        "eventId": "golden-10:14",
+        "eventId": "golden-10:15",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 14,
+        "revision": 15,
         "timestamp": 0.0,
         "commandId": "attack-1",
         "payload": {
@@ -591,30 +647,30 @@
           }
         }
       },
-      "previousHash": "51674bb45e10aa44d5dda45beb1fbd16ba8752dcd425bc0adc6b1153e7c2edd5",
-      "hash": "bbc46a6c6a835e83478ccaff00071cf0013d44aca49af1a5697fb3813f1f4d92"
+      "previousHash": "6adbbdc2a6469ab4808d4886501e6f4550a2dc2bebfe3ceb9c8543a551e5bea1",
+      "hash": "45d0486572f24c23158424399fc95788f32f0c54a9753c83d84fa00e929c0ba6"
     },
     {
       "event": {
-        "eventId": "golden-10:15",
+        "eventId": "golden-10:16",
         "eventType": "InterventionDeclined",
         "gameId": "golden-10",
-        "revision": 15,
+        "revision": 16,
         "timestamp": 0.0,
         "commandId": "decline-1",
         "payload": {
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "bbc46a6c6a835e83478ccaff00071cf0013d44aca49af1a5697fb3813f1f4d92",
-      "hash": "849e896cda5b366d01e369a2fd7402a766443e94a034af1b6bc7f2f577acbe71"
+      "previousHash": "45d0486572f24c23158424399fc95788f32f0c54a9753c83d84fa00e929c0ba6",
+      "hash": "0c00261f8be181d30c6f6090a6dbd56ed8cde95067d1ca722ca317c60b9984db"
     },
     {
       "event": {
-        "eventId": "golden-10:16",
+        "eventId": "golden-10:17",
         "eventType": "DamageApplied",
         "gameId": "golden-10",
-        "revision": 16,
+        "revision": 17,
         "timestamp": 0.0,
         "commandId": "decline-1",
         "payload": {
@@ -624,15 +680,15 @@
           "triggerContext": "attack"
         }
       },
-      "previousHash": "849e896cda5b366d01e369a2fd7402a766443e94a034af1b6bc7f2f577acbe71",
-      "hash": "ee99ee57994f1cf116e49a1eb1bbd2ee6cc239b4a6c90ea618123718f375ad18"
+      "previousHash": "0c00261f8be181d30c6f6090a6dbd56ed8cde95067d1ca722ca317c60b9984db",
+      "hash": "468ef015c2a98aa2f36afc0919f8db6179b64ddc36dd866618e834d6785b9d79"
     },
     {
       "event": {
-        "eventId": "golden-10:17",
+        "eventId": "golden-10:18",
         "eventType": "RevealWindowOpened",
         "gameId": "golden-10",
-        "revision": 17,
+        "revision": 18,
         "timestamp": 0.0,
         "commandId": "decline-1",
         "payload": {
@@ -645,15 +701,15 @@
           "forceRank": false
         }
       },
-      "previousHash": "ee99ee57994f1cf116e49a1eb1bbd2ee6cc239b4a6c90ea618123718f375ad18",
-      "hash": "807e6bc616ff77097f9a85e085bc5dd288f837cd981914266a7da41dc8ee471c"
+      "previousHash": "468ef015c2a98aa2f36afc0919f8db6179b64ddc36dd866618e834d6785b9d79",
+      "hash": "0dde1f1ebf14614931d8d2520f691a314b5abeb0988abd781eb5a98525298153"
     },
     {
       "event": {
-        "eventId": "golden-10:18",
+        "eventId": "golden-10:19",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 18,
+        "revision": 19,
         "timestamp": 0.0,
         "commandId": "decline-1",
         "payload": {
@@ -667,34 +723,34 @@
           }
         }
       },
-      "previousHash": "807e6bc616ff77097f9a85e085bc5dd288f837cd981914266a7da41dc8ee471c",
-      "hash": "dccb947eed45323c879ef626de0b90b99cbe95a0422dfb4c8c0bf48d9d8fbc44"
+      "previousHash": "0dde1f1ebf14614931d8d2520f691a314b5abeb0988abd781eb5a98525298153",
+      "hash": "69081216dda875204b086a16c88b875dcbc6ee1fa0894fb71cbd50d1fcbef1bf"
     },
     {
       "event": {
-        "eventId": "golden-10:19",
+        "eventId": "golden-10:20",
         "eventType": "ClueRevealed",
         "gameId": "golden-10",
-        "revision": 19,
+        "revision": 20,
         "timestamp": 0.0,
-        "commandId": "reveal-1-18",
+        "commandId": "reveal-1-19",
         "payload": {
           "playerId": "p1",
           "kind": "marker-0",
           "value": "rose"
         }
       },
-      "previousHash": "dccb947eed45323c879ef626de0b90b99cbe95a0422dfb4c8c0bf48d9d8fbc44",
-      "hash": "044671443eb94f72b25d5baf6cf3c8ef204f879d16dde0ff0cbdf3e7b938cc68"
+      "previousHash": "69081216dda875204b086a16c88b875dcbc6ee1fa0894fb71cbd50d1fcbef1bf",
+      "hash": "09a1f4e836be1647641d3203e9b0e48986782fbf1b2b2675056278ac1ae07a4e"
     },
     {
       "event": {
-        "eventId": "golden-10:20",
+        "eventId": "golden-10:21",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 20,
+        "revision": 21,
         "timestamp": 0.0,
-        "commandId": "reveal-1-18",
+        "commandId": "reveal-1-19",
         "payload": {
           "from": {
             "kind": "reveal",
@@ -706,15 +762,15 @@
           }
         }
       },
-      "previousHash": "044671443eb94f72b25d5baf6cf3c8ef204f879d16dde0ff0cbdf3e7b938cc68",
-      "hash": "bc520075995d6fcce27a4c273a4aeb5e0323d66415b5db0870a16c04a70f9fc3"
+      "previousHash": "09a1f4e836be1647641d3203e9b0e48986782fbf1b2b2675056278ac1ae07a4e",
+      "hash": "8bb57bd666b9b79f371ae95443b6e1d183e88e5897bfb079ac0188785da75ce9"
     },
     {
       "event": {
-        "eventId": "golden-10:21",
+        "eventId": "golden-10:22",
         "eventType": "AttackDeclared",
         "gameId": "golden-10",
-        "revision": 21,
+        "revision": 22,
         "timestamp": 0.0,
         "commandId": "attack-2",
         "payload": {
@@ -722,15 +778,15 @@
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "bc520075995d6fcce27a4c273a4aeb5e0323d66415b5db0870a16c04a70f9fc3",
-      "hash": "8a0135cb5638c233cf2332929254aaf0118e1275aad283e22177f182807c6d85"
+      "previousHash": "8bb57bd666b9b79f371ae95443b6e1d183e88e5897bfb079ac0188785da75ce9",
+      "hash": "24cc1feaf20c59b4f75652c0ffaed4788541dd36e52377912c78ca97fcfdb30e"
     },
     {
       "event": {
-        "eventId": "golden-10:22",
+        "eventId": "golden-10:23",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 22,
+        "revision": 23,
         "timestamp": 0.0,
         "commandId": "attack-2",
         "payload": {
@@ -744,30 +800,30 @@
           }
         }
       },
-      "previousHash": "8a0135cb5638c233cf2332929254aaf0118e1275aad283e22177f182807c6d85",
-      "hash": "b75b6103c231a91cd82db151d7b22693a6c0f64199e36ae2f4a88292405d4ba4"
+      "previousHash": "24cc1feaf20c59b4f75652c0ffaed4788541dd36e52377912c78ca97fcfdb30e",
+      "hash": "90bb643e4e72b4ac087143c28427db68c2f5d7a3a60cb680aec5101fb7bc38ce"
     },
     {
       "event": {
-        "eventId": "golden-10:23",
+        "eventId": "golden-10:24",
         "eventType": "InterventionDeclined",
         "gameId": "golden-10",
-        "revision": 23,
+        "revision": 24,
         "timestamp": 0.0,
         "commandId": "decline-2",
         "payload": {
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "b75b6103c231a91cd82db151d7b22693a6c0f64199e36ae2f4a88292405d4ba4",
-      "hash": "85fd0033adaafa3b9d8ff87f5b7681c29ce87ec1f98840574346cd804eabcd3a"
+      "previousHash": "90bb643e4e72b4ac087143c28427db68c2f5d7a3a60cb680aec5101fb7bc38ce",
+      "hash": "14ab9dc7127d7e7a699b80b32a7f63909282316879350c81e04985ad428dd358"
     },
     {
       "event": {
-        "eventId": "golden-10:24",
+        "eventId": "golden-10:25",
         "eventType": "DamageApplied",
         "gameId": "golden-10",
-        "revision": 24,
+        "revision": 25,
         "timestamp": 0.0,
         "commandId": "decline-2",
         "payload": {
@@ -777,15 +833,15 @@
           "triggerContext": "attack"
         }
       },
-      "previousHash": "85fd0033adaafa3b9d8ff87f5b7681c29ce87ec1f98840574346cd804eabcd3a",
-      "hash": "07a5b8b607abe511ec1ebcd66ff16d2b5c64b545851ea8e4539d1192c39e6b71"
+      "previousHash": "14ab9dc7127d7e7a699b80b32a7f63909282316879350c81e04985ad428dd358",
+      "hash": "f0a8cb9bf8ab31401303c98ad6925a9786ab5af922ad5adf76f942689e313cd6"
     },
     {
       "event": {
-        "eventId": "golden-10:25",
+        "eventId": "golden-10:26",
         "eventType": "RevealWindowOpened",
         "gameId": "golden-10",
-        "revision": 25,
+        "revision": 26,
         "timestamp": 0.0,
         "commandId": "decline-2",
         "payload": {
@@ -797,15 +853,15 @@
           "forceRank": false
         }
       },
-      "previousHash": "07a5b8b607abe511ec1ebcd66ff16d2b5c64b545851ea8e4539d1192c39e6b71",
-      "hash": "22d3fa28fe98ee7fb4814d7f3dce6fd71c44cbd6c681380a095fa8ab4f4d617b"
+      "previousHash": "f0a8cb9bf8ab31401303c98ad6925a9786ab5af922ad5adf76f942689e313cd6",
+      "hash": "c36a990c538c70bdfa8ff5b3140173a71123a865c8f570a8780c9a524dfb3e47"
     },
     {
       "event": {
-        "eventId": "golden-10:26",
+        "eventId": "golden-10:27",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 26,
+        "revision": 27,
         "timestamp": 0.0,
         "commandId": "decline-2",
         "payload": {
@@ -819,34 +875,34 @@
           }
         }
       },
-      "previousHash": "22d3fa28fe98ee7fb4814d7f3dce6fd71c44cbd6c681380a095fa8ab4f4d617b",
-      "hash": "4f0a5040cab5f7d3414d3d9af4bd29467fcf8b9d53ac011b4ce3bb33f767ab9b"
+      "previousHash": "c36a990c538c70bdfa8ff5b3140173a71123a865c8f570a8780c9a524dfb3e47",
+      "hash": "8f5ecbbb8d1f4f2797bf75c355974dccb47b9978472838bae0c52c5e34acf58b"
     },
     {
       "event": {
-        "eventId": "golden-10:27",
+        "eventId": "golden-10:28",
         "eventType": "ClueRevealed",
         "gameId": "golden-10",
-        "revision": 27,
+        "revision": 28,
         "timestamp": 0.0,
-        "commandId": "reveal-2-26",
+        "commandId": "reveal-2-27",
         "payload": {
           "playerId": "p1",
           "kind": "marker-1",
           "value": "unknown"
         }
       },
-      "previousHash": "4f0a5040cab5f7d3414d3d9af4bd29467fcf8b9d53ac011b4ce3bb33f767ab9b",
-      "hash": "8b6f8ff0f8bfbb133eeb24b24cf8959d68a97fc507e76ae9b19355ea8c750794"
+      "previousHash": "8f5ecbbb8d1f4f2797bf75c355974dccb47b9978472838bae0c52c5e34acf58b",
+      "hash": "2c72f4e48979562361798919201edbe90803cde2c231ad126e6b944ca4ad1dd4"
     },
     {
       "event": {
-        "eventId": "golden-10:28",
+        "eventId": "golden-10:29",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 28,
+        "revision": 29,
         "timestamp": 0.0,
-        "commandId": "reveal-2-26",
+        "commandId": "reveal-2-27",
         "payload": {
           "from": {
             "kind": "reveal",
@@ -858,15 +914,15 @@
           }
         }
       },
-      "previousHash": "8b6f8ff0f8bfbb133eeb24b24cf8959d68a97fc507e76ae9b19355ea8c750794",
-      "hash": "b3d40efdae97c34908d1e818ffb806e22494842079e21915157d0ad38a41926c"
+      "previousHash": "2c72f4e48979562361798919201edbe90803cde2c231ad126e6b944ca4ad1dd4",
+      "hash": "e9bbcf058d6eab12da2f8f71c83a1292dde8c38857c2d5c8d9b991d5d28d560b"
     },
     {
       "event": {
-        "eventId": "golden-10:29",
+        "eventId": "golden-10:30",
         "eventType": "AttackDeclared",
         "gameId": "golden-10",
-        "revision": 29,
+        "revision": 30,
         "timestamp": 0.0,
         "commandId": "attack-3",
         "payload": {
@@ -874,15 +930,15 @@
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "b3d40efdae97c34908d1e818ffb806e22494842079e21915157d0ad38a41926c",
-      "hash": "4615c4c1beb4636743ea87cee0560ac4f60ba518e26a4754d740d8399612a0f6"
+      "previousHash": "e9bbcf058d6eab12da2f8f71c83a1292dde8c38857c2d5c8d9b991d5d28d560b",
+      "hash": "b7a8fab9d29f6e954a78a08c8fbaba815e11bfe0cde1a2f5318e7d4378b7fc05"
     },
     {
       "event": {
-        "eventId": "golden-10:30",
+        "eventId": "golden-10:31",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 30,
+        "revision": 31,
         "timestamp": 0.0,
         "commandId": "attack-3",
         "payload": {
@@ -896,30 +952,30 @@
           }
         }
       },
-      "previousHash": "4615c4c1beb4636743ea87cee0560ac4f60ba518e26a4754d740d8399612a0f6",
-      "hash": "4ad6347db4574aee72b1e6ed5c0a5f6514a0ebcc45a90a40ebde4455a582d82b"
+      "previousHash": "b7a8fab9d29f6e954a78a08c8fbaba815e11bfe0cde1a2f5318e7d4378b7fc05",
+      "hash": "9b73fdde3cdeadb75278c644f91b151ce5f7bda8f46274948e9a7213f65543ad"
     },
     {
       "event": {
-        "eventId": "golden-10:31",
+        "eventId": "golden-10:32",
         "eventType": "InterventionDeclined",
         "gameId": "golden-10",
-        "revision": 31,
+        "revision": 32,
         "timestamp": 0.0,
         "commandId": "decline-3",
         "payload": {
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "4ad6347db4574aee72b1e6ed5c0a5f6514a0ebcc45a90a40ebde4455a582d82b",
-      "hash": "25c21f4ee0dc608163750bb3c4f1e1c65c2dc82d9a962d563bb641d154a4ae4c"
+      "previousHash": "9b73fdde3cdeadb75278c644f91b151ce5f7bda8f46274948e9a7213f65543ad",
+      "hash": "e7e52cc156c11a054b1eafc9d2f8a142090d1fd08e3cebce5218694d1f18f985"
     },
     {
       "event": {
-        "eventId": "golden-10:32",
+        "eventId": "golden-10:33",
         "eventType": "DamageApplied",
         "gameId": "golden-10",
-        "revision": 32,
+        "revision": 33,
         "timestamp": 0.0,
         "commandId": "decline-3",
         "payload": {
@@ -929,15 +985,15 @@
           "triggerContext": "attack"
         }
       },
-      "previousHash": "25c21f4ee0dc608163750bb3c4f1e1c65c2dc82d9a962d563bb641d154a4ae4c",
-      "hash": "153698992bfc41dfa7219e7ea395bfc7c9b6b983093c60b4e5b4f4d016edfe7f"
+      "previousHash": "e7e52cc156c11a054b1eafc9d2f8a142090d1fd08e3cebce5218694d1f18f985",
+      "hash": "33f42a5b9a2bff2383ef94e71daed3968f55b41f4a7961a8a01ca98da95ae779"
     },
     {
       "event": {
-        "eventId": "golden-10:33",
+        "eventId": "golden-10:34",
         "eventType": "ClueRevealed",
         "gameId": "golden-10",
-        "revision": 33,
+        "revision": 34,
         "timestamp": 0.0,
         "commandId": "decline-3",
         "payload": {
@@ -946,15 +1002,15 @@
           "value": 7
         }
       },
-      "previousHash": "153698992bfc41dfa7219e7ea395bfc7c9b6b983093c60b4e5b4f4d016edfe7f",
-      "hash": "b707bb9c73a47ccf14bdadb4cd8c72d0bd01ee158de44f0f7da874aa38004ca7"
+      "previousHash": "33f42a5b9a2bff2383ef94e71daed3968f55b41f4a7961a8a01ca98da95ae779",
+      "hash": "dc57a95dc7d6490d69bc363546325752741d2ba6619e84deb3e958c94a116fc2"
     },
     {
       "event": {
-        "eventId": "golden-10:34",
+        "eventId": "golden-10:35",
         "eventType": "SkillWindowOpened",
         "gameId": "golden-10",
-        "revision": 34,
+        "revision": 35,
         "timestamp": 0.0,
         "commandId": "decline-3",
         "payload": {
@@ -963,15 +1019,15 @@
           "trigger": "attack"
         }
       },
-      "previousHash": "b707bb9c73a47ccf14bdadb4cd8c72d0bd01ee158de44f0f7da874aa38004ca7",
-      "hash": "2d5ea8c71b271cb3e55f1f315457ec6762a55a4700b994fde39ce0b624e7dd66"
+      "previousHash": "dc57a95dc7d6490d69bc363546325752741d2ba6619e84deb3e958c94a116fc2",
+      "hash": "8a204044de1f53b196fcb55f73315e8a64ee3f4eaff2b1e29d2afddb5fdb4844"
     },
     {
       "event": {
-        "eventId": "golden-10:35",
+        "eventId": "golden-10:36",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 35,
+        "revision": 36,
         "timestamp": 0.0,
         "commandId": "decline-3",
         "payload": {
@@ -985,15 +1041,15 @@
           }
         }
       },
-      "previousHash": "2d5ea8c71b271cb3e55f1f315457ec6762a55a4700b994fde39ce0b624e7dd66",
-      "hash": "42d7db1372c2d09ea56910f91782ae9c74a7f6da29e24678ec891c304165fb21"
+      "previousHash": "8a204044de1f53b196fcb55f73315e8a64ee3f4eaff2b1e29d2afddb5fdb4844",
+      "hash": "57a6b1af9f7bf16cec3c3183a4a0e9e156a6108ada576843139affbc9e8e0307"
     },
     {
       "event": {
-        "eventId": "golden-10:36",
+        "eventId": "golden-10:37",
         "eventType": "SkillDeclined",
         "gameId": "golden-10",
-        "revision": 36,
+        "revision": 37,
         "timestamp": 0.0,
         "commandId": "skill-decline-3",
         "payload": {
@@ -1001,15 +1057,15 @@
           "rank": 7
         }
       },
-      "previousHash": "42d7db1372c2d09ea56910f91782ae9c74a7f6da29e24678ec891c304165fb21",
-      "hash": "be56cc0fa35f9b76536bb676e3e684e3f44c5270857ac0092ac082f397709b68"
+      "previousHash": "57a6b1af9f7bf16cec3c3183a4a0e9e156a6108ada576843139affbc9e8e0307",
+      "hash": "dc86a9b8a42e1176ed4dc8cc8d9986a65922acf2ca90e3e7b91839dc0ceed4fb"
     },
     {
       "event": {
-        "eventId": "golden-10:37",
+        "eventId": "golden-10:38",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 37,
+        "revision": 38,
         "timestamp": 0.0,
         "commandId": "skill-decline-3",
         "payload": {
@@ -1023,15 +1079,15 @@
           }
         }
       },
-      "previousHash": "be56cc0fa35f9b76536bb676e3e684e3f44c5270857ac0092ac082f397709b68",
-      "hash": "05cd47d2fc95c5b7f2fb0efa778e05de74da248b1f81b03ac03b9f0dd724884c"
+      "previousHash": "dc86a9b8a42e1176ed4dc8cc8d9986a65922acf2ca90e3e7b91839dc0ceed4fb",
+      "hash": "0b7ba9e6d651a27d94bf8617103e84c04a2b1617c012fb49520c6d91b98876d3"
     },
     {
       "event": {
-        "eventId": "golden-10:38",
+        "eventId": "golden-10:39",
         "eventType": "DaggerPassed",
         "gameId": "golden-10",
-        "revision": 38,
+        "revision": 39,
         "timestamp": 0.0,
         "commandId": "pass-4",
         "payload": {
@@ -1039,15 +1095,15 @@
           "toPlayerId": "p0"
         }
       },
-      "previousHash": "05cd47d2fc95c5b7f2fb0efa778e05de74da248b1f81b03ac03b9f0dd724884c",
-      "hash": "afb8a04cf5fe78caa9f0f5ed96ba55f9e113ba7439f5ec6478537638b12410a1"
+      "previousHash": "0b7ba9e6d651a27d94bf8617103e84c04a2b1617c012fb49520c6d91b98876d3",
+      "hash": "1674ace4638338e3661dcb4420005669507014a1959be32a8096e1468b3ac4c3"
     },
     {
       "event": {
-        "eventId": "golden-10:39",
+        "eventId": "golden-10:40",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 39,
+        "revision": 40,
         "timestamp": 0.0,
         "commandId": "pass-4",
         "payload": {
@@ -1061,15 +1117,15 @@
           }
         }
       },
-      "previousHash": "afb8a04cf5fe78caa9f0f5ed96ba55f9e113ba7439f5ec6478537638b12410a1",
-      "hash": "c691bf915682e5e5ddfa41ead00bcf994c3e91e88bb637cabaf3453b42a7b76f"
+      "previousHash": "1674ace4638338e3661dcb4420005669507014a1959be32a8096e1468b3ac4c3",
+      "hash": "909266af31c6953641f0a9590a07fc27f359c9d31dd3c479898e820126ee4371"
     },
     {
       "event": {
-        "eventId": "golden-10:40",
+        "eventId": "golden-10:41",
         "eventType": "AttackDeclared",
         "gameId": "golden-10",
-        "revision": 40,
+        "revision": 41,
         "timestamp": 0.0,
         "commandId": "attack-4",
         "payload": {
@@ -1077,15 +1133,15 @@
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "c691bf915682e5e5ddfa41ead00bcf994c3e91e88bb637cabaf3453b42a7b76f",
-      "hash": "6f3c649136dafd2e36439641c14d8f820056c4148cb43078f52100db68351ea5"
+      "previousHash": "909266af31c6953641f0a9590a07fc27f359c9d31dd3c479898e820126ee4371",
+      "hash": "158d05688f7734b51320a366db2ae5c5e50c8f3dfaf8734f91224e1a52c72459"
     },
     {
       "event": {
-        "eventId": "golden-10:41",
+        "eventId": "golden-10:42",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 41,
+        "revision": 42,
         "timestamp": 0.0,
         "commandId": "attack-4",
         "payload": {
@@ -1099,30 +1155,30 @@
           }
         }
       },
-      "previousHash": "6f3c649136dafd2e36439641c14d8f820056c4148cb43078f52100db68351ea5",
-      "hash": "b7ac8c6dcfc21c49b3f7067d1608c023048bbf60dcd6dc3710495be96714e30e"
+      "previousHash": "158d05688f7734b51320a366db2ae5c5e50c8f3dfaf8734f91224e1a52c72459",
+      "hash": "ef0e261f290c2ec031d1a4f4e42b69e8648f84c0940b62f21d229d46505dff4a"
     },
     {
       "event": {
-        "eventId": "golden-10:42",
+        "eventId": "golden-10:43",
         "eventType": "InterventionDeclined",
         "gameId": "golden-10",
-        "revision": 42,
+        "revision": 43,
         "timestamp": 0.0,
         "commandId": "decline-4",
         "payload": {
           "targetPlayerId": "p1"
         }
       },
-      "previousHash": "b7ac8c6dcfc21c49b3f7067d1608c023048bbf60dcd6dc3710495be96714e30e",
-      "hash": "f72cf7f65cc1895a232a357a85f8c77e55ea203e6df246298e7bf464ec00ee15"
+      "previousHash": "ef0e261f290c2ec031d1a4f4e42b69e8648f84c0940b62f21d229d46505dff4a",
+      "hash": "d69a345399a869db8383bf3099196059cdb4eb9d5f3fe0906400743298e585c9"
     },
     {
       "event": {
-        "eventId": "golden-10:43",
+        "eventId": "golden-10:44",
         "eventType": "DamageApplied",
         "gameId": "golden-10",
-        "revision": 43,
+        "revision": 44,
         "timestamp": 0.0,
         "commandId": "decline-4",
         "payload": {
@@ -1132,30 +1188,30 @@
           "triggerContext": "attack"
         }
       },
-      "previousHash": "f72cf7f65cc1895a232a357a85f8c77e55ea203e6df246298e7bf464ec00ee15",
-      "hash": "af2c1d5665170bc80b87da57cf52952659ae55fc58d00358e66c428ffa9ce232"
+      "previousHash": "d69a345399a869db8383bf3099196059cdb4eb9d5f3fe0906400743298e585c9",
+      "hash": "23bab67c0ab74640dcf66240b34d8dcb0a8f3dbb03204cd53f081ff1424bd988"
     },
     {
       "event": {
-        "eventId": "golden-10:44",
+        "eventId": "golden-10:45",
         "eventType": "PlayerCaptured",
         "gameId": "golden-10",
-        "revision": 44,
+        "revision": 45,
         "timestamp": 0.0,
         "commandId": "decline-4",
         "payload": {
           "playerId": "p1"
         }
       },
-      "previousHash": "af2c1d5665170bc80b87da57cf52952659ae55fc58d00358e66c428ffa9ce232",
-      "hash": "693a4479277147642fd3169a7e3bee5fd407bdaac77cdacc849f988d766f7da6"
+      "previousHash": "23bab67c0ab74640dcf66240b34d8dcb0a8f3dbb03204cd53f081ff1424bd988",
+      "hash": "77e936e34390d517b1289b51d4a90acce0d0e13bbdd4d3451d182aa4ee044e62"
     },
     {
       "event": {
-        "eventId": "golden-10:45",
+        "eventId": "golden-10:46",
         "eventType": "GameEnded",
         "gameId": "golden-10",
-        "revision": 45,
+        "revision": 46,
         "timestamp": 0.0,
         "commandId": "decline-4",
         "payload": {
@@ -1218,15 +1274,15 @@
           "explanationKey": "game.end.captured-player"
         }
       },
-      "previousHash": "693a4479277147642fd3169a7e3bee5fd407bdaac77cdacc849f988d766f7da6",
-      "hash": "9870e016ae66585f263fd255c50df551ac20c1bc896a7fb0fb52db75d4f4778d"
+      "previousHash": "77e936e34390d517b1289b51d4a90acce0d0e13bbdd4d3451d182aa4ee044e62",
+      "hash": "a67fcd4ea5a4acf30af3bae7c741327a87416a91d325ada49921657a36c23208"
     },
     {
       "event": {
-        "eventId": "golden-10:46",
+        "eventId": "golden-10:47",
         "eventType": "PhaseChanged",
         "gameId": "golden-10",
-        "revision": 46,
+        "revision": 47,
         "timestamp": 0.0,
         "commandId": "decline-4",
         "payload": {
@@ -1239,8 +1295,8 @@
           }
         }
       },
-      "previousHash": "9870e016ae66585f263fd255c50df551ac20c1bc896a7fb0fb52db75d4f4778d",
-      "hash": "4164dcdb10f4aaef447b246f42eb546cdb7ca43a890568bc735820ffceb84cc8"
+      "previousHash": "a67fcd4ea5a4acf30af3bae7c741327a87416a91d325ada49921657a36c23208",
+      "hash": "9f075de3ad310c3f1dc34b41ee054baaf2e95980608cc9ca074e3d2725db8684"
     }
   ],
   "commands": [
@@ -1366,7 +1422,7 @@
       "commandId": "attack-1",
       "gameId": "golden-10",
       "actorPlayerId": "p0",
-      "expectedRevision": 12,
+      "expectedRevision": 13,
       "type": "attack",
       "payload": {
         "targetPlayerId": "p1"
@@ -1376,15 +1432,15 @@
       "commandId": "decline-1",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 14,
+      "expectedRevision": 15,
       "type": "decline-intervention",
       "payload": {}
     },
     {
-      "commandId": "reveal-1-18",
+      "commandId": "reveal-1-19",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 18,
+      "expectedRevision": 19,
       "type": "choose-reveal",
       "payload": {
         "token": "marker-0"
@@ -1394,7 +1450,7 @@
       "commandId": "attack-2",
       "gameId": "golden-10",
       "actorPlayerId": "p0",
-      "expectedRevision": 20,
+      "expectedRevision": 21,
       "type": "attack",
       "payload": {
         "targetPlayerId": "p1"
@@ -1404,15 +1460,15 @@
       "commandId": "decline-2",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 22,
+      "expectedRevision": 23,
       "type": "decline-intervention",
       "payload": {}
     },
     {
-      "commandId": "reveal-2-26",
+      "commandId": "reveal-2-27",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 26,
+      "expectedRevision": 27,
       "type": "choose-reveal",
       "payload": {
         "token": "marker-1"
@@ -1422,7 +1478,7 @@
       "commandId": "attack-3",
       "gameId": "golden-10",
       "actorPlayerId": "p0",
-      "expectedRevision": 28,
+      "expectedRevision": 29,
       "type": "attack",
       "payload": {
         "targetPlayerId": "p1"
@@ -1432,7 +1488,7 @@
       "commandId": "decline-3",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 30,
+      "expectedRevision": 31,
       "type": "decline-intervention",
       "payload": {}
     },
@@ -1440,7 +1496,7 @@
       "commandId": "skill-decline-3",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 35,
+      "expectedRevision": 36,
       "type": "choose-skill",
       "payload": {
         "use": false
@@ -1450,7 +1506,7 @@
       "commandId": "pass-4",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 37,
+      "expectedRevision": 38,
       "type": "pass-dagger",
       "payload": {
         "targetPlayerId": "p0"
@@ -1460,7 +1516,7 @@
       "commandId": "attack-4",
       "gameId": "golden-10",
       "actorPlayerId": "p0",
-      "expectedRevision": 39,
+      "expectedRevision": 40,
       "type": "attack",
       "payload": {
         "targetPlayerId": "p1"
@@ -1470,14 +1526,14 @@
       "commandId": "decline-4",
       "gameId": "golden-10",
       "actorPlayerId": "p1",
-      "expectedRevision": 41,
+      "expectedRevision": 42,
       "type": "decline-intervention",
       "payload": {}
     }
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "4164dcdb10f4aaef447b246f42eb546cdb7ca43a890568bc735820ffceb84cc8",
-    "snapshotHash": "c16cc0f777e0583ba19be9ccfc869da5b856b0dbee343d95549e951c69419181"
+    "eventHead": "9f075de3ad310c3f1dc34b41ee054baaf2e95980608cc9ca074e3d2725db8684",
+    "snapshotHash": "b396652d54d77343a334aba7be8375d522bcb7c7d29dfa149a81288d81917306"
   }
 }

@@ -10,8 +10,9 @@ Projection rules follow the domain contract (03):
 - a spectator sees only the public facts;
 - the RNG seed is never included (knowing it would let a viewer reproduce the
   whole identity assignment);
-- the clue icon is only shown at setup to the left-hand neighbour, so it is not
-  part of the projection at all.
+- the clue icon of every player appears only in the viewer block of the player
+  who saw it at setup: each viewer sees their own icon and their right-hand
+  neighbour's; the public ``players`` list never carries any icon.
 """
 
 from __future__ import annotations
@@ -112,9 +113,25 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
     return actions
 
 
+def _right_neighbour(state: "EngineState", viewer: "Player") -> "Player | None":
+    """The player who showed their clue icon to ``viewer`` at setup.
+
+    Seats are read clockwise, so each player shows to the next seat; the icon a
+    viewer saw therefore belongs to the previous seat, cyclically (seat gaps
+    tolerated).
+    """
+    ordered = sorted(state.players.values(), key=lambda player: player.seat)
+    if len(ordered) < 2:
+        return None
+    index = ordered.index(viewer)
+    return ordered[index - 1]
+
+
 def project_state(state: "EngineState", viewer_player_id: str | None = None) -> dict[str, Any]:
     """Derive the visible projection for a player, or the public view for a spectator."""
     viewer = state.players.get(viewer_player_id) if viewer_player_id else None
+    neighbour = _right_neighbour(state, viewer) if viewer else None
+    neighbour_view = {"playerId": neighbour.player_id, "icon": neighbour.clue_icon} if neighbour else None
     projection: dict[str, Any] = {
         "gameId": state.game_id,
         "revision": state.revision,
@@ -137,6 +154,8 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
             "skillsUsed": sorted(viewer.skills_used),
             "inspections": {target_id: dict(value) for target_id, value in viewer.inspections.items()},
             "cursesToDistribute": list(state.curses) if viewer.faction == "secret-order" else [],
+            "clueIcon": viewer.clue_icon,
+            "seenNeighbourClue": neighbour_view,
         }
         projection["legalActions"] = legal_actions(state, viewer_player_id)
     return projection

@@ -31,10 +31,54 @@ class ProjectionTests(unittest.TestCase):
         self.assertIsNone(view["viewer"])
         self.assertEqual(view["legalActions"], [])
         self.assertNotIn("seed", view)
+        self.assertNotIn("clueIcon", view)
+        self.assertNotIn("seenNeighbourClue", view)
         for player in view["players"]:
             self.assertNotIn("faction", player)
             self.assertNotIn("rank", player)
             self.assertNotIn("clueIcon", player)
+
+    def test_viewer_sees_own_clue_icon_and_right_neighbours_icon(self):
+        engine = self.started(7)
+        ordered = sorted(engine.state.players.values(), key=lambda player: player.seat)
+        for index, player in enumerate(ordered):
+            view = project_state(engine.state, player.player_id)
+            self.assertEqual(view["viewer"]["clueIcon"], player.clue_icon)
+            neighbour = ordered[index - 1]
+            self.assertEqual(
+                view["viewer"]["seenNeighbourClue"],
+                {"playerId": neighbour.player_id, "icon": neighbour.clue_icon},
+            )
+
+    def test_projection_hides_clue_icons_of_anyone_but_self_and_right_neighbour(self):
+        engine = self.started(6)
+        ordered = sorted(engine.state.players.values(), key=lambda player: player.seat)
+
+        def icon_fields(value):
+            """Every icon-bearing (key, value) pair anywhere in the view tree."""
+            found = []
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key in ("clueIcon", "icon"):
+                        found.append((key, item))
+                    found.extend(icon_fields(item))
+            elif isinstance(value, list):
+                for item in value:
+                    found.extend(icon_fields(item))
+            return found
+
+        for player in ordered:
+            index = ordered.index(player)
+            neighbour = ordered[index - 1]
+            view = project_state(engine.state, player.player_id)
+            # the only icon fields in the whole view are the viewer's own and the
+            # right neighbour's; no other player's icon appears anywhere
+            self.assertEqual(
+                sorted(icon_fields(view)),
+                sorted([("clueIcon", player.clue_icon), ("icon", neighbour.clue_icon)]),
+            )
+        # spectator and replay-style projections carry no icon field at all
+        self.assertEqual(icon_fields(project_state(engine.state)), [])
 
     def test_player_sees_only_their_own_identity(self):
         engine = self.started()

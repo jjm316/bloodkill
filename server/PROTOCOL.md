@@ -2,8 +2,9 @@
 
 服务器（FastAPI/uvicorn）是权威节点：全部规则由 `blood_bound` 引擎裁决，浏览器只收到
 **按连接投影后**的状态。任何玩家的身份（阵营/位阶）、诅咒分配、私密事件都不会下发到
-其他浏览器；随机种子、clue icon 也永不进入投影。房主只有管理权（开始/锁定房间），
-不能替其他玩家操作。
+其他浏览器；随机种子也永不进入投影。开局徽记按规则只对本人和其右邻可见：`viewer`
+块带本人 `clueIcon` 与右邻徽记 `seenNeighbourClue`，公共 `players[]` 条目不含任何
+徽记字段。房主只有管理权（开始/锁定房间），不能替其他玩家操作。
 
 ## REST API
 
@@ -69,7 +70,7 @@
 | 类型 | 说明 |
 | --- | --- |
 | `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`。 |
-| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。 |
+| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。 |
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
 | `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭。 |
@@ -127,7 +128,9 @@
     "identity": {"faction": "rose", "rank": 5},
     "resources": ["curse"],
     "skillsUsed": false,
-    "cursesToDistribute": ["c-…"]   // 仅审判官在分发阶段非空
+    "cursesToDistribute": ["c-…"],   // 仅审判官在分发阶段非空
+    "clueIcon": "rose",              // 本人阵营徽记
+    "seenNeighbourClue": {"playerId": "p-…", "icon": "beast"}  // 右邻徽记，仅此一处
   },
   "legalActions": [
     {"type": "pass-dagger", "targetPlayerId": "p-…"},
@@ -145,7 +148,8 @@
 
 - `viewer.identity` 只出现在投影接收者自己的 `viewer` 块里；其他玩家的 `players[]` 项**不含**阵营/位阶。
 - `revealed` 只在身份被公开（受伤/被捕获）后出现。
-- 投影**不含**随机种子 `seed`（知道种子即可用 `random.Random(seed)` 重现全部身份分配）与 `clueIcon`（规则：开局只向左手边玩家展示）。
+- 投影**不含**随机种子 `seed`（知道种子即可用 `random.Random(seed)` 重现全部身份分配）。
+- 阵营徽记按规则只向左邻展示：徽记只出现在被展示者的 `viewer` 块里（本人 `clueIcon` + 右邻 `seenNeighbourClue`）；`players[]` 条目、旁观者投影与回放步骤均**不含**任何徽记字段。
 - `cursesToDistribute` 只在审判官自己的 `viewer` 块里。
 - 事件广播过滤 `CurseViewed` / `CurseDistributed`；服务器端存档保留完整事件流，用于回放校验。
 

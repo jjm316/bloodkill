@@ -60,6 +60,37 @@ class RulesEngineTests(unittest.TestCase):
         inquisitor_count = sum(player.faction == "secret-order" for player in left.state.players.values())
         self.assertEqual(len(left.state.curses), inquisitor_count * 2)
 
+    def test_start_logs_clue_icon_showing_pairs_without_icons(self):
+        engine = self.started(6)
+        start_events = [event for event in engine.state.events if event.command_id == "start"]
+        self.assertEqual([event.event_type for event in start_events], ["GameStarted", "ClueIconsShown", "PhaseChanged"])
+        payload = next(event for event in start_events if event.event_type == "ClueIconsShown").payload
+        self.assertEqual(set(payload), {"pairs"})
+        ordered = sorted(engine.state.players.values(), key=lambda player: player.seat)
+        expected = [
+            {"fromPlayerId": player.player_id, "toPlayerId": ordered[(index + 1) % len(ordered)].player_id}
+            for index, player in enumerate(ordered)
+        ]
+        self.assertEqual(payload["pairs"], expected)
+        for pair in payload["pairs"]:
+            self.assertEqual(set(pair), {"fromPlayerId", "toPlayerId"})
+            self.assertTrue(set(pair.values()) <= set(engine.state.players))
+
+    def test_rank_three_icon_is_hostile_and_inquisitor_icon_contradicts_affiliation(self):
+        saw_rank_three = False
+        for seed_index in range(20):
+            engine = RulesEngine.new_game("g1", f"icon-seed-{seed_index}", clock=FixedClock())
+            for index in range(7):
+                engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}"))
+            engine.apply(command(engine, "start", None, "start-game"))
+            for player in engine.state.players.values():
+                if player.rank == 3 and player.faction in {"rose", "beast"}:
+                    saw_rank_three = True
+                    self.assertEqual(player.clue_icon, "beast" if player.faction == "rose" else "rose", player.player_id)
+                if player.faction == "secret-order":
+                    self.assertIn(player.clue_icon, {"rose", "beast"}, player.player_id)
+        self.assertTrue(saw_rank_three)
+
     def test_pass_dagger_and_idempotency(self):
         engine = self.started()
         holder = engine.state.dagger_holder_id
@@ -69,7 +100,7 @@ class RulesEngineTests(unittest.TestCase):
         second = engine.apply(cmd)
         self.assertEqual(first, second)
         self.assertEqual(engine.state.dagger_holder_id, target)
-        self.assertEqual([event.revision for event in first], [9, 10])
+        self.assertEqual([event.revision for event in first], [10, 11])
         self.assertEqual(len({event.event_id for event in first}), 2)
         self.assertEqual(first[-1].event_type, "PhaseChanged")
 

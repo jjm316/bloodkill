@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -160,6 +161,10 @@ class RoomManagerTests(unittest.TestCase):
         self.assertIsNone(steps[-1]["viewer"])
         self.assertEqual(steps[-1]["status"], "ended")
         self.assertIsNotNone(steps[-1]["result"])
+        # replay steps are spectator projections: no clue icon fields anywhere
+        for step in steps:
+            self.assertNotIn("clueIcon", json.dumps(step))
+            self.assertNotIn("seenNeighbourClue", json.dumps(step))
 
 
 if __name__ == "__main__":
