@@ -43,6 +43,10 @@ Effort: `blood-oath-replica`
 
 ## Decisions-so-far
 
+- 2026-08-29：内网穿透选型定案（见 [调研笔记 research-02](research-02-public-access-tunnel.md)）：默认 cloudflared 快速隧道（本机 winget 已装并完成端到端实测：协议全链路通、自动 HTTPS/WSS、手机零安装；代价是 URL 每次重启随机变、WSS 指令往返实测约 0.8–1 秒）；备选 frp + 国内轻量 VPS 明文转发（预期几十毫秒级、约百元/年）、PC 圈子 Radmin VPN（本机已装，仅 Windows 客户端、手机出局）；花生壳（5 并发<6 人下限）、natapp（HTTP 隧道人脸识别+域名强制轮换）、ngrok（拦截页+1GB/月）、ZeroTier/Tailscale 组网（免费档容量不足）不采用。用户裁定明文可接受、便利性优先，`docs/deployment-lan.md` 的强制 TLS 条款同步降级为建议。
+
+- 2026-08-29：用户裁定产品决策：仅个人学习/非商业使用，不对外公开发布；目标版本为用户提供图片对应的出版版本（基础完整版，不涉及扩展）；允许使用官方素材（个人学习用途，素材来源待调研）；手机/平板支持为后续计划（尽量全支持，排期靠后）；部署为家用机自托管 + 内网穿透，方案待调研优缺点后选定（无域名、无 HTTPS 证书）。
+
 - 2026-08-29：11 已按用户指示直接标记 `resolved`（跳过 code review）；Python 全量测试门禁已转绿（106/106）。详见 [11 票据](issues/11-accessibility-performance-release.md)。
 
 - 2026-08-29：11 实现主体完成但门禁未通过，状态为 claimed；客户端具备键盘/读屏基础可访问性、移动端稳定布局和减少动态效果支持，事件日志按 ID 去重并限制 120 条；新增发布检查表、局域网/HTTPS-WSS 部署说明及 REST/WebSocket smoke 脚本。`npm run build` 与 smoke 通过，但全量 Python 测试和终局回放 smoke 仍需补齐。详见 [11 票据](issues/11-accessibility-performance-release.md)。
