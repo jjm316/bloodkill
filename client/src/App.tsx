@@ -9,8 +9,11 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("lobby");
   const [credentials, setCredentials] = useState<RoomCredentials | null>(null);
 
-  if (screen === "lobby") {
-    return (
+  return (
+    <>
+      <a className="skip-link" href="#main-content">跳转到主要内容</a>
+      <main id="main-content">
+        {screen === "lobby" ? (
       <Lobby
         onJoin={(next) => {
           setCredentials(next);
@@ -18,13 +21,9 @@ export default function App() {
         }}
         onReplay={() => setScreen("replay")}
       />
-    );
-  }
-  if (screen === "replay") {
-    return <ReplayScreen onBack={() => setScreen("lobby")} />;
-  }
-  if (credentials) {
-    return (
+        ) : screen === "replay" ? (
+          <ReplayScreen onBack={() => setScreen("lobby")} />
+        ) : credentials ? (
       <GameScreen
         credentials={credentials}
         onLeave={() => {
@@ -32,7 +31,8 @@ export default function App() {
           setScreen("lobby");
         }}
       />
-    );
-  }
-  return null;
+        ) : null}
+      </main>
+    </>
+  );
 }

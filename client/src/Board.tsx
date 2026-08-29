@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { GameState, Identity, PendingView, PlayerView } from "./types";
 import { displayFaction, displayRank, displayResource } from "./types";
 
@@ -31,14 +32,14 @@ function Resources({ resources }: { resources: Record<string, number> }) {
   );
 }
 
-function Seat({ player, dagger, identity }: { player: PlayerView; dagger: boolean; identity?: Identity }) {
+const Seat = memo(function Seat({ player, dagger, identity }: { player: PlayerView; dagger: boolean; identity?: Identity }) {
   const clues: string[] = [];
   if (player.revealed.rank !== undefined) clues.push(displayRank(player.revealed.rank));
   player.revealed.markers.forEach((marker) => {
     if (marker !== null) clues.push(displayFaction(marker));
   });
   return (
-    <div className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`}>
+    <article role="listitem" className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`} aria-label={`${player.displayName}${player.captured ? "，已被捕获" : ""}`}>
       <div className="seat-name">
         {dagger && (
           <span className="dagger-icon" title="持有匕首">
@@ -53,16 +54,16 @@ function Seat({ player, dagger, identity }: { player: PlayerView; dagger: boolea
           </span>
         )}
       </div>
-      <div className="damage" aria-label={`受到 ${player.damage} 点伤害`}>
+      <div className="damage" role="img" aria-label={`${player.displayName}受到 ${player.damage} 点伤害`}>
         {[0, 1, 2, 3].map((i) => (
           <span key={i} className={i < player.damage ? "pip filled" : "pip"} />
         ))}
       </div>
       {clues.length > 0 && <div className="revealed">{clues.join(" · ")}</div>}
       <Resources resources={player.resources} />
-    </div>
+    </article>
   );
-}
+});
 
 function PendingBanner({ pending, players }: { pending: PendingView; players: PlayerView[] }) {
   if (pending.kind === "intervention") {
@@ -116,10 +117,10 @@ function ResultBanner({ result, players }: { result: NonNullable<GameState["resu
 export function Board({ game }: { game: GameState }) {
   const viewerId = game.viewer?.playerId ?? null;
   return (
-    <div className="board">
+    <section className="board" aria-label="对局桌面">
       {game.status === "ended" && game.result && <ResultBanner result={game.result} players={game.players} />}
       {game.pending && <PendingBanner pending={game.pending} players={game.players} />}
-      <div className="players">
+      <div className="players" role="list" aria-label="玩家座位">
         {game.players.map((player) => (
           <Seat
             key={player.playerId}
@@ -129,6 +130,6 @@ export function Board({ game }: { game: GameState }) {
           />
         ))}
       </div>
-    </div>
+    </section>
   );
 }

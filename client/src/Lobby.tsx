@@ -27,16 +27,16 @@ export function Lobby({ onJoin, onReplay }: { onJoin: (c: RoomCredentials) => vo
     if (!asSpectator) localStorage.setItem(NAME_KEY, name.trim());
     onJoin({ code, name: asSpectator ? "" : name.trim(), token: localStorage.getItem(hostTokenKey(code)) });
   };
-  return <div className="lobby">
-    <h1>鲜血盟约</h1>
-    <label className="field">姓名<input value={name} onChange={(e) => setName(e.target.value)} placeholder="其他玩家看到的名称" maxLength={32} /></label>
+  return <div className="lobby" aria-labelledby="lobby-title">
+    <h1 id="lobby-title">鲜血盟约</h1>
+    <label className="field" htmlFor="player-name">姓名<input id="player-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="其他玩家看到的名称" maxLength={32} autoComplete="nickname" aria-invalid={Boolean(error)} /></label>
     <div className="lobby-actions">
       <button disabled={busy} onClick={createRoom}>创建房间</button>
-      <label className="field">房间号<input value={joinCode} onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6位数字房间号" inputMode="numeric" /></label>
+      <label className="field" htmlFor="room-code">房间号<input id="room-code" value={joinCode} onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6位数字房间号" inputMode="numeric" autoComplete="off" /></label>
       <div className="lobby-actions"><button disabled={busy} onClick={() => joinRoom(false)}>加入房间</button><button disabled={busy} onClick={() => joinRoom(true)}>旁观</button></div>
       <button onClick={onReplay}>观看回放</button>
     </div>
-    {error && <div className="error">{error}</div>}
+    {error && <div className="error" role="alert" aria-live="assertive">{error}</div>}
     <p className="hint">房间由创建者在本地托管。玩家只需房间号和姓名，无需注册账号；创建房间后，本浏览器会记住房主凭据。</p>
   </div>;
 }

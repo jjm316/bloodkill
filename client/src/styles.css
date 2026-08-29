@@ -19,6 +19,19 @@ body {
   padding: 12px;
 }
 
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  z-index: 10;
+  padding: 8px 12px;
+  background: #f5c518;
+  color: #12141a;
+  border-radius: 4px;
+}
+
+.skip-link:focus { top: 8px; }
+
 button {
   min-height: 40px;
   padding: 6px 14px;
@@ -32,6 +45,15 @@ button {
 
 button:hover:not(:disabled) {
   background: #2f3547;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+.skip-link:focus-visible {
+  outline: 3px solid #72b7ff;
+  outline-offset: 2px;
 }
 
 button:disabled {
@@ -146,6 +168,8 @@ h2 {
   flex-direction: column;
   gap: 4px;
 }
+
+.seat[aria-label] { min-width: 0; }
 
 .seat.dagger {
   border-color: #f5c518;
@@ -305,4 +329,16 @@ h2 {
   .seat {
     flex: 1 1 180px;
   }
+}
+
+@media (max-width: 480px) {
+  #root { padding: 8px; }
+  button, input, select { width: 100%; }
+  .room-header button { width: auto; }
+  .action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .action-buttons button { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }

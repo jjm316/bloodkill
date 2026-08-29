@@ -43,6 +43,8 @@ Effort: `blood-oath-replica`
 
 ## Decisions-so-far
 
+- 2026-08-29：11 实现主体完成但门禁未通过，状态为 claimed；客户端具备键盘/读屏基础可访问性、移动端稳定布局和减少动态效果支持，事件日志按 ID 去重并限制 120 条；新增发布检查表、局域网/HTTPS-WSS 部署说明及 REST/WebSocket smoke 脚本。`npm run build` 与 smoke 通过，但全量 Python 测试和终局回放 smoke 仍需补齐。详见 [11 票据](issues/11-accessibility-performance-release.md)。
+
 - 2026-08-29：09 已解决；WebSocket 现以稳定 `commandId`/`expectedRevision`/`ack` 实现确认与幂等重传，客户端退避重连后以完整权威投影收敛，过期命令收到冲突与新状态。房主离开不终止房间，持 token 重连恢复管理权；协议版本不匹配显式拒绝，`/metrics` 仅提供无身份运行计数。详见 [09 票据](issues/09-online-sync-recovery.md)、[协议](../../server/PROTOCOL.md) 与 [恢复测试](../../tests/test_server_sync.py)。
 
 - 2026-08-26: Issues 20 and 14 resolved. Rank 4 alchemist and rank 7 berserker are fully implemented with intervention context, `choose-return`, reaction damage, resource/event semantics, projection/protocol/catalog updates, and regression coverage. The rank 1--9 ability/resource scope is now complete.

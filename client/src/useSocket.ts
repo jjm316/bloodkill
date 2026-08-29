@@ -89,7 +89,15 @@ export function useGameSocket(code: string, name: string, token: string | null):
           flushPendingCommands();
         } else if (typed.type === "event") {
           const incoming = (message as { events?: GameEvent[] }).events ?? [];
-          setEvents((previous) => [...previous, ...incoming]);
+          setEvents((previous) => {
+            const seen = new Set(previous.map((event) => event.eventId));
+            const next = incoming.filter((event) => {
+              if (seen.has(event.eventId)) return false;
+              seen.add(event.eventId);
+              return true;
+            });
+            return [...previous, ...next].slice(-120);
+          });
         } else if (typed.type === "ack") {
           const ack = message as CommandAck;
           pendingCommandsRef.current.delete(ack.commandId);
