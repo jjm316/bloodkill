@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from blood_bound import Command, RuleError, project_state
 
-from .protocol import PRIVATE_EVENT_TYPES
+from .protocol import PRIVATE_EVENT_TYPES, PROTOCOL_VERSION
 from .rooms import Room, RoomManager
 
 
@@ -43,6 +43,13 @@ class Conn:
 
 # connection id -> connection
 conns: dict[str, Conn] = {}
+metrics = {
+    "websocketConnections": 0,
+    "seatResumptions": 0,
+    "seatTakeovers": 0,
+    "commandsAccepted": 0,
+    "commandsRejected": 0,
+}
 
 
 def room_conns(room: Room) -> list[Conn]:
@@ -123,12 +130,44 @@ async def broadcast(room: Room, message: dict[str, Any]) -> None:
         await send_safe(conn.ws, message)
 
 
+async def send_state(conn: Conn) -> None:
+    await send_safe(conn.ws, build_state(conn))
+
+
+async def send_command_ack(
+    conn: Conn,
+    command_id: str,
+    status: str,
+    *,
+    error: RuleError | None = None,
+) -> None:
+    message: dict[str, Any] = {
+        "type": "ack",
+        "commandId": command_id,
+        "status": status,
+        "revision": conn.room.engine.state.revision,
+    }
+    if error is not None:
+        message["error"] = {
+            "code": error.code,
+            "message": str(error),
+            "details": error.details,
+        }
+    await send_safe(conn.ws, message)
+
+
 # ---- REST -------------------------------------------------------------
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def operational_metrics() -> dict[str, int]:
+    """Anonymous, process-local counters for a self-hosted server."""
+    return {**metrics, "activeConnections": len(conns), "activeRooms": len(manager.rooms)}
 
 
 @app.post("/api/rooms")
@@ -175,6 +214,7 @@ async def ws_endpoint(websocket: WebSocket, code: str) -> None:
     conn_id = uuid.uuid4().hex
     conn = Conn(ws=websocket, room=room)
     conns[conn_id] = conn
+    metrics["websocketConnections"] += 1
     try:
         if not await _handle_hello(conn, websocket):
             return
@@ -195,17 +235,34 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
         raw = await ws.receive_json()
     except Exception:
         return False
+    if not isinstance(raw, dict) or raw.get("type") != "hello":
+        await send_safe(ws, error_message("command.invalid-shape", "First message must be hello."))
+        return False
+    version = raw.get("protocolVersion")
+    if version is not None and version != PROTOCOL_VERSION:
+        await send_safe(
+            ws,
+            error_message(
+                "protocol.version-mismatch",
+                "Client and server protocol versions differ.",
+                expected=PROTOCOL_VERSION,
+                received=version,
+            ),
+        )
+        return False
     room = conn.room
     name = str(raw.get("name") or "").strip()
     token = raw.get("token")
     conn.is_host = bool(token and token == room.host_token)
     if name:
         try:
-            player_id, _is_new = manager.join_or_resume(room, name)
+            player_id, is_new = manager.join_or_resume(room, name)
         except RuleError as error:
             await send_safe(ws, rule_error_message(error))
             return False
         conn.player_id = player_id
+        if not is_new:
+            metrics["seatResumptions"] += 1
         for other_id, other in list(conns.items()):
             if other is not conn and other.room is room and other.player_id == player_id:
                 await send_safe(other.ws, {"type": "taken-over", "reason": "seat taken over by a new connection"})
@@ -214,6 +271,7 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
                 except Exception:
                     pass
                 conns.pop(other_id, None)
+                metrics["seatTakeovers"] += 1
     await broadcast_state(room)
     return True
 
@@ -234,23 +292,51 @@ async def _handle_message(conn: Conn, raw: Any) -> None:
 async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
     room = conn.room
     command_type = raw.get("command")
-    payload = raw.get("payload") or {}
-    command_id = str(raw.get("commandId") or uuid.uuid4().hex)
+    payload = raw.get("payload", {})
+    raw_command_id = raw.get("commandId")
+    command_id = raw_command_id if isinstance(raw_command_id, str) and raw_command_id else uuid.uuid4().hex
+    expected_revision = raw.get("expectedRevision", room.engine.state.revision)
     if command_type in ("start-game", "join-game"):
-        await send_safe(conn.ws, error_message("command.server-managed", "This command is managed by the server."))
+        error = RuleError("command.server-managed", "This command is managed by the server.")
+        await send_safe(conn.ws, rule_error_message(error))
+        await send_command_ack(conn, command_id, "rejected", error=error)
+        metrics["commandsRejected"] += 1
         return
     actor = conn.player_id
     if actor is None:
-        await send_safe(conn.ws, error_message("player.not-eligible", "Spectators cannot act."))
+        error = RuleError("player.not-eligible", "Spectators cannot act.")
+        await send_safe(conn.ws, rule_error_message(error))
+        await send_command_ack(conn, command_id, "rejected", error=error)
+        metrics["commandsRejected"] += 1
         return
-    if not isinstance(payload, dict):
-        await send_safe(conn.ws, error_message("command.invalid-shape", "A command payload must be an object."))
+    if not isinstance(command_type, str) or not command_type or not isinstance(payload, dict):
+        error = RuleError("command.invalid-shape", "A command must have a type and object payload.")
+        await send_safe(conn.ws, rule_error_message(error))
+        await send_command_ack(conn, command_id, "rejected", error=error)
+        metrics["commandsRejected"] += 1
         return
-    command = Command(command_id, room.game_id, actor, room.engine.state.revision, command_type, payload)
+    if not isinstance(expected_revision, int) or isinstance(expected_revision, bool):
+        error = RuleError("command.invalid-shape", "expectedRevision must be an integer.")
+        await send_safe(conn.ws, rule_error_message(error))
+        await send_command_ack(conn, command_id, "rejected", error=error)
+        metrics["commandsRejected"] += 1
+        return
+    command = Command(command_id, room.game_id, actor, expected_revision, command_type, payload)
+    revision_before = room.engine.state.revision
     try:
         events = manager.apply_command(room, command)
     except RuleError as error:
         await send_safe(conn.ws, rule_error_message(error))
+        await send_command_ack(conn, command_id, "rejected", error=error)
+        await send_state(conn)
+        metrics["commandsRejected"] += 1
+        return
+    applied = room.engine.state.revision != revision_before
+    await send_command_ack(conn, command_id, "accepted")
+    metrics["commandsAccepted"] += 1
+    if not applied:
+        # A retransmission is acknowledged without replaying its public events.
+        await send_state(conn)
         return
     events_view = public_events(events)
     if events_view:

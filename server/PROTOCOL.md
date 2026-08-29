@@ -10,6 +10,7 @@
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/health` | `{"status": "ok"}` |
+| `GET` | `/metrics` | 无身份信息的进程内运行指标，见“运行指标与公开部署边界”。 |
 | `POST` | `/api/rooms` | 创建房间 → `{"code", "hostToken", "gameId"}`。`code` 为 6 位数字房号；`hostToken` 由房主浏览器保存在 localStorage。 |
 | `GET` | `/api/rooms/{code}` | 房间概览 → `{"code", "status": "waiting|playing|ended", "locked", "playerCount"}`。不存在 → 404 `room.not-found`。 |
 | `GET` | `/api/rooms/{code}/replay` | 终局回放 → `{"gameId", "steps": [GameState]}`，每步都是旁观者投影。未结束 → 409 `room.not-ended`。只保留最近 20 个已结束对局。 |
@@ -22,20 +23,23 @@
 ### 客户端 → 服务器
 
 ```json
-{"type": "hello", "name": "小明", "token": "<hostToken 或省略>"}
+{"type": "hello", "name": "小明", "token": "<hostToken 或省略>", "clientRevision": 12, "protocolVersion": "1"}
 ```
 
 - `name` 为空字符串 → 旁观者（`yourPlayerId = null`，不可操作）。
 - `token` 等于房主的 `hostToken` → 该连接获得 `isHost`。
 - `name` 已存在于房间 → 断线重连，恢复座位（`roomStatus = playing` 时也可恢复）。
 - 同一座位被新连接以同名登录 → 旧连接收到 `taken-over` 并关闭。
+- `clientRevision` 为客户端最后收到的 `game.revision`，只用于诊断；服务端始终以 `state` 全量投影完成恢复。
+- `protocolVersion` 与服务端不匹配时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本；缺省仅用于兼容早期客户端。
 - `name` 是新人：房间已开始 → 400 `room.already-started`；房间已锁定 → 403 `room.locked`；名字为空 → 400 `player.name-required`。
 
 ```json
-{"type": "command", "command": "pass-dagger", "payload": {"targetPlayerId": "p-…"}, "commandId": "可选"}
+{"type": "command", "command": "pass-dagger", "payload": {"targetPlayerId": "p-…"}, "commandId": "uuid", "expectedRevision": 12}
 ```
 
-- `commandId` 可省略（服务器补一个）；引擎保证命令幂等与修订号校验。
+- 浏览器为每个命令生成稳定的 `commandId`；旧客户端可省略，服务器会补一个，但该命令不可安全重传。
+- `expectedRevision` 必须是生成操作时看到的修订号。省略时为兼容旧客户端按服务端当前 revision 处理。
 - `start-game` / `join-game` 由服务器托管，直接发送会得到 `command.server-managed`。
 - 旁观者发送任何 command → `player.not-eligible`。
 - 引擎拒绝的命令 → 对应 `RuleError` 错误码原样转发（见下），服务器状态不变。
@@ -67,6 +71,7 @@
 | `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`。 |
 | `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。 |
 | `error` | `{"code", "message", "details"}`。 |
+| `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
 | `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭。 |
 
 ### `state` 消息形状
@@ -84,6 +89,19 @@
   "game": { /* GameState 投影；waiting 时也有（setup 阶段） */ }
 }
 ```
+
+### 断线恢复与命令确认
+
+1. 浏览器在连接关闭后以退避重连；同名 `hello` 恢复原座位。房主离开不会结束或转移房间，持有原 `hostToken` 的重连仍为房主。
+2. `hello` 后服务器总会发送完整、按接收者投影的 `state`。客户端以它替换本地状态，不尝试补造事件；因此重连前后的 `game.revision` 与状态哈希以服务器为准。
+3. 客户端仅保留尚未收到 `ack` 的命令，并以原 `commandId`、原 `expectedRevision` 重传。相同命令重复到达时服务端返回 `accepted`，但不再次广播事件或结算。
+4. 新 `commandId` 携带过期 `expectedRevision` 时服务端返回 `game.revision-conflict`、`ack.status = rejected` 和最新 `state`；客户端丢弃该命令，等待用户基于新状态再次操作。
+5. 同一 `commandId` 若内容不同，服务端返回 `command.id-reuse`。所有拒绝均有 `ack`，因此不会永久卡在客户端发件箱。
+
+### 运行指标与公开部署边界
+
+- `GET /metrics` 返回无身份信息的进程内计数：连接数、座位恢复/接管数、命令接受/拒绝数及当前连接、房间数量；进程重启后清零。它用于观察重连风暴和非法命令，不记录昵称、令牌、命令内容或私密状态。
+- 局域网可使用 HTTP/WS；任何内网穿透或公网入口必须由 HTTPS/WSS 终止 TLS。不要将明文隧道、`hostToken`、存档目录或调试端点暴露到公网。
 
 ### GameState 投影形状（`blood_bound/projection.py`）
 
@@ -135,7 +153,7 @@
 
 **服务器层**：`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
 `room.already-started`、`player.name-required`、`player.not-eligible`（旁观者操作）、
-`command.server-managed`、`command.invalid-shape`。
+`command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`。
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、
 `game.already-ended`、`command.unknown`、`game.not-setup`、`game.duplicate-player`、

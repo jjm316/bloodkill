@@ -3,6 +3,8 @@
 See PROTOCOL.md for the full wire format and message-by-message behaviour.
 """
 
+PROTOCOL_VERSION = "1"
+
 # client -> server
 CLIENT_HELLO = "hello"
 CLIENT_COMMAND = "command"
@@ -12,6 +14,7 @@ CLIENT_HOST = "host"
 SERVER_STATE = "state"
 SERVER_EVENT = "event"
 SERVER_ERROR = "error"
+SERVER_ACK = "ack"
 SERVER_TAKEN_OVER = "taken-over"
 
 # Engine event types whose payload carries private facts (curse assignments).

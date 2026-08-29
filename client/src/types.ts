@@ -100,6 +100,14 @@ export interface ServerError {
   details?: Record<string, unknown>;
 }
 
+export interface CommandAck {
+  type: "ack";
+  commandId: string;
+  status: "accepted" | "rejected";
+  revision: number;
+  error?: Omit<ServerError, "type">;
+}
+
 export function actionToCommand(action: Action): { command: string; payload: Record<string, unknown> } {
   const { type, ...payload } = action;
   return { command: type, payload };

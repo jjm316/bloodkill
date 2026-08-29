@@ -287,7 +287,7 @@ function Banner({ title, detail, onBack }: { title: string; detail: string; onBa
 }
 
 export function GameScreen({ credentials, onLeave }: { credentials: RoomCredentials; onLeave: () => void }) {
-  const { state, events, error, closed, takenOver, send, sendHost } = useGameSocket(
+  const { state, events, error, closed, reconnecting, takenOver, send, sendHost } = useGameSocket(
     credentials.code,
     credentials.name,
     credentials.token,
@@ -302,7 +302,7 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
       />
     );
   }
-  if (closed && !state) {
+  if (closed && !state && !reconnecting) {
     return (
       <Banner
         title="Disconnected"
@@ -328,6 +328,7 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
           {state.locked ? " 🔒" : ""} {state.isHost ? "(host)" : ""}
         </span>
         <span className="status">{state.roomStatus}</span>
+        {reconnecting && <span className="hint">Reconnecting...</span>}
         <button onClick={onLeave}>Leave</button>
       </header>
       {error && (
