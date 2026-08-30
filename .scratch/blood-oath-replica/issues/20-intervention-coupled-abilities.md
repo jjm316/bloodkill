@@ -13,7 +13,7 @@ Status: resolved
 1. **rank 7 berserker**：技能窗 context 取 `attackerPlayerId`（attack 触发即攻击者，intervention 触发仍为原攻击者）；`use=True` → 原攻击者承受 1 点伤害，`source = "reaction"`（盾可挡，报 `target.shielded`）；可造成第 4 点捕获（终局 active = berserker）；反伤正常走线索展示和后续技能窗口。catalog slug：`counter-one`。
 2. **rank 4 alchemist**：仅 `trigger == "intervention"` 的技能窗携带 `protectedPlayerId`（被干涉者）；`use=True` + `mode ∈ {"heal", "harm"}`：
    - `harm`：被干涉者承受 1 点伤害，`source = "skill"`，走 17 的自选展示流程，不开新技能窗；
-   - `heal`：被干涉者需 `damage ≥ 1`（否则 `skill.invalid-target`）；开新 pending `token-return`（actor = 被治疗者）+ 新命令 `choose-return {token}`；结算：`damage − 1`（事件 `DamageHealed {playerId, amount, source: "skill"}`）并退回所选已展示标记（事件 `TokenReturned {playerId, token}`）；退回 rank 后二次展示不再开窗（17 闩锁）；审判官标记退回后恢复 `wild`。窗口开启事件 `TokenReturnOpened {playerId}`。
+   - `heal`：被干涉者需 `damage ≥ 1`（否则 `skill.invalid-target`）；开新 pending `token-return`（actor = 被治疗者）+ 新命令 `choose-return {token}`；结算：`damage − 1`（事件 `DamageHealed {playerId, amount, source: "skill"}`）并退回所选已展示标记（事件 `TokenReturned {playerId, token}`）；退回 rank 后二次展示不再开窗（17 闩锁）；审判者标记退回后恢复 `wild`。窗口开启事件 `TokenReturnOpened {playerId}`。
    - 无 `protectedPlayerId`（attack 直接触发）时 `use=True` 拒绝 `skill.invalid-target`，`legal_actions` 只给 decline。
 3. **收尾**：`_IMPLEMENTED_SKILL_RANKS` 补齐为 1–9；catalog `ability.rank.04`/`ability.rank.07` 更新（`heal-or-harm` / `counter-one`）与双语文案；`docs/rule-branch-coverage.md` 更新（注入转自然触发标注、新分支行）；`server/PROTOCOL.md` 与客户端类型同步 `choose-return` / token-return 窗口。
 4. **测试**：berserker 反击（含盾挡、反击捕获终局）；alchemist harm/heal、退 rank 二次展示不开窗、退普通标记、attack 触发拒绝、治疗 0 伤拒绝；性质测试 sweep 自然覆盖。

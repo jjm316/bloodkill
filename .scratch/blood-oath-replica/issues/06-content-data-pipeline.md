@@ -16,8 +16,8 @@ Blocked by: 01, 03
 
 - `catalog.json` 用稳定的规则 ID（如 `unit.rose.01`）、i18n 显示键和素材 ID 分别描述 19 个身份单元、10 个能力、3 个阵营、5 个资源以及供应区/牌桌/座位占位区；新增展示单元或区域只需新增数据记录，不改引擎代码。
 - `locales/en.json` 与 `locales/zh-Hans.json` 提供独立中英文本；`licenses.json` 为每个占位素材引用记录来源和许可边界。所有文本和素材都是项目原创占位，不含官方规则书文案、卡牌插画、Logo、扫描件或 trade dress。
-- `validate_content()` 在读取时拒绝 schema/ruleset 不匹配、重复或缺失 ID、不完整的 1--9 双家族加审判官牌组、悬空能力/素材引用、缺失翻译和没有许可证记录的素材；`load_content()` 可接收 fixture 目录，适合构建期或 CI 使用。
-- 两个已有引擎行为 (`grant-quill`、`damage-two`) 与审判官诅咒分发有明确 `implementation` 标记；来源 C 尚未覆盖的 rank 3--9 均标记为 `unimplemented`，不通过占位内容猜测规则效果。
+- `validate_content()` 在读取时拒绝 schema/ruleset 不匹配、重复或缺失 ID、不完整的 1--9 双家族加审判者牌组、悬空能力/素材引用、缺失翻译和没有许可证记录的素材；`load_content()` 可接收 fixture 目录，适合构建期或 CI 使用。
+- 两个已有引擎行为 (`grant-quill`、`damage-two`) 与审判者诅咒分发有明确 `implementation` 标记；来源 C 尚未覆盖的 rank 3--9 均标记为 `unimplemented`，不通过占位内容猜测规则效果。
 
 数据版本策略与使用方式见 [内容目录说明](../../../blood_bound/content/README.md)。测试扩展至内容加载、双语解析、重复 ID、缺失翻译和缺失许可证；`python -m unittest discover -v` 通过 12 项。
 

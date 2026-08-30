@@ -21,8 +21,8 @@ Status: resolved
 已交付本地主机权威服务 + 多浏览器客户端，覆盖票据全部输出与完成条件：
 
 **领域层（新增）**
-- [`blood_bound/projection.py`](../../blood_bound/projection.py)：实现 03 契约中 `PlayerView` 的落地。`project_state(state, viewer_id)` 按玩家投影；`legal_actions` 补全引擎遗漏的合法行动（2 号技能带 `targetPlayerId` 选项、审判官 `distribute-curse` 分发入口）。投影强制保密：不含 `seed`（知道种子即可重现全部身份分配）、不含 `clueIcon`（开局只向左手边玩家展示）、其他玩家无阵营/位阶、`revealed` 仅在受伤/捕获后出现、`cursesToDistribute` 只出现在审判官自己的 `viewer` 块。旁观者 `viewer=None` 且无合法行动。
-- 测试：[`tests/test_projection.py`](../../tests/test_projection.py) 6 项全部通过（旁观者无身份/种子、只见自己身份、受伤后公开线索、审判官分发、匕首行动、2 号技能目标）。
+- [`blood_bound/projection.py`](../../blood_bound/projection.py)：实现 03 契约中 `PlayerView` 的落地。`project_state(state, viewer_id)` 按玩家投影；`legal_actions` 补全引擎遗漏的合法行动（2 号技能带 `targetPlayerId` 选项、审判者 `distribute-curse` 分发入口）。投影强制保密：不含 `seed`（知道种子即可重现全部身份分配）、不含 `clueIcon`（开局只向左手边玩家展示）、其他玩家无阵营/位阶、`revealed` 仅在受伤/捕获后出现、`cursesToDistribute` 只出现在审判者自己的 `viewer` 块。旁观者 `viewer=None` 且无合法行动。
+- 测试：[`tests/test_projection.py`](../../tests/test_projection.py) 6 项全部通过（旁观者无身份/种子、只见自己身份、受伤后公开线索、审判者分发、匕首行动、2 号技能目标）。
 
 **服务端（新增，`server/`）**
 - `rooms.py`（纯 stdlib，无需 FastAPI 即可测试）：`RoomManager` 负责 6 位数字房号、多房间、房主令牌、按名字加入/重连、同名接管（旧连接收 `taken-over` 后关闭）、锁定、6–12 人开局、每接受一条命令自动存档、终局只保留最近 20 局、启动时 `restore()` 恢复全部未结束房间。
@@ -30,7 +30,7 @@ Status: resolved
 - 测试：[`tests/test_server_rooms.py`](../../tests/test_server_rooms.py) 8 项全部通过（房号/持久化、加入/重连、开局后拒入、锁定行为、6 人开局门槛、自动存档+重启恢复、保留 20 局上限、旁观回放步骤）。
 
 **客户端（新增，`client/`，React + TypeScript + Vite）**
-- 大厅（建房/加入/旁观/回放入口，房主令牌存 localStorage）→ 等待室（花名册/在线标记、房主开局 6–12 人门槛、锁房）→ 对局（行动按钮全部来自服务端 `legalActions` 投影：传匕首/攻击/申请/选择/放弃干预/技能窗口/审判官诅咒分发；事件日志）→ 终局结果横幅；回放页与对局共用同一 `Board` 组件。手机竖屏 40px 最小触控目标。
+- 大厅（建房/加入/旁观/回放入口，房主令牌存 localStorage）→ 等待室（花名册/在线标记、房主开局 6–12 人门槛、锁房）→ 对局（行动按钮全部来自服务端 `legalActions` 投影：传匕首/攻击/申请/选择/放弃干预/技能窗口/审判者诅咒分发；事件日志）→ 终局结果横幅；回放页与对局共用同一 `Board` 组件。手机竖屏 40px 最小触控目标。
 - `npx tsc --noEmit` 与 `npm run build` 均通过（157KB JS / 50.6KB gzip）。
 
 **文档与配置**

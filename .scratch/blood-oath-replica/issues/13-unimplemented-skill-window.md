@@ -4,7 +4,7 @@ Type: task
 Blocked by: 12（venv）
 Status: resolved
 
-问题：rank 3–9 的能力在 `content/catalog.json` 中标为 `unimplemented`，但引擎 `_apply_damage` 在攻击伤害展示 rank 时，对任意 rank（含 fleur-cross 审判官）都会开启技能窗；`_choose_skill use=True` 对 rank 3–9 与 fleur-cross 只是记 `skills_used`、发 `SkillUsed`，无任何效果。玩家会看到一个点了没反应的技能按钮。
+问题：rank 3–9 的能力在 `content/catalog.json` 中标为 `unimplemented`，但引擎 `_apply_damage` 在攻击伤害展示 rank 时，对任意 rank（含 fleur-cross 审判者）都会开启技能窗；`_choose_skill use=True` 对 rank 3–9 与 fleur-cross 只是记 `skills_used`、发 `SkillUsed`，无任何效果。玩家会看到一个点了没反应的技能按钮。
 
 输出：在 `_apply_damage` 按已实现位阶门控技能窗开启（仅 rank 1/2 开窗）；补测试覆盖 rank 3–9 与 fleur-cross 不开窗。`legal_actions` 无需改（窗口不再打开，自然无无效果选项）。
 

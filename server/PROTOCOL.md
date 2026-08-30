@@ -63,7 +63,7 @@
 | `decline-intervention` | `{}` | 受攻击者放弃干预 |
 | `choose-skill` | `{"use": true\|false, "targetPlayerId"?, "targetPlayerIds"?, "mode"?}` | 技能窗口；2/5/6/8/9 使用单目标，3 使用两个目标，4 使用 `mode=heal|harm` |
 | `choose-return` | `{"token": "rank|marker-0|marker-1"}` | rank 4 治疗窗口，治疗者退回一张已展示标记 |
-| `distribute-curse` | `{"assignments": {"curseId": "playerId"}}` | 仅审判官；数量/重复校验由引擎完成 |
+| `distribute-curse` | `{"assignments": {"curseId": "playerId"}}` | 仅审判者；数量/重复校验由引擎完成 |
 
 ### 服务器 → 客户端
 
@@ -129,7 +129,7 @@
     "identity": {"faction": "rose", "rank": 5},
     "resources": ["curse"],
     "skillsUsed": false,
-    "cursesToDistribute": ["c-…"],   // 仅审判官在分发阶段非空
+    "cursesToDistribute": ["c-…"],   // 仅审判者在分发阶段非空
     "clueIcon": "rose",              // 本人阵营徽记
     "seenNeighbourClue": {"playerId": "p-…", "icon": "beast"}  // 右邻徽记，仅此一处
   },
@@ -151,7 +151,7 @@
 - `revealed` 只在身份被公开（受伤/被捕获）后出现。
 - 投影**不含**随机种子 `seed`（知道种子即可用 `random.Random(seed)` 重现全部身份分配）。
 - 阵营徽记按规则只向左邻展示：徽记只出现在被展示者的 `viewer` 块里（本人 `clueIcon` + 右邻 `seenNeighbourClue`）；`players[]` 条目、旁观者投影与回放步骤均**不含**任何徽记字段。
-- `cursesToDistribute` 只在审判官自己的 `viewer` 块里。
+- `cursesToDistribute` 只在审判者自己的 `viewer` 块里。
 - 事件广播过滤 `CurseViewed` / `CurseDistributed`；服务器端存档保留完整事件流，用于回放校验。
 
 ### 错误码

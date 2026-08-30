@@ -15,11 +15,11 @@ Status: resolved
 已完成 [领域模型与状态契约](../domain-model-contract.md)。契约定义了：
 
 - 包含私有身份和 token 所有权的 `EngineState`，以及按玩家裁剪的 `PlayerView`；
-- 6--12 人、偶数双家族和奇数审判官局的不变量，伤害、捕获、匕首、资源、护盾/扇子和 pending window 约束；
+- 6--12 人、偶数双家族和奇数审判者局的不变量，伤害、捕获、匕首、资源、护盾/扇子和 pending window 约束；
 - 建局、传匕首、攻击、干涉、技能和诅咒分发命令目录，以及不可由 UI 直接发出的事实事件目录；
 - 干涉/技能/终局状态迁移图、稳定错误码、幂等与 revision 检查；
 - `schemaVersion`/`rulesetVersion` 的向后兼容、事件追加和快照恢复策略；
-- 7 人审判官局与偶数局 setup fixture 形状。
+- 7 人审判者局与偶数局 setup fixture 形状。
 
 权威事件日志与可丢弃快照的架构决策记录在 [ADR-0001](../../../docs/adr/0001-authoritative-event-log.md)，领域术语记录在 [CONTEXT.md](../../../CONTEXT.md)。
 

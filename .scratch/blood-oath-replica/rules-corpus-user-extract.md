@@ -8,17 +8,17 @@
 
 | 规则 ID | 规则摘要 | 待验收重点 |
 | --- | --- | --- |
-| `setup.equal-factions` | 6–12 人；偶数人数时从 Rose、Beast 各选取玩家数一半的不重复身份 | 两阵营人数相等；两张审判官不入局 |
-| `setup.inquisitor` | 奇数人数时从两张审判官中随机选一张，Rose/Beast 各选取人数向下取整的一半；每名审判者对应 1 张真诅咒和 1 张假诅咒 | 诅咒卡数量按审判者人数计算 |
-| `setup.clue-icon` | 每位玩家只向其左手边玩家展示 clue icon | Harlequin 的 clue icon 为敌对家族；审判官虽显示 Rose/Beast clue 但真实属于 Secret Order |
+| `setup.equal-factions` | 6–12 人；偶数人数时从 Rose、Beast 各选取玩家数一半的不重复身份 | 两阵营人数相等；两张审判者不入局 |
+| `setup.inquisitor` | 奇数人数时从两张审判者中随机选一张，Rose/Beast 各选取人数向下取整的一半；每名审判者对应 1 张真诅咒和 1 张假诅咒 | 诅咒卡数量按审判者人数计算 |
+| `setup.clue-icon` | 每位玩家只向其左手边玩家展示 clue icon | Harlequin 的 clue icon 为敌对家族；审判者虽显示 Rose/Beast clue 但真实属于 Secret Order |
 | `turn.dagger-holder` | 只有匕首持有者主动行动；可传递匕首或攻击任意玩家 | 攻击后匕首交给攻击目标 |
-| `damage.reveal` | 每点伤害展示一个此前未展示的标记：玩家自选等级（rank）或身份标记（红/蓝/？），身份标记组合由 rank 决定 | 第 3 点被迫展示 rank、第 4 点被捕获；仅审判官 wild 可取任意颜色身份标记 |
+| `damage.reveal` | 每点伤害展示一个此前未展示的标记：玩家自选等级（rank）或身份标记（红/蓝/？），身份标记组合由 rank 决定 | 第 3 点被迫展示 rank、第 4 点被捕获；仅审判者 wild 可取任意颜色身份标记 |
 | `intervention.request` | 仅攻击目标可请求干涉；rank token 仍在供应区的玩家可响应 | 被选干涉者承伤并强制展示 rank；技能伤害不可干涉 |
 | `skill.reveal-rank` | 因**攻击**伤害展示 rank 时，可立刻发动对应角色技能 | 技能伤害不触发技能；炼金治疗后若退回 rank，可在下次重新取得 rank 时再发动 |
-| `game.end` | 任一玩家第 4 点伤害被捕获时立即结束 | 家族 active player 按领袖规则判定；审判官造成第 4 点伤害时走独立失败分支 |
-| `inquisitor.attack-limit` | 审判官不能攻击已受 3 点伤害的玩家 | 禁止命令必须带可解释原因 |
-| `inquisitor.curse` | 审判官查看供应区全部诅咒，暗置分发给不同玩家 | True Curse 在正常胜方领袖前时，审判官独赢；审判官被捕获也独赢 |
-| `inquisitor.capture-branch` | 审判官作为 active player 造成第 4 点伤害时，审判官自身判负，其他方按该分支获胜 | 不把审判官临时归入 Rose/Beast |
+| `game.end` | 任一玩家第 4 点伤害被捕获时立即结束 | 家族 active player 按领袖规则判定；审判者造成第 4 点伤害时走独立失败分支 |
+| `inquisitor.attack-limit` | 审判者不能攻击已受 3 点伤害的玩家 | 禁止命令必须带可解释原因 |
+| `inquisitor.curse` | 审判者查看供应区全部诅咒，暗置分发给不同玩家 | True Curse 在正常胜方领袖前时，审判者独赢；审判者被捕获也独赢 |
+| `inquisitor.capture-branch` | 审判者作为 active player 造成第 4 点伤害时，审判者自身判负，其他方按该分支获胜 | 不把审判者临时归入 Rose/Beast |
 
 ## 角色能力语义
 
@@ -35,7 +35,7 @@
 | 7 | `berserker` | 令刚刚攻击自己的玩家承受 1 点伤害。 |
 | 8 | `mage` | 给一名玩家 Staff；该玩家的身份标记全部变为问号（?）。 |
 | 9 | `courtesan` | 向一名玩家给出 Fan；该玩家成为攻击目标时，他人不能干涉。 |
-| fleur cross | `inquisitor` | 两张审判官仅 clue icon 不同，共用同一个 fleur cross rank token；查看供应区诅咒并暗置分给不同玩家；其 affiliation 为 wild，且不能攻击已受 3 点伤害者。被捕获或满足 True Curse 夺胜条件时独赢。 |
+| fleur cross | `inquisitor` | 两张审判者仅 clue icon 不同，共用同一个 fleur cross rank token；查看供应区诅咒并暗置分给不同玩家；其 affiliation 为 wild，且不能攻击已受 3 点伤害者。被捕获或满足 True Curse 夺胜条件时独赢。 |
 
 ### 身份标记组成（2026-08-22 澄清）
 
@@ -79,8 +79,8 @@ Then 红、蓝阵营各发出 4 张不重复身份，恰有一名玩家持有匕
 ### `setup/odd-player-inquisitor`
 
 Given 7 名玩家和已提供的诅咒卡数量配置  
-When 创建审判官对局  
-Then Rose 与 Beast 各发出 3 张不重复身份，并从两张审判官中随机发出 1 张；准备 1 张诅咒卡与 fleur cross rank token。
+When 创建审判者对局  
+Then Rose 与 Beast 各发出 3 张不重复身份，并从两张审判者中随机发出 1 张；准备 1 张诅咒卡与 fleur cross rank token。
 
 ### `turn/pass-dagger`
 
@@ -130,17 +130,17 @@ Then A 的阵营获胜，并附带“active player 捕获敌方领袖”的可�
 
 Given 正常家族胜方已经确定，且该胜方当前领袖持有 True Curse  
 When 公开诅咒卡  
-Then 审判官独赢，家族胜利被覆盖。
+Then 审判者独赢，家族胜利被覆盖。
 
 ### `game/end-inquisitor-active-capture`
 
-Given 审判官是 active player，目标玩家已受 3 点伤害  
-When 审判官的攻击造成目标第 4 点伤害并使其被捕获  
-Then 审判官按独立分支判负，其他方按该分支获胜。
+Given 审判者是 active player，目标玩家已受 3 点伤害  
+When 审判者的攻击造成目标第 4 点伤害并使其被捕获  
+Then 审判者按独立分支判负，其他方按该分支获胜。
 
 ## 未决项
 
 - 诅咒卡数量已裁决为“每名审判者 1 张真诅咒 + 1 张假诅咒”；当前奇数局各有 1 名审判者，因此为 2 张。
-- 两张审判官仅 clue icon 不同，共用同一 fleur cross rank token；其 affiliation 为 wild。
-- 审判官作为 active player 造成第 4 点伤害时走独立分支：审判官判负，其他方获胜。
+- 两张审判者仅 clue icon 不同，共用同一 fleur cross rank token；其 affiliation 为 wild。
+- 审判者作为 active player 造成第 4 点伤害时走独立分支：审判者判负，其他方获胜。
 - 发言模式：来源 A 提供“公开自由发言”或“全程禁言”两个变体；来源 C 未定义此项，应作为房间规则配置而非引擎隐含行为。

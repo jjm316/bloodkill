@@ -13,7 +13,7 @@ Status: resolved
 1. **rank 3 harlequin**：`choose-skill use=True` + `targetPlayerIds`（恰好 2 名其他存活玩家，否则 `skill.invalid-target`）；公开事件 `HarlequinInspected {playerId, targetPlayerIds}`（目标公开）；秘密反馈写入 `Player.inspections`（目标 faction + rank），只出现在本人 viewer 投影，事件日志与他人投影均不含反馈。catalog slug：`inspect-two`。
 2. **rank 5 mentalist**：`targetPlayerId`（非自己、活体；盾目标拒绝 `target.shielded`）；1 点伤害 `source = "skill"` 且强制亮 rank（rank 已展示则回落为自选身份标记，由 17 的 `forceRank` 机制保证），不开新技能窗；结算完成后经 `followup: hand-dagger` 把匕首交给目标。slug：`damage-one-reveal-rank`。
 3. **rank 6 guardian**：`targetPlayerId`（任意活体，允许自己）；`ResourceGranted` shield 给目标、sword 给自己；`Player` 记录 `shield_ward_id`；guardian 第 3 点伤害时 `ResourceReturned` 归还自己的 sword 与 ward 的 shield（挂在 17 的逐点结算上；ward 已捕获时仍归还）。slug：`grant-shield-sword`。
-4. **rank 8 mage**：`targetPlayerId`（任意活体）；`ResourceGranted` staff；目标两张身份标记全部变为 `unknown`（含已展示标记的显示值；审判官的 `wild` 也变为 `unknown`）；事件 `IdentityMarkersObscured {playerId}`。slug：`grant-staff-obscure`。
+4. **rank 8 mage**：`targetPlayerId`（任意活体）；`ResourceGranted` staff；目标两张身份标记全部变为 `unknown`（含已展示标记的显示值；审判者的 `wild` 也变为 `unknown`）；事件 `IdentityMarkersObscured {playerId}`。slug：`grant-staff-obscure`。
 5. **rank 9 courtesan**：`targetPlayerId`（任意活体）；`ResourceGranted` fan；扇的干涉阻断防御闸门（`_attack` 资格名单、`legal_actions`）已存在，本票把注入测试转为自然触发并保留注入用例。slug：`grant-fan`。
 
 注意：15 已由 17 修复，`hand-dagger` followup 仅在 `status == "active"` 时生效；技能伤害造成第 4 点捕获时不得残留 action 相位或匕首移交。

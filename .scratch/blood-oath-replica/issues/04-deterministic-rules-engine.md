@@ -14,9 +14,9 @@ Status: resolved
 
 已完成 `blood_bound/` 纯 Python 领域引擎，选择 Python 3.11+、标准库 `unittest`，不引入 Web 框架或数据库依赖。当前 API 包含：
 
-- `RulesEngine.new_game()` 和 `Command`/`Event`/`EngineState` 数据结构；确定性 seed 的 6--12 人建局、偶数双家族和奇数审判官分配、每名审判者一真一假两张诅咒卡；
+- `RulesEngine.new_game()` 和 `Command`/`Event`/`EngineState` 数据结构；确定性 seed 的 6--12 人建局、偶数双家族和奇数审判者分配、每名审判者一真一假两张诅咒卡；
 - `join-game`、`start-game`、`pass-dagger`、`attack`、干涉请求/选择/拒绝、攻击触发技能选择、`distribute-curse` 命令；
-- 攻击伤害、线索展示、捕获、审判官攻击限制、Shield/Fan 目标限制、技能窗口和家族/审判官终局分支；
+- 攻击伤害、线索展示、捕获、审判者攻击限制、Shield/Fan 目标限制、技能窗口和家族/审判者终局分支；
 - `legal_actions(player_id)` 权威派生接口；稳定 `RuleError.code`；expected revision 检查；重复命令按 body hash 幂等重放，复用 command ID 配不同 body 会拒绝；
 - 事务式 deep-copy 提交：命令中途失败不改变 authority；事件在提交时按旧 revision 顺序生成唯一 ID，注入 clock 后可复现测试事件。
 

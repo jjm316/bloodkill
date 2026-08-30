@@ -16,7 +16,7 @@ Issue 21 branch additions:
 | Branch | Behavior | Coverage |
 | --- | --- | --- |
 | `start` 徽记展示事件 | 追加 `ClueIconsShown`：`pairs` 为 seat 环序"每人 → 左邻"，payload 无徽记内容 | `RulesEngineTests.test_start_logs_clue_icon_showing_pairs_without_icons` |
-| 徽记不变量 | rank 3 徽记恒为敌对家族；审判官徽记 ∈ {rose, beast} 而真实所属为 `wild`（必不符） | `RulesEngineTests.test_rank_three_icon_is_hostile_and_inquisitor_icon_contradicts_affiliation` |
+| 徽记不变量 | rank 3 徽记恒为敌对家族；审判者徽记 ∈ {rose, beast} 而真实所属为 `wild`（必不符） | `RulesEngineTests.test_rank_three_icon_is_hostile_and_inquisitor_icon_contradicts_affiliation` |
 | 徽记投影 | viewer 块含本人 `clueIcon` 与右邻 `seenNeighbourClue`，仅此两枚 | `ProjectionTests.test_viewer_sees_own_clue_icon_and_right_neighbours_icon` |
 | 徽记保密 | `players[]` 条目无徽记字段；旁观者与回放投影（`viewer=None`）无徽记 | `ProjectionTests.test_projection_hides_clue_icons_of_anyone_but_self_and_right_neighbour`；`RoomManagerTests.test_replay_returns_public_spectator_steps`；性质 `ProjectionSecrecyPropertyTests` |
 
@@ -48,7 +48,7 @@ Issue 20 branch additions:
 | `start` 非 setup | `game.not-setup` | `SetupBranchTests.test_second_start_is_rejected` |
 | `start` 人数不足 | `game.player-count` | `SetupBranchTests.test_start_with_fewer_than_six_is_rejected` |
 | `start` 偶数局 | 双家族各半、无诅咒 | `RulesEngineTests.test_setup_is_deterministic_and_odd_games_have_one_curse`；golden 6/8/10/12 |
-| `start` 奇数局 | 审判官 + 1 诅咒 | 同上；golden 7/9/11 |
+| `start` 奇数局 | 审判者 + 1 诅咒 | 同上；golden 7/9/11 |
 | `start` 身份发放 | 不重复 rank、随机匕首持有者、`GameStarted` | `RulesEngineTests.test_setup_is_deterministic_and_odd_games_have_one_curse` |
 | `pass-dagger` 相位/持有者 | `game.not-active` / `player.not-dagger-holder` | `CommandGuardBranchTests.test_pass_by_non_holder_is_rejected`、`test_action_command_during_intervention_window_is_rejected` |
 | `pass-dagger` 传给自己 | `target.not-eligible` | `CommandGuardBranchTests.test_pass_to_self_is_rejected` |
@@ -56,7 +56,7 @@ Issue 20 branch additions:
 | `attack` 相位/持有者 | `game.not-active` / `player.not-dagger-holder` | `CommandGuardBranchTests.test_action_command_during_intervention_window_is_rejected` |
 | `attack` 攻击自己 | `target.not-eligible` | `CommandGuardBranchTests.test_attack_to_self_is_rejected` |
 | `attack` 盾目标 | `target.shielded`（注入） | `AttackBranchTests.test_shielded_target_is_rejected` |
-| `attack` 审判官攻 3 伤 | `target.already-three-damage`（注入） | `AttackBranchTests.test_inquisitor_cannot_attack_target_with_three_damage` |
+| `attack` 审判者攻 3 伤 | `target.already-three-damage`（注入） | `AttackBranchTests.test_inquisitor_cannot_attack_target_with_three_damage` |
 | `attack` 合法 | `AttackDeclared`、匕首移交、干涉窗口与资格名单 | `AttackBranchTests.test_attack_declares_window_hands_dagger_and_lists_eligible` |
 | `attack` 目标持扇 | 资格名单为空（注入） | `AttackBranchTests.test_fan_target_blocks_all_intervention_responders` |
 | `request-intervention` 窗口/演员 | `intervention.not-open` / `player.not-actor` | `AttackBranchTests.test_wrong_actor_cannot_request_or_decline_intervention`、`test_choose_intervention_without_window_is_rejected` |
@@ -75,7 +75,7 @@ Issue 20 branch additions:
 | `choose-skill` rank 2 合法 | 2 伤、匕首移交、不开新窗口 | `SkillBranchTests.test_assassin_skill_deals_two_damage_hands_dagger_and_opens_no_new_window` |
 | `choose-skill` rank 2 捕获 | 终局后相位/匕首清空（issue 15 已修） | `SkillBranchTests.test_assassin_skill_capture_leaves_ended_phase` |
 | `distribute-curse` 无诅咒/非活跃 | `curse.invalid-count` | `CurseBranchTests.test_distribute_curse_without_curses_is_rejected` |
-| `distribute-curse` 非审判官 | `player.not-eligible` | `CurseBranchTests.test_distribute_curse_by_non_inquisitor_is_rejected` |
+| `distribute-curse` 非审判者 | `player.not-eligible` | `CurseBranchTests.test_distribute_curse_by_non_inquisitor_is_rejected` |
 | `distribute-curse` 分配键不符 | `curse.invalid-count` | `CurseBranchTests.test_distribute_curse_with_wrong_assignment_keys_is_rejected` |
 | `distribute-curse` 未知/已捕获收件人 | `target.not-found` / `target.captured` | `CurseBranchTests.test_distribute_curse_to_unknown_recipient_is_rejected`、`test_distribute_curse_to_captured_recipient_is_rejected` |
 | `distribute-curse` 重复收件人 | `curse.duplicate-recipient`（注入） | `CurseBranchTests.test_distribute_curse_duplicate_recipient_is_rejected` |
@@ -85,8 +85,8 @@ Issue 20 branch additions:
 | `_apply_damage` 攻击伤害开技能窗 | rank 1--9（rank 4 仅 intervention），仅 `source=attack`/`source=intervention` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_does_not_open_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_without_skill_window` |
 | `_end_game` 捕获家族领袖 | `captured-leader`，攻击方胜 | `EndGameBranchTests.test_captured_leader_branch` |
 | `_end_game` 捕获普通成员 | `captured-player`，攻击方负 | `EndGameBranchTests.test_captured_non_leader_branch` |
-| `_end_game` 审判官被捕获 | `inquisitor-captured`，平局 | `EndGameBranchTests.test_inquisitor_captured_is_draw` |
-| `_end_game` 审判官为行动者 | `inquisitor-active-capture`（注入，14 后自然可达） | `EndGameBranchTests.test_inquisitor_active_capture_branch` |
+| `_end_game` 审判者被捕获 | `inquisitor-captured`，平局 | `EndGameBranchTests.test_inquisitor_captured_is_draw` |
+| `_end_game` 审判者为行动者 | `inquisitor-active-capture`（注入，14 后自然可达） | `EndGameBranchTests.test_inquisitor_active_capture_branch` |
 | `_is_leader` 领袖判定 | 家族存活者最低 rank | 上述 leader/non-leader 两测试 |
 | 状态校验 | damage/capture、revealed、匕首持有者不变量 | 性质 `StateInvariantPropertyTests`；`RulesEngineTests.test_checkpoint_resume_continues_without_double_applying` |
 
@@ -97,7 +97,7 @@ Issue 20 branch additions:
 | 观众投影 | 无身份、无 seed、无行动 | `ProjectionTests.test_spectator_sees_no_identity_or_seed` |
 | 玩家投影 | 仅自己身份；公共玩家列表无身份字段 | `ProjectionTests.test_player_sees_only_their_own_identity` |
 | 线索展示 | 伤害后才出现在投影 | `ProjectionTests.test_revealed_clues_appear_only_after_damage` |
-| 诅咒视图 | 仅审判官见 `cursesToDistribute` | `ProjectionTests.test_inquisitor_gets_private_curse_assignment_view` |
+| 诅咒视图 | 仅审判者见 `cursesToDistribute` | `ProjectionTests.test_inquisitor_gets_private_curse_assignment_view` |
 | `legal_actions` 行动阶段 | 仅匕首持有者有 pass/attack；盾目标不可攻击 | `ProjectionTests.test_dagger_holder_actions_are_derived_from_authority` |
 | `legal_actions` 技能窗 | rank 2 列出目标；rank 1 无目标 | `ProjectionTests.test_rank_two_skill_window_offers_valid_targets`；`ProjectionBranchTests.test_elder_skill_window_offers_use_without_a_target` |
 | `legal_actions` 干涉窗 | 请求前后选项集合 | `ProjectionBranchTests.test_pending_intervention_actions_before_and_after_request` |
@@ -114,7 +114,7 @@ Issue 20 branch additions:
 - 确定性：同 seed + 命令序列 → 事件日志（revision/type/payload）一致；
 - 恢复等价：任意位置 checkpoint → resume 后与不中断运行逐事件一致、revision 相等（无双重结算）；
 - 幂等：走法中每条命令重复提交 → 返回原事件、revision 不变；
-- 投影保密：任意 viewer（含观众）投影不含 seed、不含他人 faction/rank/clueIcon、不含 pending context，诅咒仅审判官可见；
+- 投影保密：任意 viewer（含观众）投影不含 seed、不含他人 faction/rank/clueIcon、不含 pending context，诅咒仅审判者可见；
 - 状态不变量：每条命令后 damage/capture/revealed/匕首持有者/revision 连续性成立。
 
 ## 已知缺陷

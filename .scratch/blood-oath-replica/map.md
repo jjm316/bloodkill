@@ -45,9 +45,9 @@ Effort: `blood-oath-replica`
 
 - 2026-08-30：22 已解决：攻击无人干涉结算后匕首归受伤目标（此前 `_after_damage` 把 `attack` 来源判回攻击者，与语料 `combat/attack-handoff`/`intervention/refused` 相反；开技能窗分支恰好正确、行为分裂）。`skill`/`reaction` 来源判定不动（rank 4/7 联动属 20）；golden fixtures 漂移后重新生成，全量 113 通过。详见 [22 票据](issues/22-attack-dagger-to-wounded-target.md)。
 
-- 2026-08-30：21 已解决：开局"向左邻展示阵营徽记"上线——`_start` 追加单条 `ClueIconsShown` 公开事件（仅 `pairs` 展示关系，无徽记内容，无 schema/ruleset 版本变更，golden fixtures 按预期漂移后重新生成）；投影 `viewer` 块下发本人 `clueIcon` 与右邻 `seenNeighbourClue`，`players[]`/旁观者/回放零徽记；前端自己座位渲染中文徽记文案，事件日志一行"全员已向左邻展示阵营徽记"；补投影保密、审判官徽记必错与 rank 3 反转测试，全量 110/110 通过。双轴 code review 无违规。详见 [21 票据](issues/21-clue-icon-neighbour-reveal.md)。
+- 2026-08-30：21 已解决：开局"向左邻展示阵营徽记"上线——`_start` 追加单条 `ClueIconsShown` 公开事件（仅 `pairs` 展示关系，无徽记内容，无 schema/ruleset 版本变更，golden fixtures 按预期漂移后重新生成）；投影 `viewer` 块下发本人 `clueIcon` 与右邻 `seenNeighbourClue`，`players[]`/旁观者/回放零徽记；前端自己座位渲染中文徽记文案，事件日志一行"全员已向左邻展示阵营徽记"；补投影保密、审判者徽记必错与 rank 3 反转测试，全量 110/110 通过。双轴 code review 无违规。详见 [21 票据](issues/21-clue-icon-neighbour-reveal.md)。
 
-- 2026-08-30：`setup.clue-icon` grilling 定案：补上开局"向左邻展示阵营徽记"环节——纯投影（viewer 块加本人 `clueIcon` 与右邻徽记，无 setup 阶段、无 schema bump）；新增一条批量公开事件 `ClueIconsShown` 记录展示关系（内容不进事件）；方向约定俯视顺时针=座位号递增，UI 文案不出现左右；中文术语"阵营徽记"（rank 3 敌对家族、审判官随机家族特例保留，审判官徽记必与真实所属不符，补测试钉死）。已立案 [21](issues/21-clue-icon-neighbour-reveal.md)（ready-for-agent），待产品方审阅后实现。CONTEXT.md 新增"阵营徽记""左邻/右邻"词条。
+- 2026-08-30：`setup.clue-icon` grilling 定案：补上开局"向左邻展示阵营徽记"环节——纯投影（viewer 块加本人 `clueIcon` 与右邻徽记，无 setup 阶段、无 schema bump）；新增一条批量公开事件 `ClueIconsShown` 记录展示关系（内容不进事件）；方向约定俯视顺时针=座位号递增，UI 文案不出现左右；中文术语"阵营徽记"（rank 3 敌对家族、审判者随机家族特例保留，审判者徽记必与真实所属不符，补测试钉死）。已立案 [21](issues/21-clue-icon-neighbour-reveal.md)（ready-for-agent），待产品方审阅后实现。CONTEXT.md 新增"阵营徽记""左邻/右邻"词条。
 
 - 2026-08-29：内网穿透选型定案（见 [调研笔记 research-02](research-02-public-access-tunnel.md)）：默认 cloudflared 快速隧道（本机 winget 已装并完成端到端实测：协议全链路通、自动 HTTPS/WSS、手机零安装；代价是 URL 每次重启随机变、WSS 指令往返实测约 0.8–1 秒）；备选 frp + 国内轻量 VPS 明文转发（预期几十毫秒级、约百元/年）、PC 圈子 Radmin VPN（本机已装，仅 Windows 客户端、手机出局）；花生壳（5 并发<6 人下限）、natapp（HTTP 隧道人脸识别+域名强制轮换）、ngrok（拦截页+1GB/月）、ZeroTier/Tailscale 组网（免费档容量不足）不采用。用户裁定明文可接受、便利性优先，`docs/deployment-lan.md` 的强制 TLS 条款同步降级为建议。
 
@@ -70,13 +70,13 @@ Effort: `blood-oath-replica`
 - 2026-08-19：采用“先规则引擎、后界面”的分层路线；理由是桌游复杂度主要来自状态转换和边界结算。
 - 2026-08-19：产品方确认必须支持多人联机；客户端采用浏览器网页，不提供安装包；服务端由用户本地启动并通过内网穿透供他人访问。首轮开发先以桌面网页为主，同时约束响应式布局以兼容手机（含 iPhone）和平板。
 - 2026-08-19：01 身份研究未能从一手资料识别“鲜血盟约”的唯一桌游版本；在用户提供官方产品/规则/版权或授权入口前，规则、内容和 IP 身份均不可推断，详见 [研究笔记](research-01-identity-version-ip.md)。
-- 2026-08-19：用户提供的规则摘录已将目标锁定为 `Blood Bound`：6–12 人、Rose/Beast 各 1–9 身份，以及奇数局的一名 Secret Order 审判官。出版方、印次和授权仍未核验。
+- 2026-08-19：用户提供的规则摘录已将目标锁定为 `Blood Bound`：6–12 人、Rose/Beast 各 1–9 身份，以及奇数局的一名 Secret Order 审判者。出版方、印次和授权仍未核验。
 - 2026-08-19：第二份用户规则来源补充奇数人数使用中立身份、并澄清法师为双方获得法杖；它与第一份来源在治疗后技能重发和护卫盾牌效果上冲突。02 只将两份来源一致的条款作为暂定规范，冲突项待产品方裁决。
-- 2026-08-19：用户补充的规则书正文已裁决人数、中立审判官、羽毛、炼金治疗、护卫盾牌和法师法杖。02 只缺规则书第 8 页的诅咒卡设置比例表；该表在实现奇数局时作为版本化设置数据处理。
+- 2026-08-19：用户补充的规则书正文已裁决人数、中立审判者、羽毛、炼金治疗、护卫盾牌和法师法杖。02 只缺规则书第 8 页的诅咒卡设置比例表；该表在实现奇数局时作为版本化设置数据处理。
 - 2026-08-29：用户更新诅咒规则为每名审判者对应 1 张真诅咒和 1 张假诅咒；狂战士反伤改为施加给原攻击者，且反伤正常触发线索、技能和第 4 点捕获。
 - 2026-08-19：用户提供的英文规则书正文（来源 C）优先于此前中文摘录与社区解读；前述关于羽毛、治疗、护卫、法杖和干涉资格的冲突已按 C 解决。来源 C 未覆盖之处不从低优先级来源猜测补齐。
 - 2026-08-19：02 的三项 needs-info 已由产品方回答，票据现为 `resolved`；可推进 03 领域模型与状态契约。
-- 2026-08-19：frontier 已推进到 03；开始设计支持 6–12 人、Rose/Beast、Secret Order 审判官、私有线索、诅咒卡和独立终局分支的状态契约。
+- 2026-08-19：frontier 已推进到 03；开始设计支持 6–12 人、Rose/Beast、Secret Order 审判者、私有线索、诅咒卡和独立终局分支的状态契约。
 - 2026-08-20：03 已解决；以 `EngineState` 保存权威私有事实、以 `PlayerView` 隔离玩家投影，pending window 显式建模干涉/技能响应；事件日志是回放与恢复的事实来源，详见 [契约](domain-model-contract.md) 与 [ADR-0001](../../docs/adr/0001-authoritative-event-log.md)。
 - 2026-08-20：04 已解决；后端采用 Python 3.11+ 标准库实现纯领域 `RulesEngine`，提供确定性建局、命令校验/幂等、事件批提交、攻击与干涉窗口、技能窗口、诅咒分发和终局分支，详见 [引擎票据](issues/04-deterministic-rules-engine.md) 与 [引擎说明](../../blood_bound/README.md)。
 - 2026-08-20：05 已解决；新增无 UI 的 `run_deterministic_game()` smoke/golden replay runner，6--12 人均可从加入、行动、响应跑到捕获终局；结果含稳定排名和解释键，详见 [05 票据](issues/05-game-loop-scoring.md)。
