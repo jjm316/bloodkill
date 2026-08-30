@@ -81,6 +81,7 @@ export interface RoomState {
   locked: boolean;
   isHost: boolean;
   yourPlayerId: string | null;
+  hostPlayerId: string | null;
   connected: Record<string, boolean>;
   hostActions: Action[];
   game: GameState | null;

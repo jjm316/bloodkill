@@ -144,6 +144,13 @@ h2 {
   padding-left: 20px;
 }
 
+.roster li.self {
+  border: 1px solid #f5c518;
+  border-radius: 8px;
+  background: #2a2410;
+  padding: 2px 8px;
+}
+
 /* board */
 
 .board {

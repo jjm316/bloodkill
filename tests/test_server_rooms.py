@@ -48,6 +48,17 @@ class RoomManagerTests(unittest.TestCase):
         self.assertFalse(is_new)
         self.assertEqual(resumed, player_id)
 
+    def test_bind_host_records_seat_and_survives_restore(self):
+        room = self.create_room()
+        self.assertIsNone(room.host_player_id)
+        player_id, _ = self.manager.join_or_resume(room, "Alice")
+        self.manager.bind_host(room, player_id)
+        self.assertEqual(room.host_player_id, player_id)
+        restored_manager = RoomManager(Path(self._tmp.name))
+        restored_manager.restore()
+        restored = restored_manager.get_room(room.code)
+        self.assertEqual(restored.host_player_id, player_id)
+
     def test_join_after_start_is_rejected(self):
         room = self.create_room()
         for index in range(6):

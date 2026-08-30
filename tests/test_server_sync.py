@@ -118,6 +118,25 @@ class WebSocketRecoveryTests(unittest.TestCase):
         self.assertTrue(any(message["type"] == "taken-over" for message in first_ws.sent))
         self.assertEqual(json.dumps(resumed_ws.sent[-1]["game"], sort_keys=True), first_state_hash)
 
+    def test_host_hello_records_seat_for_every_viewer(self):
+        room = self.app.manager.create_room()
+        host_player = self.app.manager.join_or_resume(room, "Host")[0]
+        host_ws = FakeWebSocket({"type": "hello", "name": "Host", "token": room.host_token})
+        host_conn = self.app.Conn(ws=host_ws, room=room)
+        self.app.conns["bind-host"] = host_conn
+        asyncio.run(self.app._handle_hello(host_conn, host_ws))
+        self.assertEqual(room.host_player_id, host_player)
+
+        other_ws = FakeWebSocket({"type": "hello", "name": "Guest"})
+        other_conn = self.app.Conn(ws=other_ws, room=room)
+        self.app.conns["bind-other"] = other_conn
+        asyncio.run(self.app._handle_hello(other_conn, other_ws))
+
+        for ws in (host_ws, other_ws):
+            state = ws.sent[-1]
+            self.assertEqual(state["type"], "state")
+            self.assertEqual(state["hostPlayerId"], host_player)
+
     def test_version_mismatch_is_rejected_before_a_seat_is_resumed(self):
         ws = FakeWebSocket({"type": "hello", "name": "P0", "protocolVersion": "obsolete"})
         conn = self.app.Conn(ws=ws, room=self.room)

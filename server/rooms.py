@@ -41,6 +41,7 @@ class Room:
     engine: RulesEngine
     created_at: float
     finished_at: float | None = None
+    host_player_id: str | None = None
 
     def player_id_for_name(self, name: str) -> str | None:
         for player_id, player in self.engine.state.players.items():
@@ -136,6 +137,13 @@ class RoomManager:
         room.locked = locked
         self._persist(room)
 
+    def bind_host(self, room: Room, player_id: str) -> None:
+        """Record the seat held by the host-token bearer so every client can label it."""
+        if room.host_player_id == player_id:
+            return
+        room.host_player_id = player_id
+        self._write_meta(room)
+
     # ---- persistence ---------------------------------------------------
 
     def _persist(self, room: Room) -> None:
@@ -147,6 +155,7 @@ class RoomManager:
             "code": room.code,
             "gameId": room.game_id,
             "hostToken": room.host_token,
+            "hostPlayerId": room.host_player_id,
             "locked": room.locked,
             "status": room.status,
             "createdAt": room.created_at,
@@ -185,6 +194,7 @@ class RoomManager:
                 engine=engine,
                 created_at=float(meta.get("createdAt", 0.0)),
                 finished_at=meta.get("finishedAt"),
+                host_player_id=meta.get("hostPlayerId"),
             )
         self._prune_finished()
         return list(self.rooms.values())

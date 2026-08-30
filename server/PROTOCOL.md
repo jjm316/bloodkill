@@ -85,6 +85,7 @@
   "locked": false,
   "isHost": true,
   "yourPlayerId": "p-… | null（旁观者）",
+  "hostPlayerId": "p-… | null（房主尚未以玩家身份连接时为 null）",
   "connected": {"p-…": true},
   "hostActions": [{"type": "start-game"}, {"type": "lock"}],
   "game": { /* GameState 投影；waiting 时也有（setup 阶段） */ }
@@ -93,7 +94,7 @@
 
 ### 断线恢复与命令确认
 
-1. 浏览器在连接关闭后以退避重连；同名 `hello` 恢复原座位。房主离开不会结束或转移房间，持有原 `hostToken` 的重连仍为房主。
+1. 浏览器在连接关闭后以退避重连；同名 `hello` 恢复原座位。房主离开不会结束或转移房间，持有原 `hostToken` 的重连仍为房主。房主令牌持有者以玩家身份 `hello` 时，服务器把该座位记为 `hostPlayerId`（写入房间 meta，重启后保留），所有客户端据此显示房主标记。
 2. `hello` 后服务器总会发送完整、按接收者投影的 `state`。客户端以它替换本地状态，不尝试补造事件；因此重连前后的 `game.revision` 与状态哈希以服务器为准。
 3. 客户端仅保留尚未收到 `ack` 的命令，并以原 `commandId`、原 `expectedRevision` 重传。相同命令重复到达时服务端返回 `accepted`，但不再次广播事件或结算。
 4. 新 `commandId` 携带过期 `expectedRevision` 时服务端返回 `game.revision-conflict`、`ack.status = rejected` 和最新 `state`；客户端丢弃该命令，等待用户基于新状态再次操作。

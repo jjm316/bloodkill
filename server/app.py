@@ -71,6 +71,7 @@ def build_state(conn: Conn) -> dict[str, Any]:
         "locked": room.locked,
         "isHost": conn.is_host,
         "yourPlayerId": viewer,
+        "hostPlayerId": room.host_player_id,
         "connected": connected,
         "hostActions": _host_actions(room, conn.is_host),
         "game": game,
@@ -272,6 +273,8 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
                     pass
                 conns.pop(other_id, None)
                 metrics["seatTakeovers"] += 1
+        if conn.is_host:
+            manager.bind_host(room, player_id)
     await broadcast_state(room)
     return True
 
