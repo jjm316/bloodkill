@@ -11,3 +11,8 @@ client/dist/
 
 # property-test failure artifacts (see tests/test_properties.py)
 .scratch/blood-oath-replica/test-failures/
+
+# local manual-testing runtime artifacts (browser test profiles, detached server)
+.scratch/chrome-profiles/
+.scratch/run-server.cmd
+.scratch/uvicorn.log
