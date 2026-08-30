@@ -47,23 +47,36 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 同一局域网内所有玩家（含手机）打开 `http://<主机IP>:8000/` 即可，
 无需任何其他安装。第一次建房的主机浏览器把 `hostToken` 保存在 localStorage。
 
-### 多窗口本地测试环境（一键脚本）
+### 本地测试工具箱（子命令 + 双击 bat）
 
-手动联机测试时，可用脚本自动完成"构建前端 → 拉起服务端 → 建新房 → 平铺打开
-N 个独立浏览器窗口并按 `1..N` 自动进房"（玩家 1 是房主，位于左上角）：
+手动联机测试的全部日常操作集中在 `scripts/test_toolkit.py`，覆盖：开新局、
+启动/重启/关闭服务端、只构建前端、看状态、关测试窗口。不带子命令时默认等价于 `up`：
 
 ```text
-.venv/Scripts/python.exe scripts/launch_test_env.py --players 6   # 偶数局
-.venv/Scripts/python.exe scripts/launch_test_env.py --players 7   # 奇数局：含审判者
-.venv/Scripts/python.exe scripts/launch_test_env.py --close       # 只关闭测试窗口
+.venv/Scripts/python.exe scripts/test_toolkit.py up --players 6   # 开新局（偶数局）
+.venv/Scripts/python.exe scripts/test_toolkit.py up --players 7   # 开新局（奇数局：含审判者）
+.venv/Scripts/python.exe scripts/test_toolkit.py up --no-build    # 开新局（跳过前端构建）
+.venv/Scripts/python.exe scripts/test_toolkit.py serve            # 只启动服务端
+.venv/Scripts/python.exe scripts/test_toolkit.py restart          # 重启服务端（存档房间自动恢复）
+.venv/Scripts/python.exe scripts/test_toolkit.py down             # 关闭服务端
+.venv/Scripts/python.exe scripts/test_toolkit.py down --clear-saves  # 关服并清空存档
+.venv/Scripts/python.exe scripts/test_toolkit.py build            # 只构建前端
+.venv/Scripts/python.exe scripts/test_toolkit.py status           # 服务端/存档/测试窗口状态
+.venv/Scripts/python.exe scripts/test_toolkit.py close            # 只关闭测试窗口
 ```
+
+不想开终端的话，`scripts/` 目录下有成对的中文双击 bat 薄壳（`测试工具箱-开新局.bat`、
+`测试工具箱-重启服务端.bat` 等），双击即执行对应子命令；`开新局` 默认 6 人，
+其余参数可整行追加。
 
 - 测试窗口使用固定 profile 目录 `.scratch/chrome-profiles/`（已 gitignore），重复运行复用，
   删除该目录即恢复全新环境。
 - 自动进房依赖客户端的 URL 参数入口（`?room=&name=&token=`，见 `client/src/App.tsx`），
   也可以手工拼这种链接分享给局域网玩家一键加入。
-- 服务端以独立进程运行（日志在 `.scratch/uvicorn.log`），不随终端关闭；测试完在任务
-  管理器结束对应 python 进程即可。
+- 服务端以独立进程运行（日志在 `.scratch/uvicorn.log`），不随终端/会话关闭，用
+  `down`/`restart` 子命令管理，无需去任务管理器找进程。
+- 每次 `up` 都会新建一个房间；waiting/playing 房间不会自动过期，堆积多了可用
+  `down --clear-saves` 清空后重新开局。
 
 ## 网络访问与安全
 
