@@ -47,6 +47,24 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 同一局域网内所有玩家（含手机）打开 `http://<主机IP>:8000/` 即可，
 无需任何其他安装。第一次建房的主机浏览器把 `hostToken` 保存在 localStorage。
 
+### 多窗口本地测试环境（一键脚本）
+
+手动联机测试时，可用脚本自动完成"构建前端 → 拉起服务端 → 建新房 → 平铺打开
+N 个独立浏览器窗口并按 `1..N` 自动进房"（玩家 1 是房主，位于左上角）：
+
+```text
+.venv/Scripts/python.exe scripts/launch_test_env.py --players 6   # 偶数局
+.venv/Scripts/python.exe scripts/launch_test_env.py --players 7   # 奇数局：含审判者
+.venv/Scripts/python.exe scripts/launch_test_env.py --close       # 只关闭测试窗口
+```
+
+- 测试窗口使用固定 profile 目录 `.scratch/chrome-profiles/`（已 gitignore），重复运行复用，
+  删除该目录即恢复全新环境。
+- 自动进房依赖客户端的 URL 参数入口（`?room=&name=&token=`，见 `client/src/App.tsx`），
+  也可以手工拼这种链接分享给局域网玩家一键加入。
+- 服务端以独立进程运行（日志在 `.scratch/uvicorn.log`），不随终端关闭；测试完在任务
+  管理器结束对应 python 进程即可。
+
 ## 网络访问与安全
 
 - **局域网内**：HTTP/WS 明文即可（局域网环境可接受）。
