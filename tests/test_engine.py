@@ -116,6 +116,7 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(engine.state.pending.kind, "skill")
         engine.apply(command(engine, "skill-no", target, "choose-skill", use=False))
         self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.dagger_holder_id, target)
 
     def test_alchemist_attack_trigger_does_not_open_skill_window(self):
         engine = self.started()
@@ -127,6 +128,7 @@ class RulesEngineTests(unittest.TestCase):
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
         self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.dagger_holder_id, target)
 
     def test_inquisitor_rank_reveal_does_not_open_skill_window(self):
         engine = self.started(7)

@@ -208,6 +208,22 @@ class AttackBranchTests(unittest.TestCase):
             {pid for pid in engine.state.players if pid not in (attacker, target)},
         )
 
+    def test_declined_attack_leaves_dagger_with_wounded_target(self):
+        engine = started()
+        attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid != attacker)
+        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        engine.apply(command(engine, "decline", target, "decline-intervention"))
+        # corpus combat/attack-handoff and intervention/refused: once the attack
+        # resolves without intervention, the wounded target keeps the dagger.
+        engine.apply(command(engine, "reveal-marker", target, "choose-reveal", token="marker-0"))
+        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.players[target].damage, 1)
+        self.assertEqual(engine.state.dagger_holder_id, target)
+        self.assertEqual(engine.state.phase, {"kind": "action", "activePlayerId": target})
+        self.assertIn("pass-dagger", [action["type"] for action in legal_actions(engine.state, target)])
+        self.assertEqual(legal_actions(engine.state, attacker), [])
+
     def test_shielded_target_is_rejected(self):
         # shields are granted by rank 6 in issue 14; inject the resource directly
         engine = started()
@@ -273,6 +289,9 @@ class AttackBranchTests(unittest.TestCase):
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
         self.assertEqual(engine.state.pending.kind, "reveal")
+        engine.apply(command(engine, "reveal-marker", target, "choose-reveal", token="marker-0"))
+        # the directly resolved attack wound also leaves the dagger with the target
+        self.assertEqual(engine.state.dagger_holder_id, target)
 
     def test_wrong_actor_cannot_request_or_decline_intervention(self):
         engine = started()

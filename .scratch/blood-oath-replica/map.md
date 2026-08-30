@@ -43,6 +43,8 @@ Effort: `blood-oath-replica`
 
 ## Decisions-so-far
 
+- 2026-08-30：22 已解决：攻击无人干涉结算后匕首归受伤目标（此前 `_after_damage` 把 `attack` 来源判回攻击者，与语料 `combat/attack-handoff`/`intervention/refused` 相反；开技能窗分支恰好正确、行为分裂）。`skill`/`reaction` 来源判定不动（rank 4/7 联动属 20）；golden fixtures 漂移后重新生成，全量 113 通过。详见 [22 票据](issues/22-attack-dagger-to-wounded-target.md)。
+
 - 2026-08-30：21 已解决：开局"向左邻展示阵营徽记"上线——`_start` 追加单条 `ClueIconsShown` 公开事件（仅 `pairs` 展示关系，无徽记内容，无 schema/ruleset 版本变更，golden fixtures 按预期漂移后重新生成）；投影 `viewer` 块下发本人 `clueIcon` 与右邻 `seenNeighbourClue`，`players[]`/旁观者/回放零徽记；前端自己座位渲染中文徽记文案，事件日志一行"全员已向左邻展示阵营徽记"；补投影保密、审判官徽记必错与 rank 3 反转测试，全量 110/110 通过。双轴 code review 无违规。详见 [21 票据](issues/21-clue-icon-neighbour-reveal.md)。
 
 - 2026-08-30：`setup.clue-icon` grilling 定案：补上开局"向左邻展示阵营徽记"环节——纯投影（viewer 块加本人 `clueIcon` 与右邻徽记，无 setup 阶段、无 schema bump）；新增一条批量公开事件 `ClueIconsShown` 记录展示关系（内容不进事件）；方向约定俯视顺时针=座位号递增，UI 文案不出现左右；中文术语"阵营徽记"（rank 3 敌对家族、审判官随机家族特例保留，审判官徽记必与真实所属不符，补测试钉死）。已立案 [21](issues/21-clue-icon-neighbour-reveal.md)（ready-for-agent），待产品方审阅后实现。CONTEXT.md 新增"阵营徽记""左邻/右邻"词条。

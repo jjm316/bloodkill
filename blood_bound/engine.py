@@ -685,7 +685,10 @@ class RulesEngine:
             return events + [self._event(state, command, "SkillWindowOpened", {"playerId": target.player_id, "rank": target.rank, "trigger": trigger})]
         state.pending = None
         if state.status == "active":
-            holder = target.player_id if context.get("source") == "intervention" else (context.get("attackerPlayerId") or target.player_id)
+            # Attack and intervention wounds pass the dagger to the wounded
+            # player; skill and reaction sources resolve via issue 20 rules.
+            source = context.get("source")
+            holder = target.player_id if source in {"attack", "intervention"} else (context.get("attackerPlayerId") or target.player_id)
             if holder in state.players and not state.players[holder].captured:
                 state.dagger_holder_id = holder
                 state.phase = {"kind": "action", "activePlayerId": holder}
