@@ -1,7 +1,7 @@
 # 01 - 搭建 vitest + RTL 并为等待名册写首批测试
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 
@@ -31,3 +31,14 @@ Status: ready-for-agent
 - 上述每条行为至少有一条断言覆盖。
 - `cd client && npm run build` 与 `npx tsc --noEmit` 仍通过。
 - 后端 `python -m pytest tests/ -q` 不受影响，仍全绿。
+
+## Comments
+
+- 2026-09-05 实现完毕，全部完成条件达成：
+  - 基建：devDependencies 加入 `vitest@^3.2.7`、`jsdom`、`@testing-library/react`、`@testing-library/dom`、`@testing-library/jest-dom`；`package.json` 加 `"test": "vitest run"`；新建独立 `client/vitest.config.ts`（jsdom + globals + setup），不触碰 `vite.config.ts`。
+  - `GameScreen.tsx` 仅加一个 `export` 关键字导出 `WaitingRoom`，其余零改动。
+  - 测试：`client/src/WaitingRoom.test.tsx`，6 条用例覆盖任务清单全部 6 项行为（self/（你）、（房主）三视角、（离线）、旁观者无 self 无（你）、（你）先于（房主）、三标记齐全顺序契约逐字断言 `昵称（你）（房主）（离线）`）。
+  - 结果：`npm test` 6/6 绿；`npm run build` 通过；`npx tsc --noEmit` 通过；后端按仓库实际跑法 `.venv/Scripts/python -m unittest discover -s tests` 154 条全绿。
+- 与完成条件字面的两处偏差，均有依据：
+  - vitest 钉在 `^3` 而非最新 5.x：最新 vitest 5 要求 vite ^6.4+，项目是 vite 5.4，本 issue 禁止改现有行为，故不升 vite，选 vitest 3（官方支持 vite 5/6）。
+  - 后端验证用 `unittest discover` 而非 `pytest`：仓库约定后端测试跑法即 `.venv` unittest discover，pytest 未安装也不应安装（见会话记忆/仓库惯例）。
