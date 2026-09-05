@@ -20,10 +20,13 @@ class Replay:
 def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: str = "golden-seed") -> tuple[RulesEngine, Replay]:
     """Run a complete no-UI game by repeatedly feeding legal commands.
 
-    The runner uses ordinary public commands only: it passes the dagger back to a
-    fixed attacker, attacks one victim, has every eligible player decline to
-    volunteer in the intervention poll, and declines skills.
-    It exists for golden replay and CI smoke coverage, not as an AI strategy.
+    The runner uses ordinary public commands only: it passes the dagger back to
+    a fixed attacker, attacks one victim, has every eligible player decline to
+    volunteer in the intervention poll, and declines skills — except the
+    inquisitor, whose reveal-triggered curse window is used to distribute the
+    curses deterministically (odd games attack the inquisitor for exactly that
+    coverage; ADR 0003). It exists for golden replay and CI smoke coverage, not
+    as an AI strategy.
     """
     engine = RulesEngine.new_game(game_id, seed, clock=lambda: 0.0)
     commands: list[str] = []
@@ -40,7 +43,14 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
 
     attacker = engine.state.dagger_holder_id
     assert attacker is not None
-    victim = next(player_id for player_id in engine.state.players if player_id != attacker)
+    inquisitor = next(
+        (player.player_id for player in engine.state.players.values() if player.faction == "secret-order"),
+        None,
+    )
+    # Odd games attack the inquisitor so the replay exercises the curse path
+    # (wound -> fleur-cross reveal -> distribute -> capture); even games keep
+    # the historical first-other-seat victim.
+    victim = inquisitor or next(player_id for player_id in engine.state.players if player_id != attacker)
     turn = 0
     while engine.state.status != "ended":
         turn += 1
@@ -66,7 +76,17 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
                 payload["color"] = "rose"
             send(f"reveal-{turn}-{engine.state.revision}", target, "choose-reveal", **payload)
         if engine.state.pending and engine.state.pending.kind == "skill":
-            send(f"skill-decline-{turn}", engine.state.pending.actor_player_id, "choose-skill", use=False)
+            pending = engine.state.pending
+            if pending.rank == "fleur-cross":
+                # deterministic distribution over the first live non-inquisitor seats
+                recipients = [pid for pid in sorted(engine.state.players) if pid != pending.actor_player_id]
+                assignments = {
+                    curse_id: recipients[index % len(recipients)]
+                    for index, curse_id in enumerate(engine.state.curses)
+                }
+                send(f"curse-{turn}", pending.actor_player_id, "choose-skill", use=True, assignments=assignments)
+            else:
+                send(f"skill-decline-{turn}", pending.actor_player_id, "choose-skill", use=False)
 
     replay = Replay(
         game_id=game_id,

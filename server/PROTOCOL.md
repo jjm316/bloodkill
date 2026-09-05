@@ -57,13 +57,15 @@
 | 命令 | payload | 说明 |
 | --- | --- | --- |
 | `pass-dagger` | `{"targetPlayerId"}` | 匕首持有者传递匕首 |
-| `attack` | `{"targetPlayerId"}` | 攻击目标（护盾/满 3 伤/已捕获 → 引擎报错）；声明后自动开启干涉投票，资格集为空时直接结算 |
+| `attack` | `{"targetPlayerId"}` | 攻击目标（护盾/已捕获 → 引擎报错；审判者不可攻击已受 3 伤者，其投影攻击列表已预先过滤）；声明后自动开启干涉投票，资格集为空时直接结算 |
 | `respond-intervention` | `{"volunteer": true\|false}` | 干涉投票表态，仅投票阶段的有资格未表态玩家；答后不可反悔 |
 | `choose-intervention` | `{"responderPlayerId"}` | ≥2 人自愿后，被攻击者从自愿者中选一人承伤（完成干涉） |
 | `decline-intervention` | `{}` | ≥2 人自愿后，被攻击者拒绝全部自愿者，攻击正常结算 |
-| `choose-skill` | `{"use": true\|false, "targetPlayerId"?, "targetPlayerIds"?, "mode"?}` | 技能窗口；2/5/6/8/9 使用单目标，3 使用两个目标，4 使用 `mode=heal|harm` |
+| `choose-skill` | `{"use": true\|false, "targetPlayerId"?, "targetPlayerIds"?, "mode"?, "assignments"?}` | 技能窗口；2/5/6/8/9 使用单目标，3 使用两个目标，4 使用 `mode=heal|harm`；审判者（亮出 fleur-cross 等级开启的诅咒技能窗口）发动时携带 `assignments`（`{"curseId": "playerId"}`，键须与待分发诅咒完全一致、收件人存活且互不相同），放弃走 `use=false` |
 | `choose-return` | `{"token": "rank|marker-0|marker-1"}` | rank 4 治疗窗口，治疗者退回一张已展示标记 |
-| `distribute-curse` | `{"assignments": {"curseId": "playerId"}}` | 仅审判者；数量/重复校验由引擎完成 |
+
+规则版本 0.4 起（ADR 0003），旧的全时段常驻 `distribute-curse` 命令已移除：
+诅咒分发只由审判者技能窗口内的 `choose-skill` 承载，旧命令将得到 `command.unknown`。
 
 `start-game`、`join-game`、`timeout-intervention` 由服务器托管：直接发送会得到
 `command.server-managed`。`timeout-intervention` 是干涉窗口到期时由服务端定时器
@@ -150,7 +152,7 @@
     "identity": {"faction": "rose", "rank": 5},
     "resources": ["curse"],
     "skillsUsed": false,
-    "cursesToDistribute": ["c-…"],   // 仅审判者在分发阶段非空
+    "cursesToDistribute": ["c-…"],   // 待分发诅咒卡 ID，仅审判者可见（分发后清空）；分发动作经技能窗口的 choose-skill
     "clueIcon": "rose",              // 本人阵营徽记
     "seenNeighbourClue": {"playerId": "p-…", "icon": "beast"}  // 右邻徽记，仅此一处
   },
@@ -160,8 +162,7 @@
     {"type": "respond-intervention", "volunteer": true | false},
     {"type": "decline-intervention"},
     {"type": "choose-intervention", "responderPlayerId": "p-…"},
-    {"type": "choose-skill", "use": true, "targetPlayerId": "p-…"},
-    {"type": "distribute-curse"}
+    {"type": "choose-skill", "use": true, "targetPlayerId": "p-…"}
   ]
 }
 ```

@@ -17,7 +17,7 @@
 | `skill.reveal-rank` | 因**攻击**伤害展示 rank 时，可立刻发动对应角色技能 | 技能伤害不触发技能；炼金治疗后若退回 rank，可在下次重新取得 rank 时再发动 |
 | `game.end` | 任一玩家第 4 点伤害被捕获时立即结束 | 家族 active player 按领袖规则判定；审判者造成第 4 点伤害时走独立失败分支 |
 | `inquisitor.attack-limit` | 审判者不能攻击已受 3 点伤害的玩家 | 禁止命令必须带可解释原因 |
-| `inquisitor.curse` | 审判者查看供应区全部诅咒，暗置分发给不同玩家 | True Curse 在正常胜方领袖前时，审判者独赢；审判者被捕获也独赢 |
+| `inquisitor.curse` | 审判者在诅咒技能窗口中发动：将真诅咒与假诅咒暗置分发给不同玩家，或放弃（诅咒永留供应区） | True Curse 在正常胜方领袖前时，审判者独赢；审判者被捕获也独赢 |
 | `inquisitor.capture-branch` | 审判者作为 active player 造成第 4 点伤害时，审判者自身判负，其他方按该分支获胜 | 不把审判者临时归入 Rose/Beast |
 
 ## 角色能力语义
@@ -35,7 +35,7 @@
 | 7 | `berserker` | 令刚刚攻击自己的玩家承受 1 点伤害。 |
 | 8 | `mage` | 给一名玩家 Staff；该玩家的身份标记全部变为问号（?）。 |
 | 9 | `courtesan` | 向一名玩家给出 Fan；该玩家成为攻击目标时，他人不能干涉。 |
-| fleur cross | `inquisitor` | 两张审判者仅 clue icon 不同，共用同一个 fleur cross rank token；查看供应区诅咒并暗置分给不同玩家；其 affiliation 为 wild，且不能攻击已受 3 点伤害者。被捕获或满足 True Curse 夺胜条件时独赢。 |
+| fleur cross | `inquisitor` | 两张审判者仅 clue icon 不同，共用同一个 fleur cross rank token；诅咒分发为亮等级技能（见 `inquisitor.curse`）；其 affiliation 为 wild，且不能攻击已受 3 点伤害者。被捕获或满足 True Curse 夺胜条件时独赢。 |
 
 ### 身份标记组成（2026-08-22 澄清）
 
@@ -67,6 +67,10 @@
 ### 产品方裁决（2026-09-04）
 
 - **干涉模型重构**：来源 C 写「仅攻击目标可请求干涉」，产品方裁定改为「攻击声明后自动开启全员公开自愿投票」。同意权归干涉者本人：恰一人自愿时干涉必然发生（被攻击者无权拒绝），多人自愿时被攻击者可选其一或全部拒绝，无人自愿则攻击正常结算。表态实时公开、答后不可反悔；房主开局配置干涉超时（默认 90 秒，可选 30/60/90/120/180），投票阶段到期未表态视为不干涉，目标三选一阶段到期自动全部拒绝。玩家可在客户端设置"默认不挡刀"，开启后不弹确认、自动视为不干涉。上表 `intervention.poll` 已按此书写（原 `intervention.request` 废弃）。详见 `docs/adr/0002-intervention-volunteer-poll.md`。
+
+### 产品方裁决（2026-09-05）
+
+- **诅咒分发时机**：来源 C 只写 "when the Inquisitor uses his ability"，未锚定时机；首个实现把它做成全时段常驻的供应区动作。产品方裁定诅咒分发就是审判者的技能，与 rank 1–9 角色技能同一套流程：因攻击或挡刀（干涉）伤害亮出等级（fleur-cross）时开启唯一一次技能窗口，窗口内选择发动（真/假诅咒暗置分给不同玩家，客户端下拉框标注「真诅咒交给：/假诅咒交给：」并弹确认）或放弃；放弃或从未亮出等级则诅咒永留供应区、诅咒胜路作废。技能伤害不触发该窗口；已发动或放弃后不再出现第二次窗口。此裁决推翻"fleur-cross 是设置阶段能力、永不触发技能窗口"的旧设定。上表 `inquisitor.curse` 与 fleur cross 行已按此书写。详见 `docs/adr/0003-inquisitor-curse-as-reveal-triggered-skill.md`。
 
 引擎数据应使用原创规则 ID、原创显示文案和可替换资源；不得导入或展示原始卡牌文本、插画或 Logo。
 

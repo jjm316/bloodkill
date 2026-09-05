@@ -11,7 +11,7 @@ from scripts import test_toolkit
 class BuildParserTest(unittest.TestCase):
     def test_up_defaults(self):
         args = test_toolkit.build_parser().parse_args(["up"])
-        self.assertEqual(args.players, 6)
+        self.assertEqual(args.players, 7)  # e19d8a1: 奇数局默认，含审判者
         self.assertEqual(args.port, 8000)
         self.assertIsNone(args.cols)
         self.assertFalse(args.no_build)

@@ -93,15 +93,15 @@ Issue 20 branch additions:
 | `choose-skill` rank 2 目标自己 | `skill.invalid-target` | `SkillBranchTests.test_assassin_skill_cannot_target_self` |
 | `choose-skill` rank 2 合法 | 2 伤、匕首移交、不开新窗口 | `SkillBranchTests.test_assassin_skill_deals_two_damage_hands_dagger_and_opens_no_new_window` |
 | `choose-skill` rank 2 捕获 | 终局后相位/匕首清空（issue 15 已修） | `SkillBranchTests.test_assassin_skill_capture_leaves_ended_phase` |
-| `distribute-curse` 无诅咒/非活跃 | `curse.invalid-count` | `CurseBranchTests.test_distribute_curse_without_curses_is_rejected` |
-| `distribute-curse` 非审判者 | `player.not-eligible` | `CurseBranchTests.test_distribute_curse_by_non_inquisitor_is_rejected` |
-| `distribute-curse` 分配键不符 | `curse.invalid-count` | `CurseBranchTests.test_distribute_curse_with_wrong_assignment_keys_is_rejected` |
-| `distribute-curse` 未知/已捕获收件人 | `target.not-found` / `target.captured` | `CurseBranchTests.test_distribute_curse_to_unknown_recipient_is_rejected`、`test_distribute_curse_to_captured_recipient_is_rejected` |
-| `distribute-curse` 重复收件人 | `curse.duplicate-recipient`（注入） | `CurseBranchTests.test_distribute_curse_duplicate_recipient_is_rejected` |
-| `distribute-curse` 合法 | `CurseDistributed`、诅咒清空 | `RulesEngineTests.test_curse_distribution_is_private_to_the_inquisitor_command` |
+| 诅咒窗口触发（ADR 0003，规则 0.4） | 亮出 fleur-cross 即开唯一技能窗口：自选亮等级（1/2 点自选）、第 3 点被迫、挡刀承伤被迫，三路一致；技能伤害不触发 | `RulesEngineTests.test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`CurseBranchTests.test_self_chosen_rank_reveal_opens_the_curse_window`、`test_third_damage_forced_rank_reveal_opens_the_curse_window`、`test_intervention_damage_opens_the_curse_window`、`test_skill_damage_does_not_open_the_curse_window` |
+| `choose-skill` 诅咒放弃 | `SkillDeclined`、技能永久失去、诅咒留供应区；后续不再出现第二次窗口；家族胜利照常结算不做诅咒判定 | `RulesEngineTests.test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`CurseBranchTests.test_decline_keeps_curses_in_supply_and_closes_the_window_for_good`、`test_declined_curse_never_judges_a_family_win` |
+| `choose-skill` 诅咒发动 | `SkillUsed` + 每卡一条私密 `CurseDistributed`、供应区清空、归属入终局判定；无伤害、匕首与行动阶段原样恢复 | `RulesEngineTests.test_curse_distribution_rides_the_skill_command_and_stays_private`；`CurseBranchTests.test_distribute_does_not_disturb_dagger_or_open_new_windows` |
+| 诅咒发动校验 | 分配键与待分发集合不符（含空）→ `curse.invalid-count`；重复收件人 → `curse.duplicate-recipient`；未知/已捕获收件人 → `target.not-found` / `target.captured`；非审判者 → `player.not-eligible`；窗口已关 → `skill.not-open`；重复发动 → `skill.already-used`（注入） | `CurseBranchTests.test_distribute_with_no_curses_is_rejected`、`test_distribute_with_wrong_assignment_keys_is_rejected`、`test_distribute_to_unknown_or_captured_recipient_is_rejected`、`test_distribute_duplicate_recipient_is_rejected`、`test_distribute_by_non_inquisitor_is_rejected`、`test_distribute_then_decline_is_rejected_as_window_closed`、`test_repeated_use_in_a_reopened_window_is_rejected` |
+| 旧 `distribute-curse` 命令移除 | 旧命令 → `command.unknown`，分发仅剩技能命令一条路径 | `CurseBranchTests.test_standalone_distribute_curse_command_is_gone` |
+| `_end_game` 真诅咒夺胜 | 正常家族胜方领袖持真诅咒 → 胜方改写为审判者独赢（`inquisitor-true-curse`） | `CurseBranchTests.test_winning_leader_holding_true_curse_gives_the_inquisitor_a_solo_win` |
 | `_apply_damage` 首伤展示 rank / 后续展示 affiliation | `ClueRevealed` 种类 | `ProjectionTests.test_revealed_clues_appear_only_after_damage`；`SkillBranchTests.test_skill_window_only_opens_once_per_rank_reveal` |
 | `_apply_damage` 第 4 伤 | `PlayerCaptured` + `GameEnded`、立即终局 | `EndGameBranchTests` 四项；golden 全部 |
-| `_apply_damage` 攻击伤害开技能窗 | rank 1--9（rank 4 仅 intervention），仅 `source=attack`/`source=intervention` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_does_not_open_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window` |
+| `_apply_damage` 攻击伤害开技能窗 | rank 1--9 与审判者 fleur-cross（rank 4 仅 intervention），仅 `source=attack`/`source=intervention` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window`；`CurseBranchTests` 触发路四项 |
 | `_end_game` 捕获家族领袖 | `captured-leader`，攻击方胜 | `EndGameBranchTests.test_captured_leader_branch` |
 | `_end_game` 捕获普通成员 | `captured-player`，攻击方负 | `EndGameBranchTests.test_captured_non_leader_branch` |
 | `_end_game` 审判者被捕获 | `inquisitor-captured`，平局 | `EndGameBranchTests.test_inquisitor_captured_is_draw` |
@@ -116,8 +116,9 @@ Issue 20 branch additions:
 | 观众投影 | 无身份、无 seed、无行动 | `ProjectionTests.test_spectator_sees_no_identity_or_seed` |
 | 玩家投影 | 仅自己身份；公共玩家列表无身份字段 | `ProjectionTests.test_player_sees_only_their_own_identity` |
 | 线索展示 | 伤害后才出现在投影 | `ProjectionTests.test_revealed_clues_appear_only_after_damage` |
-| 诅咒视图 | 仅审判者见 `cursesToDistribute` | `ProjectionTests.test_inquisitor_gets_private_curse_assignment_view` |
-| `legal_actions` 行动阶段 | 仅匕首持有者有 pass/attack；盾目标不可攻击 | `ProjectionTests.test_dagger_holder_actions_are_derived_from_authority` |
+| 诅咒视图 | 仅审判者见 `cursesToDistribute`（待分发卡 ID，分发后清空） | `ProjectionTests.test_curse_supply_is_visible_to_the_inquisitor_alone` |
+| `legal_actions` 行动阶段 | 仅匕首持有者有 pass/attack；盾目标不可攻击；审判者的攻击列表过滤已受 3 伤目标（他人不受限） | `ProjectionTests.test_dagger_holder_actions_are_derived_from_authority`；`ProjectionTests.test_inquisitor_attack_actions_filter_three_damage_targets` |
+| `legal_actions` 诅咒技能窗 | 审判者=放弃+发动两项，他人与观众无动作；分发完成后任何 viewer 不再有分发/技能动作 | `ProjectionTests.test_curse_window_offers_decline_and_use_to_the_inquisitor_only`、`test_after_distribution_no_viewer_has_a_curse_entry_point` |
 | `legal_actions` 技能窗 | rank 2 列出目标；rank 1 无目标 | `ProjectionTests.test_rank_two_skill_window_offers_valid_targets`；`ProjectionBranchTests.test_elder_skill_window_offers_use_without_a_target` |
 | `legal_actions` 干涉窗 | 投票阶段逐人 respond、三选一阶段目标专属选项 | `ProjectionBranchTests.test_pending_intervention_actions_across_poll_and_choice_stages` |
 | `legal_actions` 终局/未知玩家 | 空列表 | `ProjectionBranchTests.test_legal_actions_empty_for_unknown_player_and_ended_game` |

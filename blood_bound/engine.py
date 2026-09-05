@@ -106,9 +106,10 @@ class EngineState:
 
 
 # Ranks whose reveal-triggered skill is implemented in this ruleset version.
-# Issue 14 expands this to ranks 1--9 as abilities land; the Inquisitor's
-# fleur-cross rank is a setup-phase curse ability, never a reveal-triggered skill.
-_IMPLEMENTED_SKILL_RANKS = frozenset(range(1, 10))
+# Issue 14 expands this to ranks 1--9 as abilities land; ADR 0003 (2026-09-05
+# product ruling) adds the Inquisitor's fleur-cross: its reveal opens the
+# one-time curse-distribution skill window like any other rank's skill.
+_REVEAL_SKILL_RANKS = frozenset({*range(1, 10), "fleur-cross"})
 
 
 def _markers_for(rank: int | str | None, faction: str | None) -> list[str]:
@@ -138,7 +139,9 @@ class RulesEngine:
             EngineState(
                 schema_version=2,
                 ruleset_id="blood-bound-compatible",
-                ruleset_version="0.3",
+                # 0.4: curse distribution became a reveal-triggered skill (ADR 0003);
+                # 0.3 saves are explicitly rejected, affected games must be rebuilt.
+                ruleset_version="0.4",
                 game_id=game_id,
                 seed=seed,
             ),
@@ -151,7 +154,7 @@ class RulesEngine:
 
     @classmethod
     def resume_from_checkpoint(cls, checkpoint: EngineState, *, clock: Clock | None = None) -> "RulesEngine":
-        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.3":
+        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.4":
             raise RuleError("state.invalid", reason="unsupported schema version")
         engine = cls(deepcopy(checkpoint), clock=clock)
         cls._validate(engine.state)
@@ -212,7 +215,6 @@ class RulesEngine:
             "choose-skill": self._choose_skill,
             "choose-return": self._choose_return,
             "choose-reveal": self._choose_reveal,
-            "distribute-curse": self._distribute_curse,
         }
         try:
             handler = handlers[command.type]
@@ -494,6 +496,12 @@ class RulesEngine:
             raise RuleError("skill.already-used")
         owner.skills_used.add(skill_id)
         events = [self._event(state, command, "SkillUsed", {"playerId": owner.player_id, "rank": owner.rank})]
+        # The pending window defines the skill being invoked: the curse
+        # distribution rides the fleur-cross window even if the owner's dealt
+        # rank were an integer (only possible through synthetic state).
+        if pending.rank == "fleur-cross":
+            events.extend(self._distribute_curses(state, command, owner))
+            return events
         if owner.rank == 1:
             owner.resources["quill"] += 1
             events.append(self._event(state, command, "ResourceGranted", {"playerId": owner.player_id, "resource": "quill", "amount": 1}))
@@ -623,12 +631,19 @@ class RulesEngine:
         color = command.payload.get("color")
         return self._reveal_token(state, command, target, token, dict(pending.context), color=color)
 
-    def _distribute_curse(self, state: EngineState, command: Command) -> list[Event]:
+    def _distribute_curses(self, state: EngineState, command: Command, owner: Player) -> list[Event]:
+        """Curse distribution carried by the inquisitor's skill command (ADR 0003).
+
+        Validation semantics are the ones the removed standing distribute-curse
+        command used: assignment keys must match the pending curse set exactly,
+        recipients must be live and pairwise distinct, and only the inquisitor
+        may distribute. Each curse emits one private CurseDistributed event and
+        the supply clears on success.
+        """
+        if owner.faction != "secret-order":
+            raise RuleError("player.not-eligible")
         if state.status != "active" or not state.curses:
             raise RuleError("curse.invalid-count")
-        actor = state.players.get(command.actor_player_id or "")
-        if not actor or actor.faction != "secret-order":
-            raise RuleError("player.not-eligible")
         assignments = command.payload.get("assignments")
         if not isinstance(assignments, Mapping) or set(assignments) != set(state.curses):
             raise RuleError("curse.invalid-count")
@@ -637,18 +652,18 @@ class RulesEngine:
             raise RuleError("curse.duplicate-recipient")
         for player_id in recipients:
             self._live_player(state, player_id)
-        events = [
+        pending_curses = list(state.curses)
+        state.curse_assignments.update({str(curse_id): str(recipient_id) for curse_id, recipient_id in assignments.items()})
+        state.curses = []
+        return [
             self._event(
                 state,
                 command,
                 "CurseDistributed",
                 {"curseId": curse_id, "recipientPlayerId": assignments[curse_id]},
             )
-            for curse_id in state.curses
+            for curse_id in pending_curses
         ]
-        state.curse_assignments.update({str(curse_id): str(recipient_id) for curse_id, recipient_id in assignments.items()})
-        state.curses = []
-        return events
 
     def _resolve_damage(
         self,
@@ -781,7 +796,7 @@ class RulesEngine:
             state.status == "active"
             and trigger in {"attack", "intervention"}
             and context.get("rankRevealed")
-            and target.rank in _IMPLEMENTED_SKILL_RANKS
+            and target.rank in _REVEAL_SKILL_RANKS
             and (target.rank != 4 or trigger == "intervention")
             and str(target.rank) not in target.skills_used
         ):

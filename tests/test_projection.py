@@ -114,16 +114,73 @@ class ProjectionTests(unittest.TestCase):
         target_view = next(p for p in after["players"] if p["playerId"] == target)
         self.assertIn("rank", target_view["revealed"])
 
-    def test_inquisitor_gets_private_curse_assignment_view(self):
+    def open_curse_window(self, engine):
+        """Wound the inquisitor once and reveal their rank, opening the curse skill window."""
+        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        holder = engine.state.dagger_holder_id
+        if holder == inquisitor:
+            other = next(pid for pid in engine.state.players if pid != inquisitor)
+            engine.apply(command(engine, "pass-away", holder, "pass-dagger", targetPlayerId=other))
+        engine.apply(command(engine, "attack-inquisitor", engine.state.dagger_holder_id, "attack", targetPlayerId=inquisitor))
+        decline_poll(engine)
+        reveal_rank(engine, inquisitor)
+        assert engine.state.pending and engine.state.pending.kind == "skill" and engine.state.pending.rank == "fleur-cross"
+        return inquisitor
+
+    def test_curse_supply_is_visible_to_the_inquisitor_alone(self):
         engine = self.started(7)
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
         other = next(pid for pid in engine.state.players if pid != inquisitor)
-        inquisitor_view = project_state(engine.state, inquisitor)
-        other_view = project_state(engine.state, other)
-        self.assertEqual(inquisitor_view["viewer"]["cursesToDistribute"], ["true-curse-1", "false-curse-1"])
-        self.assertEqual(other_view["viewer"]["cursesToDistribute"], [])
-        self.assertIn({"type": "distribute-curse"}, inquisitor_view["legalActions"])
-        self.assertNotIn({"type": "distribute-curse"}, other_view["legalActions"])
+        self.assertEqual(project_state(engine.state, inquisitor)["viewer"]["cursesToDistribute"], ["true-curse-1", "false-curse-1"])
+        self.assertEqual(project_state(engine.state, other)["viewer"]["cursesToDistribute"], [])
+        self.assertEqual(project_state(engine.state)["viewer"], None)
+        # the standing distribute-curse entry point is gone (ADR 0003)
+        for viewer in (inquisitor, other, None):
+            view = project_state(engine.state, viewer)
+            self.assertNotIn("distribute-curse", [action["type"] for action in view["legalActions"]])
+
+    def test_curse_window_offers_decline_and_use_to_the_inquisitor_only(self):
+        engine = self.started(7)
+        inquisitor = self.open_curse_window(engine)
+        other = next(pid for pid in engine.state.players if pid != inquisitor)
+        self.assertEqual(
+            project_state(engine.state, inquisitor)["legalActions"],
+            [{"type": "choose-skill", "use": False}, {"type": "choose-skill", "use": True}],
+        )
+        self.assertEqual(project_state(engine.state, other)["legalActions"], [])
+        self.assertEqual(project_state(engine.state)["legalActions"], [])
+        # the pending card ids stay a private picker data source
+        self.assertEqual(project_state(engine.state, inquisitor)["viewer"]["cursesToDistribute"], ["true-curse-1", "false-curse-1"])
+
+    def test_after_distribution_no_viewer_has_a_curse_entry_point(self):
+        engine = self.started(7)
+        inquisitor = self.open_curse_window(engine)
+        recipients = [pid for pid in sorted(engine.state.players) if pid != inquisitor]
+        engine.apply(command(engine, "use", inquisitor, "choose-skill", use=True, assignments={"true-curse-1": recipients[0], "false-curse-1": recipients[1]}))
+        for viewer in [None, *engine.state.players]:
+            view = project_state(engine.state, viewer)
+            action_types = [action["type"] for action in view["legalActions"]]
+            self.assertNotIn("distribute-curse", action_types)
+            self.assertNotIn("choose-skill", action_types)
+            if view["viewer"] is not None:
+                self.assertEqual(view["viewer"]["cursesToDistribute"], [])
+
+    def test_inquisitor_attack_actions_filter_three_damage_targets(self):
+        engine = self.started(7)
+        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        victim = next(pid for pid in engine.state.players if pid != inquisitor)
+        engine.state.players[victim].damage = 3  # synthetic: three resolved attacks
+        engine.state.players[victim].revealed = {"rank", "marker-0", "marker-1"}
+        holder = engine.state.dagger_holder_id
+        if holder != inquisitor:
+            engine.apply(command(engine, "pass", holder, "pass-dagger", targetPlayerId=inquisitor))
+        inquisitor_targets = {action["targetPlayerId"] for action in project_state(engine.state, inquisitor)["legalActions"] if action["type"] == "attack"}
+        self.assertNotIn(victim, inquisitor_targets)
+        # a family attacker still sees the 3-damage player as a legal target
+        other = next(pid for pid in engine.state.players if pid not in (inquisitor, victim))
+        engine.apply(command(engine, "pass-on", inquisitor, "pass-dagger", targetPlayerId=other))
+        other_targets = {action["targetPlayerId"] for action in project_state(engine.state, other)["legalActions"] if action["type"] == "attack"}
+        self.assertIn(victim, other_targets)
 
     def test_dagger_holder_actions_are_derived_from_authority(self):
         engine = self.started()

@@ -17,3 +17,6 @@ client/dist/
 .scratch/run-server.cmd
 .scratch/uvicorn.log
 .zcode
+# curse e2e local runtime state (room code/host token) and server log
+.scratch/e2e-curse.json
+.scratch/e2e-curse-uvicorn.log

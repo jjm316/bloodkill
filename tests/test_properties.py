@@ -121,6 +121,12 @@ def generate_walk(count: int, seed: str, *, max_turns: int = 500) -> tuple[tuple
             raise AssertionError(f"pending window without legal action: {pending.kind}")
         action = rng.choice(actions)
         payload = {key: value for key, value in action.items() if key != "type"}
+        if action["type"] == "choose-skill" and action.get("use") and pending.rank == "fleur-cross":
+            # the curse window's use action carries the assignments; the walk
+            # picks distinct live recipients at random (self-distribution is legal)
+            curses = sorted(engine.state.curses)
+            recipients = rng.sample(sorted(engine.state.players), len(curses))
+            payload["assignments"] = dict(zip(curses, recipients))
         send(f"pending-{turn}", actor, action["type"], payload)
 
     walk = tuple(commands)

@@ -118,9 +118,10 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
             {"type": "attack", "targetPlayerId": target.player_id}
             for target in state.players.values()
             if target.player_id != player_id and not target.captured and not target.resources.get("shield", 0)
+            # the inquisitor may never attack a 3-damage player; surface the
+            # rule as a filtered affordance instead of a click-time rejection
+            and not (player.faction == "secret-order" and target.damage >= 3)
         )
-    if state.curses and player.faction == "secret-order":
-        actions.append({"type": "distribute-curse"})
     return actions
 
 

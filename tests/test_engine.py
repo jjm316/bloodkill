@@ -144,7 +144,7 @@ class RulesEngineTests(unittest.TestCase):
         self.assertIsNone(engine.state.pending)
         self.assertEqual(engine.state.dagger_holder_id, target)
 
-    def test_inquisitor_rank_reveal_does_not_open_skill_window(self):
+    def test_inquisitor_rank_reveal_opens_the_curse_skill_window(self):
         engine = self.started(7)
         attacker = engine.state.dagger_holder_id
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
@@ -153,7 +153,14 @@ class RulesEngineTests(unittest.TestCase):
         decline_poll(engine)
         reveal_rank(engine, inquisitor)
         self.assertEqual(engine.state.players[inquisitor].damage, 1)
+        # ADR 0003: the fleur-cross reveal opens the one-time curse skill window.
+        self.assertEqual(engine.state.pending.kind, "skill")
+        self.assertEqual(engine.state.pending.rank, "fleur-cross")
+        engine.apply(command(engine, "skill-no", inquisitor, "choose-skill", use=False))
         self.assertIsNone(engine.state.pending)
+        self.assertIn("fleur-cross", engine.state.players[inquisitor].skills_used)
+        self.assertEqual(engine.state.curses, ["true-curse-1", "false-curse-1"])
+        self.assertEqual(engine.state.dagger_holder_id, inquisitor)
 
     def test_single_volunteer_forces_intervention_without_target_consent(self):
         engine = self.started()
@@ -178,15 +185,37 @@ class RulesEngineTests(unittest.TestCase):
             engine.apply(Command("stale", "g1", None, 0, "start-game", {}))
         self.assertEqual(error.exception.code, "game.revision-conflict")
 
-    def test_curse_distribution_is_private_to_the_inquisitor_command(self):
-        engine = self.started(7)
+    def curse_window(self, engine):
+        """Drive the inquisitor through an attack wound and rank reveal."""
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        attacker = engine.state.dagger_holder_id
+        if attacker == inquisitor:
+            other = next(pid for pid in engine.state.players if pid != inquisitor)
+            engine.apply(command(engine, "pass-away", attacker, "pass-dagger", targetPlayerId=other))
+            attacker = other
+        engine.apply(command(engine, "attack-inquisitor", attacker, "attack", targetPlayerId=inquisitor))
+        decline_poll(engine)
+        reveal_rank(engine, inquisitor)
+        assert engine.state.pending and engine.state.pending.kind == "skill" and engine.state.pending.rank == "fleur-cross"
+        return inquisitor
+
+    def test_curse_distribution_rides_the_skill_command_and_stays_private(self):
+        engine = self.started(7)
+        inquisitor = self.curse_window(engine)
         recipients = [pid for pid in engine.state.players if pid != inquisitor][: len(engine.state.curses)]
         assignments = dict(zip(engine.state.curses, recipients))
-        events = engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments=assignments))
-        self.assertEqual([event.event_type for event in events], ["CurseDistributed"] * len(assignments))
+        dagger_before = engine.state.dagger_holder_id
+        events = engine.apply(command(engine, "curse", inquisitor, "choose-skill", use=True, assignments=assignments))
+        self.assertEqual([event.event_type for event in events], ["SkillUsed", "CurseDistributed", "CurseDistributed", "PhaseChanged"])
+        distributed = [event for event in events if event.event_type == "CurseDistributed"]
+        self.assertEqual([event.payload["curseId"] for event in distributed], ["true-curse-1", "false-curse-1"])
         self.assertEqual(engine.state.curses, [])
         self.assertEqual(engine.state.curse_assignments, assignments)
+        # no wound, no new window: the action phase resumes with the same holder
+        self.assertEqual(engine.state.players[inquisitor].damage, 1)
+        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.phase, {"kind": "action", "activePlayerId": dagger_before})
+        self.assertIn("fleur-cross", engine.state.players[inquisitor].skills_used)
 
     def test_deterministic_runner_closes_even_and_odd_games(self):
         even_engine, even_replay = run_deterministic_game(6)
@@ -207,6 +236,14 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(len(engine.state.players), 12)
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(len(replay.command_ids), len(set(replay.command_ids)))
+
+    def test_ruleset_is_0_4_and_older_checkpoints_are_rejected(self):
+        engine = self.started()
+        self.assertEqual(engine.state.ruleset_version, "0.4")
+        stale = deepcopy(engine.checkpoint())
+        stale.ruleset_version = "0.3"
+        with self.assertRaises(RuleError):
+            RulesEngine.resume_from_checkpoint(stale, clock=FixedClock())
 
     def test_checkpoint_resume_continues_without_double_applying(self):
         engine = self.started()

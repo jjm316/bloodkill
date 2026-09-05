@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "ruleset": {
     "id": "blood-bound-compatible",
-    "version": "0.3"
+    "version": "0.4"
   },
   "game": {
     "gameId": "golden-6",
@@ -11,7 +11,7 @@
   "snapshot": {
     "schemaVersion": 2,
     "rulesetId": "blood-bound-compatible",
-    "rulesetVersion": "0.3",
+    "rulesetVersion": "0.4",
     "gameId": "golden-6",
     "seed": "golden-seed-6",
     "revision": 67,
@@ -1848,6 +1848,6 @@
   "integrity": {
     "algorithm": "sha256",
     "eventHead": "9f3211b32de436e75e1e09889508bdb0fd245671a0e16476081cd633ddc24899",
-    "snapshotHash": "fffb902733a39f5dd718667968a71e4de2a7e71f3a236f67ff9d9b29f4ef69d2"
+    "snapshotHash": "924da4415e30a31bf3c1786355a63afd258c1605d1af9f334f51376132ed7cbf"
   }
 }

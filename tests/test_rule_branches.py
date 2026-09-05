@@ -61,6 +61,14 @@ def mark_three_damage(engine, player_id):
     player.revealed = {"rank", "marker-0", "marker-1"}
 
 
+def mark_two_damage(engine, player_id):
+    """Set a player to 2 damage with both markers revealed, as two resolved attacks would."""
+    player = engine.state.players[player_id]
+    player.damage = 2
+    player.revealed = {"marker-0", "marker-1"}
+    player.revealed_values = {"marker-0": player.identity_markers[0], "marker-1": player.identity_markers[1]}
+
+
 def reveal_rank(engine, player_id, command_id="reveal-rank"):
     if engine.state.pending and engine.state.pending.kind == "reveal" and "rank" in {"rank", "marker-0", "marker-1"} - engine.state.players[player_id].revealed:
         engine.apply(command(engine, command_id, player_id, "choose-reveal", token="rank"))
@@ -712,60 +720,225 @@ class SkillBranchTests(unittest.TestCase):
         self.assertNotEqual(engine.state.dagger_holder_id, victim.player_id)
 
 
+def inquisitor_of(engine):
+    return next(
+        player for player in engine.state.players.values() if player.faction == "secret-order"
+    )
+
+
+def open_curse_window(engine, command_prefix="curse"):
+    """Wound the inquisitor once and reveal their rank, opening the curse skill window."""
+    inquisitor = inquisitor_of(engine)
+    attacker = engine.state.dagger_holder_id
+    if attacker == inquisitor.player_id:
+        give_dagger_to(engine, next(pid for pid in engine.state.players if pid != inquisitor.player_id))
+    engine.apply(command(engine, f"{command_prefix}-attack", engine.state.dagger_holder_id, "attack", targetPlayerId=inquisitor.player_id))
+    answer_poll(engine)
+    reveal_rank(engine, inquisitor.player_id, f"{command_prefix}-reveal")
+    assert engine.state.pending and engine.state.pending.kind == "skill" and engine.state.pending.rank == "fleur-cross"
+    return inquisitor
+
+
 class CurseBranchTests(unittest.TestCase):
-    def test_distribute_curse_without_curses_is_rejected(self):
-        engine = started()
+    """ADR 0003: curse distribution rides the reveal-triggered skill window."""
+
+    def test_self_chosen_rank_reveal_opens_the_curse_window(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        self.assertEqual(engine.state.pending.rank, "fleur-cross")
+        self.assertEqual(engine.state.pending.trigger, "attack")
+        self.assertEqual(engine.state.players[inquisitor.player_id].damage, 1)
+
+    def test_third_damage_forced_rank_reveal_opens_the_curse_window(self):
+        engine = started(7)
+        inquisitor = inquisitor_of(engine)
+        mark_two_damage(engine, inquisitor.player_id)
+        give_dagger_to(engine, next(pid for pid in engine.state.players if pid != inquisitor.player_id))
+        engine.apply(command(engine, "attack-3", engine.state.dagger_holder_id, "attack", targetPlayerId=inquisitor.player_id))
+        answer_poll(engine)
+        # the third wound force-reveals the rank without a reveal window
+        self.assertEqual(engine.state.pending.kind, "skill")
+        self.assertEqual(engine.state.pending.rank, "fleur-cross")
+
+    def test_intervention_damage_opens_the_curse_window(self):
+        engine = started(7)
+        inquisitor = inquisitor_of(engine)
+        attacker = engine.state.dagger_holder_id
+        if attacker == inquisitor.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != inquisitor.player_id))
+            attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid not in (attacker, inquisitor.player_id))
+        engine.apply(command(engine, "attack-other", attacker, "attack", targetPlayerId=target))
+        answer_poll(engine, inquisitor.player_id)
+        reveal_rank(engine, inquisitor.player_id, "reveal-intervention")
+        self.assertEqual(engine.state.pending.kind, "skill")
+        self.assertEqual(engine.state.pending.rank, "fleur-cross")
+        self.assertEqual(engine.state.pending.trigger, "intervention")
+
+    def test_skill_damage_does_not_open_the_curse_window(self):
+        engine, found = started_with_ranks(7, 2)
+        assassin = found[2]
+        inquisitor = inquisitor_of(engine)
+        attacker = engine.state.dagger_holder_id
+        if attacker == assassin.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != assassin.player_id))
+            attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "attack-assassin", attacker, "attack", targetPlayerId=assassin.player_id))
+        answer_poll(engine)
+        reveal_rank(engine, assassin.player_id, "reveal-assassin")
+        self.assertEqual(engine.state.pending.rank, 2)
+        engine.apply(command(engine, "use-assassin", assassin.player_id, "choose-skill", use=True, targetPlayerId=inquisitor.player_id))
+        # the inquisitor's rank was auto-revealed by skill damage, but skill
+        # wounds never open a skill window
+        self.assertIn("rank", engine.state.players[inquisitor.player_id].revealed)
+        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.curses, ["true-curse-1", "false-curse-1"])
+
+    def test_decline_keeps_curses_in_supply_and_closes_the_window_for_good(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        events = engine.apply(command(engine, "decline", inquisitor.player_id, "choose-skill", use=False))
+        self.assertEqual([event.event_type for event in events], ["SkillDeclined", "PhaseChanged"])
+        self.assertIn("fleur-cross", engine.state.players[inquisitor.player_id].skills_used)
+        self.assertEqual(engine.state.curses, ["true-curse-1", "false-curse-1"])
+        self.assertEqual(engine.state.curse_assignments, {})
+        # a later wound reveals affiliation only: the window never reopens
+        give_dagger_to(engine, next(pid for pid in engine.state.players if pid != inquisitor.player_id))
+        engine.apply(command(engine, "attack-again", engine.state.dagger_holder_id, "attack", targetPlayerId=inquisitor.player_id))
+        answer_poll(engine)
+        if engine.state.pending and engine.state.pending.kind == "reveal":
+            # the inquisitor's markers are wild, so revealing one needs a colour
+            engine.apply(command(engine, "reveal-again", inquisitor.player_id, "choose-reveal", token="marker-0", color="rose"))
+        self.assertIsNone(engine.state.pending)
+
+    def test_distribute_then_decline_is_rejected_as_window_closed(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        recipients = [pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id]
+        assignments = {"true-curse-1": recipients[0], "false-curse-1": recipients[1]}
+        engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments=assignments))
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", "p0", "distribute-curse", assignments={"true-curse-1": "p1"}))
+            engine.apply(command(engine, "decline", inquisitor.player_id, "choose-skill", use=False))
+        self.assertEqual(error.exception.code, "skill.not-open")
+
+    def test_standalone_distribute_curse_command_is_gone(self):
+        engine = started(7)
+        inquisitor = inquisitor_of(engine)
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "curse", inquisitor.player_id, "distribute-curse", assignments={"true-curse-1": "p0", "false-curse-1": "p1"}))
+        self.assertEqual(error.exception.code, "command.unknown")
+
+    def test_distribute_with_no_curses_is_rejected(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        engine.state.curses = []  # synthetic: curses already gone (multi-inquisitor games are out of scope)
+        recipients = [pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id]
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments={"true-curse-1": recipients[0], "false-curse-1": recipients[1]}))
         self.assertEqual(error.exception.code, "curse.invalid-count")
 
-    def test_distribute_curse_by_non_inquisitor_is_rejected(self):
+    def test_distribute_by_non_inquisitor_is_rejected(self):
         engine = started(7)
-        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
-        other = next(pid for pid in engine.state.players if pid != inquisitor)
+        other = next(player for player in engine.state.players.values() if player.faction != "secret-order")
+        engine.state.pending = Pending("skill", other.player_id, other.player_id, rank="fleur-cross", trigger="attack")
+        engine.state.phase = {"kind": "skill", "activePlayerId": other.player_id}
+        victims = [pid for pid in sorted(engine.state.players) if pid != other.player_id]
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", other, "distribute-curse", assignments={"true-curse-1": other, "false-curse-1": inquisitor}))
+            engine.apply(command(engine, "use", other.player_id, "choose-skill", use=True, assignments={"true-curse-1": victims[0], "false-curse-1": victims[1]}))
         self.assertEqual(error.exception.code, "player.not-eligible")
 
-    def test_distribute_curse_with_wrong_assignment_keys_is_rejected(self):
+    def test_distribute_with_wrong_assignment_keys_is_rejected(self):
         engine = started(7)
-        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
-        other = next(pid for pid in engine.state.players if pid != inquisitor)
-        for assignments in ({"true-curse-1": other}, ["p0"]):
+        inquisitor = open_curse_window(engine)
+        recipients = [pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id]
+        for assignments in ({"true-curse-1": recipients[0]}, ["p0"], {}):
             with self.subTest(assignments=assignments):
                 with self.assertRaises(RuleError) as error:
-                    engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments=assignments))
+                    engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments=assignments))
                 self.assertEqual(error.exception.code, "curse.invalid-count")
 
-    def test_distribute_curse_to_unknown_recipient_is_rejected(self):
+    def test_distribute_to_unknown_or_captured_recipient_is_rejected(self):
         engine = started(7)
-        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
-        other = next(pid for pid in engine.state.players if pid != inquisitor)
+        inquisitor = open_curse_window(engine)
+        victims = [pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id]
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments={"true-curse-1": "ghost", "false-curse-1": other}))
+            engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments={"true-curse-1": "ghost", "false-curse-1": victims[0]}))
         self.assertEqual(error.exception.code, "target.not-found")
-
-    def test_distribute_curse_to_captured_recipient_is_rejected(self):
-        engine = started(7)
-        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
-        victim = next(pid for pid in engine.state.players if pid != inquisitor)
-        other = next(pid for pid in engine.state.players if pid not in {inquisitor, victim})
-        engine.state.players[victim].captured = True  # synthetic: captures end games, so this never occurs live
+        engine.state.players[victims[0]].captured = True  # synthetic: captures end games, so this never occurs live
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "curse", inquisitor, "distribute-curse", assignments={"true-curse-1": victim, "false-curse-1": other}))
+            engine.apply(command(engine, "use-captured", inquisitor.player_id, "choose-skill", use=True, assignments={"true-curse-1": victims[0], "false-curse-1": victims[1]}))
         self.assertEqual(error.exception.code, "target.captured")
 
-    def test_distribute_curse_duplicate_recipient_is_rejected(self):
-        # odd-player games deal one true and one false curse per inquisitor,
-        # so assigning both to the same recipient trips the duplicate gate
+    def test_distribute_duplicate_recipient_is_rejected(self):
         engine = started(7)
-        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
-        victim = next(pid for pid in engine.state.players if pid != inquisitor)
+        inquisitor = open_curse_window(engine)
+        victim = next(pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id)
         with self.assertRaises(RuleError) as error:
-            engine.apply(
-                command(engine, "curse", inquisitor, "distribute-curse", assignments={"true-curse-1": victim, "false-curse-1": victim})
-            )
+            engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments={"true-curse-1": victim, "false-curse-1": victim}))
         self.assertEqual(error.exception.code, "curse.duplicate-recipient")
+
+    def test_repeated_use_in_a_reopened_window_is_rejected(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        engine.state.players[inquisitor.player_id].skills_used.add("fleur-cross")  # synthetic: declined earlier
+        victims = [pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id]
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments={"true-curse-1": victims[0], "false-curse-1": victims[1]}))
+        self.assertEqual(error.exception.code, "skill.already-used")
+
+    def test_distribute_does_not_disturb_dagger_or_open_new_windows(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        holder = engine.state.dagger_holder_id
+        victims = [pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id]
+        events = engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments={"true-curse-1": victims[0], "false-curse-1": victims[1]}))
+        self.assertEqual([event.event_type for event in events], ["SkillUsed", "CurseDistributed", "CurseDistributed", "PhaseChanged"])
+        self.assertEqual(engine.state.dagger_holder_id, holder)
+        self.assertEqual(engine.state.phase, {"kind": "action", "activePlayerId": holder})
+        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.curses, [])
+        self.assertEqual(
+            engine.state.curse_assignments,
+            {"true-curse-1": victims[0], "false-curse-1": victims[1]},
+        )
+
+    def test_declined_curse_never_judges_a_family_win(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        engine.apply(command(engine, "decline", inquisitor.player_id, "choose-skill", use=False))
+        victim = min(
+            (player for player in engine.state.players.values() if player.faction == "rose"),
+            key=lambda player: player.rank,
+        )
+        attacker = next(player for player in engine.state.players.values() if player.faction == "beast")
+        mark_three_damage(engine, victim.player_id)
+        give_dagger_to(engine, attacker.player_id)
+        engine.apply(command(engine, "attack-leader", attacker.player_id, "attack", targetPlayerId=victim.player_id))
+        answer_poll(engine)
+        self.assertEqual(engine.state.result["branch"], "captured-leader")
+        self.assertEqual(engine.state.result["winner"], attacker.faction)
+
+    def test_winning_leader_holding_true_curse_gives_the_inquisitor_a_solo_win(self):
+        engine = started(7)
+        inquisitor = open_curse_window(engine)
+        rose_players = sorted(
+            (player for player in engine.state.players.values() if player.faction == "rose"),
+            key=lambda player: player.rank,
+        )
+        leader, highest_rose = rose_players[0], rose_players[-1]
+        victims = [pid for pid in sorted(engine.state.players) if pid != inquisitor.player_id]
+        assignments = {"true-curse-1": leader.player_id, "false-curse-1": victims[0] if victims[0] != leader.player_id else victims[1]}
+        engine.apply(command(engine, "use", inquisitor.player_id, "choose-skill", use=True, assignments=assignments))
+        # a beast attacker captures the highest-ranked rose player: a non-leader
+        # capture, so the rose family wins normally before the curse overrides
+        beast = next(player for player in engine.state.players.values() if player.faction == "beast")
+        mark_three_damage(engine, highest_rose.player_id)
+        give_dagger_to(engine, beast.player_id)
+        engine.apply(command(engine, "attack-rose", beast.player_id, "attack", targetPlayerId=highest_rose.player_id))
+        answer_poll(engine)
+        self.assertEqual(engine.state.status, "ended")
+        self.assertEqual(engine.state.result["branch"], "inquisitor-true-curse")
+        self.assertEqual(engine.state.result["winner"], "secret-order")
 
 
 class EndGameBranchTests(unittest.TestCase):
