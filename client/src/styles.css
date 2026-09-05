@@ -303,6 +303,11 @@ h2 {
   filter: brightness(1.2);
 }
 
+/* 键盘焦点环：hot 态的金色脉冲 outline 会盖过全局 focus-visible，须显式恢复可辨识焦点 */
+.slot.hot:focus-visible {
+  outline: 3px solid #72b7ff;
+}
+
 /* wild 标记亮出时的阵营选择浮层（issue 25） */
 
 .slot-picker-backdrop {
