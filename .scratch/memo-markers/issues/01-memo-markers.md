@@ -2,7 +2,7 @@
 
 Type: task
 Blocked by: 无
-Status: ready-for-agent
+Status: resolved
 Spec: [../spec.md](../spec.md)（唯一需求来源，实施前通读）
 ADR: [docs/adr/0004-memo-markers-client-only.md](../../../docs/adr/0004-memo-markers-client-only.md)
 
@@ -39,3 +39,7 @@ spec 的全部实现决策一次落地，不留中间态（纯前端纵切，服
 - 备忘是私有 UI 状态：绝不进命令、投影或事件；验证"无网络流量"时用浏览器开发者工具核对。
 - 等待室无桌面（Board），不涉及；对局进行中与 ended 均显示角标。
 - 提交前跑代码评审（Standards + Spec 两轴）。
+
+## Comments
+
+- 2026-09-05（agent）：全量落地完成，提交 6c5ce08。实现：`client/src/memoMarkers.ts`（状态 hook：localStorage 键=房间码+gameId、换局清空并删旧键、Q8 灰兜底单一出处 `memoColorOf`、Q9 粘性 touched、自动填充依赖含 gameId——评审抓出的换局不重填隐患已修）；`Board.tsx` Seat 右上角角标+选择器（与 ClueSlots 共用提取的 `useDismissOverlay` 关闭 hook）；`GameScreen.tsx` 接线（hook 在条件 return 之前）；回放屏不传 memos 天然无角标。前端单测 7 例（vitest，基建由 frontend-test-infra 01 落地后引入，spec 禁的是"引入基建"而非使用）。浏览器实测全过：空/实态视觉、自动填充（两局分获兽蓝/玫红验证）、选择器全套（灰预选、互斥、清除、点外关、Escape）、Q9 粘性（清空后真实事件触发不重填）、刷新/接管重连保留、观众 7 座位全角标且从空白开始、回放 0 角标、终局角标仍显示、390 宽手机视口无溢出；备忘操作全程 revision 不动（零命令流量）。评审两轴修复：gameId 依赖+单测、MemoPatch/memoColorOf 收敛、共享关闭 hook、全局 button hover 排除 .memo-badge（优先级 (0,2,1) 会盖掉角标色底，.slot 同理的既有工作区修复一并落地并在注释注明）。测试房 114716/366673/920669 已建已清（saves 已删）；服务器无同房间重开机制，"gameId 变化清空"的线上可观测面=新房间空白开始+不串房，已实测，机制本身由单测覆盖。工作区里并行会话的未提交改动（CONTEXT.md 事件日志词条、styles.css focus-visible、e2e25.py）未动、未纳入本提交，提交后已原样恢复。
