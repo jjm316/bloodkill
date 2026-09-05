@@ -125,10 +125,18 @@ class RoomManagerTests(unittest.TestCase):
                 self.manager.apply_command(
                     room, command(room.engine, f"attack-{turn}", holder, "attack", targetPlayerId=victim)
                 )
-                if room.engine.state.pending and room.engine.state.pending.kind == "intervention":
-                    self.manager.apply_command(
-                        room, command(room.engine, f"decline-{turn}", victim, "decline-intervention")
-                    )
+                while room.engine.state.pending and room.engine.state.pending.kind == "intervention":
+                    pending = room.engine.state.pending
+                    if pending.context.get("stage") == "poll":
+                        responses = pending.context["responses"]
+                        responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
+                        self.manager.apply_command(
+                            room, command(room.engine, f"respond-{turn}-{responder}", responder, "respond-intervention", volunteer=False)
+                        )
+                    else:
+                        self.manager.apply_command(
+                            room, command(room.engine, f"decline-{turn}", victim, "decline-intervention")
+                        )
                 resolve_reveal_windows(self.manager, room, victim, f"reveal-{turn}")
                 if room.engine.state.pending and room.engine.state.pending.kind == "skill":
                     self.manager.apply_command(
@@ -156,10 +164,18 @@ class RoomManagerTests(unittest.TestCase):
             self.manager.apply_command(
                 room, command(room.engine, f"attack-{turn}", holder, "attack", targetPlayerId=victim)
             )
-            if room.engine.state.pending and room.engine.state.pending.kind == "intervention":
-                self.manager.apply_command(
-                    room, command(room.engine, f"decline-{turn}", victim, "decline-intervention")
-                )
+            while room.engine.state.pending and room.engine.state.pending.kind == "intervention":
+                pending = room.engine.state.pending
+                if pending.context.get("stage") == "poll":
+                    responses = pending.context["responses"]
+                    responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
+                    self.manager.apply_command(
+                        room, command(room.engine, f"respond-{turn}-{responder}", responder, "respond-intervention", volunteer=False)
+                    )
+                else:
+                    self.manager.apply_command(
+                        room, command(room.engine, f"decline-{turn}", victim, "decline-intervention")
+                    )
             resolve_reveal_windows(self.manager, room, victim, f"reveal-{turn}")
             if room.engine.state.pending and room.engine.state.pending.kind == "skill":
                 self.manager.apply_command(

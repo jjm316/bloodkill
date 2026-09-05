@@ -30,18 +30,29 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
     player = state.players[player_id]
     pending = state.pending
     if pending is not None:
+        if pending.kind == "intervention":
+            # The volunteer poll is a multi-actor window: every eligible player
+            # who has not answered yet holds their own respond action, while
+            # the choice stage belongs to the target alone.
+            if pending.context.get("stage") == "poll":
+                responses: dict[str, bool] = pending.context.get("responses", {})
+                if player_id in pending.eligible_player_ids and player_id not in responses:
+                    return [
+                        {"type": "respond-intervention", "volunteer": True},
+                        {"type": "respond-intervention", "volunteer": False},
+                    ]
+                return []
+            if pending.actor_player_id != player_id:
+                return []
+            actions: list[dict[str, Any]] = [{"type": "decline-intervention"}]
+            actions.extend(
+                {"type": "choose-intervention", "responderPlayerId": responder}
+                for responder in pending.eligible_player_ids
+                if pending.context.get("responses", {}).get(responder)
+            )
+            return actions
         if pending.actor_player_id != player_id:
             return []
-        if pending.kind == "intervention":
-            actions: list[dict[str, Any]] = [{"type": "decline-intervention"}]
-            if pending.context.get("requested"):
-                actions.extend(
-                    {"type": "choose-intervention", "responderPlayerId": responder}
-                    for responder in pending.eligible_player_ids
-                )
-            else:
-                actions.insert(0, {"type": "request-intervention"})
-            return actions
         if pending.kind == "skill":
             owner = state.players[player_id]
             actions = [{"type": "choose-skill", "use": False}]
@@ -141,6 +152,7 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
         "phase": dict(state.phase),
         "pending": _pending_view(state.pending),
         "result": dict(state.result) if state.result else None,
+        "interventionTimeoutSeconds": state.intervention_timeout_seconds,
     }
     if viewer is None:
         projection["viewer"] = None
@@ -184,7 +196,7 @@ def _public_player(player: "Player") -> dict[str, Any]:
 def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:
     if pending is None:
         return None
-    return {
+    view: dict[str, Any] = {
         "kind": pending.kind,
         "actorPlayerId": pending.actor_player_id,
         "targetPlayerId": pending.target_player_id,
@@ -194,3 +206,13 @@ def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:
         "eligibleTokens": list(pending.eligible_player_ids) if pending.kind == "token-return" else (list(getattr(pending, "context", {}).get("eligibleTokens", [])) if pending.kind == "reveal" else []),
         "forceRank": bool(getattr(pending, "context", {}).get("forceRank")) if pending.kind == "reveal" else False,
     }
+    if pending.kind == "intervention":
+        # Votes are public in real time (ADR 0002); the stage and each
+        # response are surfaced as first-class fields, never via context. The
+        # countdown deadline is server-owned wall clock and is injected into
+        # this view by the server, not the engine.
+        responses: dict[str, bool] = dict(pending.context.get("responses", {}))
+        view["stage"] = pending.context.get("stage")
+        view["responses"] = responses
+        view["volunteerPlayerIds"] = [player_id for player_id in pending.eligible_player_ids if responses.get(player_id)]
+    return view

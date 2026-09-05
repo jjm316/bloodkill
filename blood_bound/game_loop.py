@@ -21,7 +21,8 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
     """Run a complete no-UI game by repeatedly feeding legal commands.
 
     The runner uses ordinary public commands only: it passes the dagger back to a
-    fixed attacker, attacks one victim, declines intervention, and declines skills.
+    fixed attacker, attacks one victim, has every eligible player decline to
+    volunteer in the intervention poll, and declines skills.
     It exists for golden replay and CI smoke coverage, not as an AI strategy.
     """
     engine = RulesEngine.new_game(game_id, seed, clock=lambda: 0.0)
@@ -49,8 +50,14 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
         if holder != attacker:
             send(f"pass-{turn}", holder, "pass-dagger", targetPlayerId=attacker)
         send(f"attack-{turn}", attacker, "attack", targetPlayerId=victim)
-        if engine.state.pending and engine.state.pending.kind == "intervention":
-            send(f"decline-{turn}", victim, "decline-intervention")
+        while engine.state.pending and engine.state.pending.kind == "intervention":
+            pending = engine.state.pending
+            if pending.context.get("stage") == "poll":
+                responses: dict[str, bool] = pending.context["responses"]
+                responder = next(player_id for player_id in pending.eligible_player_ids if player_id not in responses)
+                send(f"respond-{turn}-{responder}", responder, "respond-intervention", volunteer=False)
+            else:
+                send(f"decline-{turn}", victim, "decline-intervention")
         while engine.state.pending and engine.state.pending.kind == "reveal":
             target = engine.state.pending.actor_player_id
             token = engine.state.pending.context["eligibleTokens"][0]

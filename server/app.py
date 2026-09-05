@@ -11,6 +11,7 @@ curse assignment, or private events. See PROTOCOL.md and README.md.
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 import uuid
@@ -22,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 
 from blood_bound import Command, RuleError, project_state
 
+from .deadlines import DeadlineScheduler
 from .protocol import PRIVATE_EVENT_TYPES, PROTOCOL_VERSION
 from .rooms import Room, RoomManager
 
@@ -60,6 +62,10 @@ def build_state(conn: Conn) -> dict[str, Any]:
     room = conn.room
     viewer = conn.player_id
     game = project_state(room.engine.state, viewer) if room.engine.state else None
+    if game is not None and game.get("pending", {}) and game["pending"].get("kind") == "intervention":
+        # The engine stays wall-clock-free; the room owns the countdown and
+        # the server injects the deadline into every projection.
+        game["pending"]["deadline"] = room.window_deadline
     connected = {
         player_id: any(c.room is room and c.player_id == player_id for c in conns.values())
         for player_id in room.engine.state.players
@@ -75,6 +81,9 @@ def build_state(conn: Conn) -> dict[str, Any]:
         "connected": connected,
         "hostActions": _host_actions(room, conn.is_host),
         "game": game,
+        # Wall-clock anchor for deadline countdowns (engine deadlines are unix
+        # seconds); clients tick locally between state broadcasts.
+        "serverTime": time.time(),
     }
 
 
@@ -121,11 +130,6 @@ async def send_safe(ws: WebSocket, message: dict[str, Any]) -> None:
         pass
 
 
-async def broadcast_state(room: Room) -> None:
-    for conn in room_conns(room):
-        await send_safe(conn.ws, build_state(conn))
-
-
 async def broadcast(room: Room, message: dict[str, Any]) -> None:
     for conn in room_conns(room):
         await send_safe(conn.ws, message)
@@ -155,6 +159,39 @@ async def send_command_ack(
             "details": error.details,
         }
     await send_safe(conn.ws, message)
+
+
+async def _expire_window(room: Room, command_type: str, payload: dict[str, Any]) -> None:
+    """Apply a window's timeout command through the normal command pipeline."""
+    command = Command(
+        f"{command_type}-{uuid.uuid4().hex}",
+        room.game_id,
+        None,
+        room.engine.state.revision,
+        command_type,
+        payload,
+    )
+    try:
+        events = manager.apply_command(room, command)
+    except RuleError:
+        # The window was already closed by players (or the game ended); the
+        # scheduler's next sync cancels any stale timer.
+        return
+    events_view = public_events(events)
+    if events_view:
+        await broadcast(room, {"type": "event", "events": events_view})
+    await broadcast_state(room)
+
+
+# Reusable deadline machinery (server/deadlines.py): every state broadcast
+# re-arms one timer per room for the engine's current expiry window.
+deadline_scheduler = DeadlineScheduler(_expire_window)
+
+
+async def broadcast_state(room: Room) -> None:
+    await deadline_scheduler.sync(room)
+    for conn in room_conns(room):
+        await send_safe(conn.ws, build_state(conn))
 
 
 # ---- REST -------------------------------------------------------------
@@ -201,6 +238,14 @@ async def replay(code: str) -> Any:
 
 
 # ---- WebSocket --------------------------------------------------------
+
+
+@app.on_event("startup")
+async def _arm_restored_deadlines() -> None:
+    # After a restart a restored room may hold an already-expired window; sync
+    # arms it with delay 0 so the timeout lands through the normal pipeline.
+    for room in manager.rooms.values():
+        await deadline_scheduler.sync(room)
 
 
 @app.websocket("/ws/{code}")
@@ -299,7 +344,7 @@ async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
     raw_command_id = raw.get("commandId")
     command_id = raw_command_id if isinstance(raw_command_id, str) and raw_command_id else uuid.uuid4().hex
     expected_revision = raw.get("expectedRevision", room.engine.state.revision)
-    if command_type in ("start-game", "join-game"):
+    if command_type in ("start-game", "join-game", "timeout-intervention"):
         error = RuleError("command.server-managed", "This command is managed by the server.")
         await send_safe(conn.ws, rule_error_message(error))
         await send_command_ack(conn, command_id, "rejected", error=error)
@@ -354,8 +399,12 @@ async def _handle_host(conn: Conn, raw: dict[str, Any]) -> None:
         return
     action = raw.get("action")
     if action == "start":
+        timeout_seconds = raw.get("interventionTimeoutSeconds")
+        if timeout_seconds is not None and (isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int)):
+            await send_safe(conn.ws, error_message("command.invalid-shape", "interventionTimeoutSeconds must be an integer."))
+            return
         try:
-            events = manager.start_game(room)
+            events = manager.start_game(room, intervention_timeout_seconds=timeout_seconds)
         except RuleError as error:
             await send_safe(conn.ws, rule_error_message(error))
             return

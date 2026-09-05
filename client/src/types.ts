@@ -7,6 +7,7 @@ export interface Action {
   targetPlayerId?: string;
   targetPlayerIds?: string[];
   responderPlayerId?: string;
+  volunteer?: boolean;
   use?: boolean;
   token?: string;
   color?: string;
@@ -50,6 +51,13 @@ export interface PendingView {
   trigger: string | null;
   eligibleTokens?: string[];
   forceRank?: boolean;
+  /** 干涉投票：poll = 逐人表态阶段；choice = 被攻击者三选一阶段 */
+  stage?: string;
+  /** 实时公开表态：playerId -> 是否愿意挡刀 */
+  responses?: Record<string, boolean>;
+  volunteerPlayerIds?: string[];
+  /** 服务端注入的到期时间（Unix 秒），仅在干涉窗口存在时非空 */
+  deadline?: number | null;
 }
 
 export interface GameResult {
@@ -67,11 +75,12 @@ export interface GameState {
   status: string;
   players: PlayerView[];
   daggerHolderId: string | null;
-  phase: { kind: string; activePlayerId?: string };
+  phase: { kind: string; stage?: string; activePlayerId?: string };
   pending: PendingView | null;
   result: GameResult | null;
   viewer: ViewerView | null;
   legalActions: Action[];
+  interventionTimeoutSeconds?: number;
 }
 
 export interface RoomState {
@@ -85,6 +94,8 @@ export interface RoomState {
   connected: Record<string, boolean>;
   hostActions: Action[];
   game: GameState | null;
+  /** 服务端墙钟（Unix 秒），用于倒计时对齐 */
+  serverTime: number;
 }
 
 export interface GameEvent {
@@ -131,20 +142,10 @@ export function displayClueIcon(icon: string | null | undefined): string {
   return "未知";
 }
 
+// 亮出的等级只暴露数字本身（issue 23）：角色名不进任何等级文案。
 export function displayRank(rank: number | string): string {
   if (rank === "fleur-cross") return "审判者";
-  const names: Record<number, string> = {
-    1: "长老",
-    2: "刺客",
-    3: "小丑",
-    4: "炼金术师",
-    5: "占卜师",
-    6: "守护者",
-    7: "狂战士",
-    8: "法师",
-    9: "交际花",
-  };
-  return typeof rank === "number" && names[rank] ? `等级${rank}·${names[rank]}` : String(rank);
+  return typeof rank === "number" ? `等级${rank}` : String(rank);
 }
 
 export function playerLabel(player: PlayerView): string {
@@ -156,7 +157,7 @@ export function displayStatus(status: string): string {
 }
 
 export function displayPhase(phase: string): string {
-  return ({ action: "行动阶段", intervention: "干预阶段", skill: "技能阶段", reveal: "展示身份", "token-return": "归还标记", ended: "已结束" } as Record<string, string>)[phase] ?? phase;
+  return ({ action: "行动阶段", intervention: "干涉投票", skill: "技能阶段", reveal: "展示身份", "token-return": "归还标记", ended: "已结束" } as Record<string, string>)[phase] ?? phase;
 }
 
 export function displayResource(resource: string): string {

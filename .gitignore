@@ -16,3 +16,4 @@ client/dist/
 .scratch/chrome-profiles/
 .scratch/run-server.cmd
 .scratch/uvicorn.log
+.zcode

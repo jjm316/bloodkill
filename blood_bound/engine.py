@@ -12,6 +12,13 @@ from .projection import legal_actions as _legal_actions, project_state as _proje
 
 Clock = Callable[[], float]
 
+# Host-configurable intervention poll timeout (issue 23 / ADR 0002). The value
+# is fixed at start-game time and covers both poll phases: the volunteer vote
+# (unanswered players count as not volunteering) and the target's choice among
+# >=2 volunteers (timeout declines all of them).
+INTERVENTION_TIMEOUT_CHOICES = (30, 60, 90, 120, 180)
+DEFAULT_INTERVENTION_TIMEOUT_SECONDS = 90
+
 
 class RuleError(Exception):
     """Stable, client-safe rule rejection."""
@@ -92,6 +99,7 @@ class EngineState:
     curses: list[str] = field(default_factory=list)
     curse_assignments: dict[str, str] = field(default_factory=dict)
     max_leader_factions: set[str] = field(default_factory=set)
+    intervention_timeout_seconds: int = DEFAULT_INTERVENTION_TIMEOUT_SECONDS
     events: list[Event] = field(default_factory=list)
     commands: list[Command] = field(default_factory=list)
     command_results: dict[str, tuple[tuple[Event, ...], str]] = field(default_factory=dict)
@@ -130,7 +138,7 @@ class RulesEngine:
             EngineState(
                 schema_version=2,
                 ruleset_id="blood-bound-compatible",
-                ruleset_version="0.2",
+                ruleset_version="0.3",
                 game_id=game_id,
                 seed=seed,
             ),
@@ -143,7 +151,7 @@ class RulesEngine:
 
     @classmethod
     def resume_from_checkpoint(cls, checkpoint: EngineState, *, clock: Clock | None = None) -> "RulesEngine":
-        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.2":
+        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.3":
             raise RuleError("state.invalid", reason="unsupported schema version")
         engine = cls(deepcopy(checkpoint), clock=clock)
         cls._validate(engine.state)
@@ -197,9 +205,10 @@ class RulesEngine:
             "start-game": self._start,
             "pass-dagger": self._pass_dagger,
             "attack": self._attack,
-            "request-intervention": self._request_intervention,
+            "respond-intervention": self._respond_intervention,
             "choose-intervention": self._choose_intervention,
             "decline-intervention": self._decline_intervention,
+            "timeout-intervention": self._timeout_intervention,
             "choose-skill": self._choose_skill,
             "choose-return": self._choose_return,
             "choose-reveal": self._choose_reveal,
@@ -238,6 +247,10 @@ class RulesEngine:
         count = len(state.players)
         if count < 6 or count > 12:
             raise RuleError("game.player-count", count=count)
+        timeout_seconds = command.payload.get("interventionTimeoutSeconds", DEFAULT_INTERVENTION_TIMEOUT_SECONDS)
+        if isinstance(timeout_seconds, bool) or timeout_seconds not in INTERVENTION_TIMEOUT_CHOICES:
+            raise RuleError("game.invalid-timeout", value=timeout_seconds, choices=list(INTERVENTION_TIMEOUT_CHOICES))
+        state.intervention_timeout_seconds = int(timeout_seconds)
         rng = random.Random(state.seed)
         ordered = sorted(state.players.values(), key=lambda player: player.seat)
         rose_count = count // 2
@@ -287,6 +300,7 @@ class RulesEngine:
                     "playerCount": count,
                     "daggerHolderId": holder.player_id,
                     "curseCount": len(state.curses),
+                    "interventionTimeoutSeconds": state.intervention_timeout_seconds,
                 },
             ),
             self._event(state, command, "ClueIconsShown", {"pairs": pairs}),
@@ -320,58 +334,149 @@ class RulesEngine:
             and "rank" not in player.revealed
             and not target.resources.get("fan", 0)
         )
-        state.pending = Pending("intervention", target.player_id, target.player_id, eligible, context={"attackerPlayerId": actor.player_id})
-        state.phase = {"kind": "intervention", "activePlayerId": target.player_id}
-        return [self._event(state, command, "AttackDeclared", {"attackerPlayerId": actor.player_id, "targetPlayerId": target.player_id})]
-
-    def _request_intervention(self, state: EngineState, command: Command) -> list[Event]:
-        pending = self._require_pending(state, command, "intervention")
-        if pending.actor_player_id != command.actor_player_id:
-            raise RuleError("player.not-actor")
-        if not pending.eligible_player_ids:
-            return self._resolve_damage(state, command, pending.target_player_id or "", "attack")
-        pending.context["requested"] = True
-        return [self._event(state, command, "InterventionOpened", {"targetPlayerId": pending.target_player_id, "eligiblePlayerIds": list(pending.eligible_player_ids)})]
-
-    def _choose_intervention(self, state: EngineState, command: Command) -> list[Event]:
-        pending = self._require_pending(state, command, "intervention")
-        if not pending.context.get("requested"):
-            raise RuleError("intervention.not-open")
-        if pending.actor_player_id != command.actor_player_id:
-            raise RuleError("player.not-actor")
-        responder = self._live_player(state, command.payload.get("responderPlayerId"))
-        if responder.player_id not in pending.eligible_player_ids:
-            raise RuleError("intervention.not-eligible", player_id=responder.player_id)
-        active_player_id = pending.context.get("attackerPlayerId", command.actor_player_id)
-        state.pending = None
-        state.dagger_holder_id = responder.player_id
-        state.phase = {"kind": "action", "activePlayerId": responder.player_id}
-        events = [self._event(state, command, "InterventionSelected", {"responderPlayerId": responder.player_id})]
-        events.extend(
-            self._apply_damage(
+        events = [self._event(state, command, "AttackDeclared", {"attackerPlayerId": actor.player_id, "targetPlayerId": target.player_id})]
+        if not eligible:
+            # Nobody may volunteer (e.g. the target holds a fan): the attack
+            # resolves immediately without opening a poll.
+            events.extend(
+                self._resolve_damage(state, command, target.player_id, "attack", active_player_id=actor.player_id)
+            )
+            return events
+        # The engine records the poll's stage but never a wall-clock deadline:
+        # replay determinism forbids real time in authoritative state. The
+        # server owns the countdown (deadline = window opened + configured
+        # seconds) and resolves expiry via the timeout-intervention command.
+        state.pending = Pending(
+            "intervention",
+            target.player_id,
+            target.player_id,
+            eligible,
+            context={
+                "attackerPlayerId": actor.player_id,
+                "stage": "poll",
+                "responses": {},
+            },
+        )
+        state.phase = {"kind": "intervention", "stage": "poll", "activePlayerId": target.player_id}
+        events.append(
+            self._event(
                 state,
                 command,
-                responder.player_id,
-                1,
-                "intervention",
-                trigger="intervention",
-                active_player_id=active_player_id,
-                protected_player_id=pending.target_player_id,
+                "InterventionPollOpened",
+                {
+                    "targetPlayerId": target.player_id,
+                    "attackerPlayerId": actor.player_id,
+                    "eligiblePlayerIds": list(eligible),
+                },
             )
         )
         return events
 
-    def _decline_intervention(self, state: EngineState, command: Command) -> list[Event]:
+    def _respond_intervention(self, state: EngineState, command: Command) -> list[Event]:
         pending = self._require_pending(state, command, "intervention")
-        if pending.actor_player_id != command.actor_player_id:
-            raise RuleError("player.not-actor")
+        if pending.context.get("stage") != "poll":
+            raise RuleError("intervention.not-poll")
+        player_id = command.actor_player_id or ""
+        if player_id not in pending.eligible_player_ids:
+            raise RuleError("intervention.not-eligible", player_id=player_id)
+        responses: dict[str, bool] = pending.context["responses"]
+        if player_id in responses:
+            raise RuleError("intervention.already-responded", player_id=player_id)
+        volunteer = bool(command.payload.get("volunteer", False))
+        responses[player_id] = volunteer
+        events = [self._event(state, command, "InterventionResponded", {"playerId": player_id, "volunteer": volunteer})]
+        if len(responses) == len(pending.eligible_player_ids):
+            events.extend(self._close_poll(state, command, pending))
+        return events
+
+    def _close_poll(self, state: EngineState, command: Command, pending: Pending) -> list[Event]:
+        """Resolve a fully answered poll: forced single taker, target's choice, or nobody."""
+        responses: dict[str, bool] = pending.context["responses"]
+        volunteers = tuple(player_id for player_id in pending.eligible_player_ids if responses.get(player_id))
+        if len(volunteers) >= 2:
+            pending.context["stage"] = "choice"
+            state.phase = {"kind": "intervention", "stage": "choice", "activePlayerId": pending.actor_player_id}
+            return [
+                self._event(
+                    state,
+                    command,
+                    "InterventionChoiceOpened",
+                    {"targetPlayerId": pending.target_player_id, "volunteerPlayerIds": list(volunteers)},
+                )
+            ]
+        if len(volunteers) == 1:
+            return self._apply_intervention(state, command, pending, volunteers[0])
+        return self._decline_all(
+            state,
+            command,
+            pending,
+            reason="no-volunteers",
+        )
+
+    def _apply_intervention(self, state: EngineState, command: Command, pending: Pending, responder_id: str) -> list[Event]:
+        active_player_id = pending.context.get("attackerPlayerId", command.actor_player_id)
+        target_id = pending.target_player_id or ""
+        state.pending = None
+        state.dagger_holder_id = responder_id
+        state.phase = {"kind": "action", "activePlayerId": responder_id}
+        events = [
+            self._event(state, command, "InterventionSelected", {"targetPlayerId": target_id, "responderPlayerId": responder_id})
+        ]
+        events.extend(
+            self._apply_damage(
+                state,
+                command,
+                responder_id,
+                1,
+                "intervention",
+                trigger="intervention",
+                active_player_id=active_player_id,
+                protected_player_id=target_id,
+            )
+        )
+        return events
+
+    def _decline_all(self, state: EngineState, command: Command, pending: Pending, *, reason: str) -> list[Event]:
         active_player_id = pending.context.get("attackerPlayerId", command.actor_player_id)
         state.pending = None
         target_id = pending.target_player_id or ""
         state.phase = {"kind": "action", "activePlayerId": target_id}
-        return [self._event(state, command, "InterventionDeclined", {"targetPlayerId": target_id})] + self._resolve_damage(
-            state, command, target_id, "attack", active_player_id=active_player_id
-        )
+        return [
+            self._event(state, command, "InterventionDeclined", {"targetPlayerId": target_id, "reason": reason})
+        ] + self._resolve_damage(state, command, target_id, "attack", active_player_id=active_player_id)
+
+    def _choose_intervention(self, state: EngineState, command: Command) -> list[Event]:
+        pending = self._require_pending(state, command, "intervention")
+        if pending.context.get("stage") != "choice":
+            raise RuleError("intervention.not-choice")
+        if pending.actor_player_id != command.actor_player_id:
+            raise RuleError("player.not-actor")
+        responder = self._live_player(state, command.payload.get("responderPlayerId"))
+        responses: dict[str, bool] = pending.context["responses"]
+        if not responses.get(responder.player_id):
+            raise RuleError("intervention.not-eligible", player_id=responder.player_id)
+        return self._apply_intervention(state, command, pending, responder.player_id)
+
+    def _decline_intervention(self, state: EngineState, command: Command) -> list[Event]:
+        pending = self._require_pending(state, command, "intervention")
+        if pending.context.get("stage") != "choice":
+            raise RuleError("intervention.not-choice")
+        if pending.actor_player_id != command.actor_player_id:
+            raise RuleError("player.not-actor")
+        return self._decline_all(state, command, pending, reason="target-declined")
+
+    def _timeout_intervention(self, state: EngineState, command: Command) -> list[Event]:
+        pending = self._require_pending(state, command, "intervention")
+        stage = pending.context.get("stage")
+        if command.payload.get("stage", stage) != stage:
+            raise RuleError("intervention.not-open")
+        if stage == "poll":
+            # Timeout counts every unanswered player as not volunteering.
+            responses: dict[str, bool] = pending.context["responses"]
+            for player_id in pending.eligible_player_ids:
+                responses.setdefault(player_id, False)
+            return self._close_poll(state, command, pending)
+        return self._decline_all(state, command, pending, reason="timeout-declined")
 
     def _choose_skill(self, state: EngineState, command: Command) -> list[Event]:
         pending = self._require_pending(state, command, "skill")

@@ -42,12 +42,29 @@ class Room:
     created_at: float
     finished_at: float | None = None
     host_player_id: str | None = None
+    # Wall-clock expiry of the engine's current intervention window. The
+    # engine stays deterministic (no real time in state); the room owns the
+    # countdown and the server injects the deadline into projections.
+    window_deadline: float | None = None
+    window_stage: str | None = None
 
     def player_id_for_name(self, name: str) -> str | None:
         for player_id, player in self.engine.state.players.items():
             if player.display_name == name:
                 return player_id
         return None
+
+    def sync_window_deadline(self) -> None:
+        """Track the current intervention window's expiry; re-arms per stage."""
+        pending = self.engine.state.pending
+        stage = pending.context.get("stage") if pending is not None and pending.kind == "intervention" else None
+        if stage not in {"poll", "choice"}:
+            self.window_deadline = None
+            self.window_stage = None
+            return
+        if self.window_stage != stage:
+            self.window_stage = stage
+            self.window_deadline = time.time() + self.engine.state.intervention_timeout_seconds
 
 
 class RoomManager:
@@ -111,6 +128,7 @@ class RoomManager:
 
     def apply_command(self, room: Room, command: Command) -> tuple[Event, ...]:
         events = room.engine.apply(command)
+        room.sync_window_deadline()
         status = room.engine.state.status
         if status == "active" and room.status == "waiting":
             room.status = "playing"
@@ -122,14 +140,17 @@ class RoomManager:
             self._prune_finished()
         return events
 
-    def start_game(self, room: Room) -> tuple[Event, ...]:
+    def start_game(self, room: Room, *, intervention_timeout_seconds: int | None = None) -> tuple[Event, ...]:
+        payload: dict[str, Any] = {}
+        if intervention_timeout_seconds is not None:
+            payload["interventionTimeoutSeconds"] = int(intervention_timeout_seconds)
         command = Command(
             f"start-{secrets.token_hex(4)}",
             room.game_id,
             None,
             room.engine.state.revision,
             "start-game",
-            {},
+            payload,
         )
         return self.apply_command(room, command)
 
@@ -160,6 +181,8 @@ class RoomManager:
             "status": room.status,
             "createdAt": room.created_at,
             "finishedAt": room.finished_at,
+            "windowDeadline": room.window_deadline,
+            "windowStage": room.window_stage,
         }
         self._meta_path(room).write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
 
@@ -195,6 +218,8 @@ class RoomManager:
                 created_at=float(meta.get("createdAt", 0.0)),
                 finished_at=meta.get("finishedAt"),
                 host_player_id=meta.get("hostPlayerId"),
+                window_deadline=meta.get("windowDeadline"),
+                window_stage=meta.get("windowStage"),
             )
         self._prune_finished()
         return list(self.rooms.values())

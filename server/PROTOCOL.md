@@ -24,7 +24,7 @@
 ### 客户端 → 服务器
 
 ```json
-{"type": "hello", "name": "小明", "token": "<hostToken 或省略>", "clientRevision": 12, "protocolVersion": "1"}
+{"type": "hello", "name": "小明", "token": "<hostToken 或省略>", "clientRevision": 12, "protocolVersion": "2"}
 ```
 
 - `name` 为空字符串 → 旁观者（`yourPlayerId = null`，不可操作）。
@@ -50,27 +50,42 @@
 ```
 
 - 仅 `isHost` 连接可用；否则 → `room.not-host`。
-- `start` 需要 6–12 名玩家，不足 → 引擎 `game.player-count`。
+- `start` 需要 6–12 名玩家，不足 → 引擎 `game.player-count`；`start` 可在消息上附带 `interventionTimeoutSeconds` 字段（干涉投票时限，开局接受一次，可选 30/60/90/120/180，缺省 90）。整数但不在可选集 → `game.invalid-timeout`；非整数类型 → `command.invalid-shape`。开始后固定，覆盖投票与三选一两阶段。
 
 **命令清单**（其余全部由引擎拒绝）：
 
 | 命令 | payload | 说明 |
 | --- | --- | --- |
 | `pass-dagger` | `{"targetPlayerId"}` | 匕首持有者传递匕首 |
-| `attack` | `{"targetPlayerId"}` | 攻击目标（护盾/满 3 伤/已捕获 → 引擎报错） |
-| `request-intervention` | `{}` | 受攻击者申请干预 |
-| `choose-intervention` | `{"responderPlayerId"}` | 匕首持有者选择干预响应人 |
-| `decline-intervention` | `{}` | 受攻击者放弃干预 |
+| `attack` | `{"targetPlayerId"}` | 攻击目标（护盾/满 3 伤/已捕获 → 引擎报错）；声明后自动开启干涉投票，资格集为空时直接结算 |
+| `respond-intervention` | `{"volunteer": true\|false}` | 干涉投票表态，仅投票阶段的有资格未表态玩家；答后不可反悔 |
+| `choose-intervention` | `{"responderPlayerId"}` | ≥2 人自愿后，被攻击者从自愿者中选一人承伤（完成干涉） |
+| `decline-intervention` | `{}` | ≥2 人自愿后，被攻击者拒绝全部自愿者，攻击正常结算 |
 | `choose-skill` | `{"use": true\|false, "targetPlayerId"?, "targetPlayerIds"?, "mode"?}` | 技能窗口；2/5/6/8/9 使用单目标，3 使用两个目标，4 使用 `mode=heal|harm` |
 | `choose-return` | `{"token": "rank|marker-0|marker-1"}` | rank 4 治疗窗口，治疗者退回一张已展示标记 |
 | `distribute-curse` | `{"assignments": {"curseId": "playerId"}}` | 仅审判者；数量/重复校验由引擎完成 |
+
+`start-game`、`join-game`、`timeout-intervention` 由服务器托管：直接发送会得到
+`command.server-managed`。`timeout-intervention` 是干涉窗口到期时由服务端定时器
+（`server/deadlines.py`，可复用抽象）代为提交的系统命令，payload 为
+`{"stage": "poll"|"choice"}`；投票阶段到期未表态视为不干涉，三选一阶段到期视为全部拒绝。
+
+### 干涉投票（协议 v2，ADR 0002）
+
+攻击声明后服务器自动开启全员公开自愿投票（`InterventionPollOpened`，含资格名单）。
+有资格玩家逐人 `respond-intervention` 表态，`InterventionResponded` 实时公开广播；
+全员表态完毕后：无人自愿 → `InterventionDeclined`（reason=no-volunteers）+ 攻击正常
+结算；恰一人自愿 → `InterventionSelected`，干涉必然发生；≥2 人自愿 →
+`InterventionChoiceOpened` 进入被攻击者三选一阶段（`choose-intervention` /
+`decline-intervention`）。倒计时 deadline 由服务端注入每个投影的
+`pending.deadline`（Unix 秒），配合 `serverTime` 对齐本地时钟；引擎状态本身不含墙钟。
 
 ### 服务器 → 客户端
 
 | 类型 | 说明 |
 | --- | --- |
-| `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`。 |
-| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。 |
+| `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`，并附服务端墙钟 `serverTime`（倒计时对齐用）。 |
+| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉投票的表态事件（`InterventionResponded` 等）全部公开。 |
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
 | `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭。 |
@@ -88,7 +103,8 @@
   "hostPlayerId": "p-… | null（房主尚未以玩家身份连接时为 null）",
   "connected": {"p-…": true},
   "hostActions": [{"type": "start-game"}, {"type": "lock"}],
-  "game": { /* GameState 投影；waiting 时也有（setup 阶段） */ }
+  "game": { /* GameState 投影；waiting 时也有（setup 阶段） */ },
+  "serverTime": 1788537000.0
 }
 ```
 
@@ -121,9 +137,14 @@
     }
   ],
   "daggerHolderId": "p-…",
-  "phase": {"kind": "action", "…"} | {"kind": "intervention", "…"} | {"kind": "skill", "…"},
-  "pending": { /* 无上下文参数的待处理窗口，例如 {"kind":"intervention"} */ },
+  "phase": {"kind": "action", "…"} | {"kind": "intervention", "stage": "poll|choice", "activePlayerId": "p-…"} | {"kind": "skill", "…"},
+  "pending": {
+    /* 干涉窗口额外携带：stage（poll|choice）、responses（{playerId: volunteer}，实时公开）、
+       volunteerPlayerIds（自愿者名单）、deadline（服务端注入的到期 Unix 秒） */
+    "kind": "intervention", "stage": "poll", "responses": {"p-…": true}, "deadline": 1788537090.0
+  },
   "result": null | {"winner": "rose|beast|inquisitor", "explanationKey": "capture|…", "ranking": [{"playerId","seat"}]},
+  "interventionTimeoutSeconds": 90,
   "viewer": null | {
     "playerId": "p-…",
     "identity": {"faction": "rose", "rank": 5},
@@ -136,7 +157,7 @@
   "legalActions": [
     {"type": "pass-dagger", "targetPlayerId": "p-…"},
     {"type": "attack", "targetPlayerId": "p-…"},
-    {"type": "request-intervention"},
+    {"type": "respond-intervention", "volunteer": true | false},
     {"type": "decline-intervention"},
     {"type": "choose-intervention", "responderPlayerId": "p-…"},
     {"type": "choose-skill", "use": true, "targetPlayerId": "p-…"},
@@ -162,8 +183,9 @@
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、
 `game.already-ended`、`command.unknown`、`game.not-setup`、`game.duplicate-player`、
-`game.player-count`、`game.seat-occupied`、`target.not-eligible`、`target.shielded`、
-`target.already-three-damage`、`player.not-actor`、`intervention.not-open`、
-`intervention.not-eligible`、`skill.already-used`、`skill.invalid-target`、
-`curse.invalid-count`、`curse.duplicate-recipient`、`game.not-active`、
-`player.not-dagger-holder`、`target.not-found`、`target.captured`。
+`game.player-count`、`game.seat-occupied`、`game.invalid-timeout`、`target.not-eligible`、
+`target.shielded`、`target.already-three-damage`、`player.not-actor`、
+`intervention.not-open`、`intervention.not-poll`、`intervention.not-choice`、
+`intervention.not-eligible`、`intervention.already-responded`、`skill.already-used`、
+`skill.invalid-target`、`curse.invalid-count`、`curse.duplicate-recipient`、
+`game.not-active`、`player.not-dagger-holder`、`target.not-found`、`target.captured`。

@@ -208,27 +208,76 @@ h2 {
   word-break: break-word;
 }
 
-.damage {
+/* 线索槽位：三格 = 1 等级 + 2 身份标记；填亮数即伤害数（issue 23） */
+
+.clue-slots {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  align-items: center;
 }
 
-.pip {
-  width: 14px;
-  height: 14px;
+.slot {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 1px solid #9aa0b4;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+  border: 1.5px dashed #565d70;
+  color: transparent;
+  background: transparent;
+  flex: none;
 }
 
-.pip.filled {
-  background: #e2574c;
-  border-color: #e2574c;
+.slot.tile {
+  border-radius: 6px;
 }
 
-.revealed {
-  font-size: 13px;
+.slot.filled {
+  border-style: solid;
+}
+
+.slot.tile.filled {
+  background: #2a2410;
+  border-color: #f0c060;
   color: #f0c060;
+}
+
+.slot.dot.filled.rose {
+  background: #b8433a;
+  border-color: #d05a50;
+  color: #fff;
+}
+
+.slot.dot.filled.beast {
+  background: #3d6fa5;
+  border-color: #5588bd;
+  color: #fff;
+}
+
+.slot.dot.filled.unknown {
+  background: #4a5063;
+  border-color: #5f667c;
+  color: #e8eaf0;
+}
+
+.slot.empty.dim {
+  color: #8a91a6;
+}
+
+.slot.hot {
+  outline: 2px solid #f5c518;
+  outline-offset: 1px;
+  animation: slot-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes slot-pulse {
+  50% {
+    outline-offset: 3px;
+  }
 }
 
 .resources {
@@ -337,6 +386,65 @@ h2 {
   flex-direction: column;
   gap: 10px;
 }
+
+/* 干涉投票：等待横幅 / 通用确认弹窗 / 默认不挡刀开关 */
+
+.waiting-banner {
+  border: 1px solid #4a4f5e;
+  border-left: 3px solid #f5c518;
+  border-radius: 8px;
+  background: #1a1e29;
+  padding: 8px 12px;
+  color: #d6d9e2;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 16, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  padding: 16px;
+}
+
+.modal {
+  background: #1a1e29;
+  border: 1px solid #4a4f5e;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  max-width: 380px;
+  width: 100%;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal h3 { margin: 0; }
+
+.modal-body { color: #d6d9e2; display: flex; flex-direction: column; gap: 6px; }
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-actions button { flex: 1; }
+
+.modal-confirm { border-color: #f5c518; }
+
+.pref-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #d6d9e2;
+  white-space: nowrap;
+}
+
+.pref-toggle input { width: auto; }
 
 @media (min-width: 720px) {
   .seat {

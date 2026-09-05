@@ -11,6 +11,25 @@
   测试直接写入权威状态以验证防御闸门；对应发放路径由 issue 14 落地后转为自然触发。
 - `@expectedFailure` = 已知缺陷的回归测试；issue 15/16 修复后标记已全部移除，当前无此类用例。
 
+Issue 23 branch additions (干涉投票模型，ADR 0002):
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| `attack` 自动开投票 | `InterventionPollOpened` + 资格名单 + poll 阶段 pending | `AttackBranchTests.test_attack_opens_poll_hands_dagger_and_lists_eligible` |
+| `attack` 资格集为空 | 不开投票直接结算（持扇注入） | `AttackBranchTests.test_fan_target_blocks_all_intervention_responders`、`test_attack_with_no_eligible_resolves_damage_directly` |
+| `respond-intervention` 守卫 | 非资格者/攻击者/目标 → `intervention.not-eligible`；重复表态 → `intervention.already-responded`；无窗口 → `intervention.not-open` | `AttackBranchTests.test_respond_guards_target_attacker_and_double_answers`、`test_respond_without_window_is_rejected` |
+| 0 人自愿 | `InterventionDeclined`(no-volunteers) + 攻击正常结算 + 匕首归目标 | `AttackBranchTests.test_all_declining_attack_leaves_dagger_with_wounded_target` |
+| 恰 1 人自愿 | 干涉必然发生，目标无权拒绝；承伤/亮 rank/开技能窗/匕首归承伤者 | `RulesEngineTests.test_single_volunteer_forces_intervention_without_target_consent`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window`、`test_intervention_responder_takes_the_dagger`、`test_shield_does_not_block_volunteering_as_responder` |
+| ≥2 人自愿 | 进入 choice 阶段，目标可选其一或全部拒绝 | `InterventionPollBranchTests.test_target_picks_one_volunteer_and_declines_all`、`AttackBranchTests.test_choose_non_volunteer_responder_is_rejected` |
+| choice 阶段守卫 | 非 `choice` 阶段 choose/decline → `intervention.not-choice`；非目标操作 → `player.not-actor`；choice 阶段 respond → `intervention.not-poll` | `AttackBranchTests.test_choose_or_decline_during_poll_stage_is_rejected`、`InterventionPollBranchTests.test_respond_and_choose_stage_guards` |
+| 投票超时 | 未表态视为不干涉后按 0/1/≥2 分支结算 | `InterventionPollBranchTests.test_poll_timeout_with_no_volunteers_resolves_the_attack`、`test_poll_timeout_keeps_a_single_volunteer_forced`、`test_poll_timeout_with_two_volunteers_opens_the_choice_stage` |
+| 三选一超时 | 自动"全部拒绝"（reason=timeout-declined） | `InterventionPollBranchTests.test_choice_timeout_auto_declines_all_volunteers` |
+| 超时守卫 | 阶段不匹配/无窗口 → `intervention.not-open` | `InterventionPollBranchTests.test_timeout_guards` |
+| 超时配置 | start-game 携带 30/60/90/120/180，非法值 `game.invalid-timeout`，缺省 90，开始后固定 | `InterventionPollBranchTests.test_host_timeout_configuration_is_fixed_at_start`、`test_default_timeout_is_ninety_seconds`、`test_invalid_timeout_choice_is_rejected` |
+| 服务端倒计时 | Room 持有窗口 deadline 并注入投影；到期定时器代发 `timeout-intervention`；重启后过期窗口立即可结算 | `DeadlineWindowTests`（test_server_sync.py） |
+| 投影公开性 | pending 携带 stage/responses/volunteerPlayerIds，旁观者同见；context 不暴露 | `ProjectionBranchTests.test_pending_intervention_actions_across_poll_and_choice_stages`、`test_pending_view_hides_private_context_and_publishes_votes` |
+| 默认不挡刀 | 客户端 localStorage 偏好 + 常驻开关 + 自动代发（服务端超时兜底断线） | 手动验收；代发走同一 `respond-intervention` 命令路径 |
+
 Issue 21 branch additions:
 
 | Branch | Behavior | Coverage |
@@ -57,16 +76,16 @@ Issue 20 branch additions:
 | `attack` 攻击自己 | `target.not-eligible` | `CommandGuardBranchTests.test_attack_to_self_is_rejected` |
 | `attack` 盾目标 | `target.shielded`（注入） | `AttackBranchTests.test_shielded_target_is_rejected` |
 | `attack` 审判者攻 3 伤 | `target.already-three-damage`（注入） | `AttackBranchTests.test_inquisitor_cannot_attack_target_with_three_damage` |
-| `attack` 合法 | `AttackDeclared`、匕首移交、干涉窗口与资格名单 | `AttackBranchTests.test_attack_declares_window_hands_dagger_and_lists_eligible` |
-| `attack` 目标持扇 | 资格名单为空（注入） | `AttackBranchTests.test_fan_target_blocks_all_intervention_responders` |
-| `request-intervention` 窗口/演员 | `intervention.not-open` / `player.not-actor` | `AttackBranchTests.test_wrong_actor_cannot_request_or_decline_intervention`、`test_choose_intervention_without_window_is_rejected` |
-| `request-intervention` 无资格者 | 直接结算伤害、无 `InterventionOpened`，结算后匕首归目标 | `AttackBranchTests.test_request_with_no_eligible_resolves_damage_directly` |
-| `request-intervention` 有资格者 | `InterventionOpened` + `requested` | `ProjectionBranchTests.test_pending_intervention_actions_before_and_after_request` |
-| `choose-intervention` 未请求 | `intervention.not-open` | `AttackBranchTests.test_choose_intervention_before_request_is_rejected` |
-| `choose-intervention` 无资格者 | `intervention.not-eligible` | `AttackBranchTests.test_choose_ineligible_responder_is_rejected` |
-| `choose-intervention` 合法 | 响应者承伤、展示 rank、无技能窗、匕首归响应者 | `RulesEngineTests.test_intervention_requires_rank_in_supply`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_without_skill_window`；`test_intervention_responder_takes_the_dagger` |
-| `decline-intervention` 演员 | `player.not-actor` | `AttackBranchTests.test_wrong_actor_cannot_request_or_decline_intervention` |
-| `decline-intervention` 合法 | 目标承伤、攻击伤害可开技能窗、结算后匕首归目标（issue 22） | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`；`AttackBranchTests.test_declined_attack_leaves_dagger_with_wounded_target` |
+| `attack` 合法 | `AttackDeclared` + `InterventionPollOpened`、匕首移交、投票资格名单 | `AttackBranchTests.test_attack_opens_poll_hands_dagger_and_lists_eligible` |
+| `attack` 目标持扇/资格集空 | 不开投票、直接结算伤害（注入） | `AttackBranchTests.test_fan_target_blocks_all_intervention_responders`、`test_attack_with_no_eligible_resolves_damage_directly` |
+| `respond-intervention` 窗口/资格 | `intervention.not-open` / `intervention.not-eligible`（攻击者、目标均不可表态） | `AttackBranchTests.test_respond_guards_target_attacker_and_double_answers`、`test_respond_without_window_is_rejected` |
+| `respond-intervention` 不可反悔 | 二次表态 → `intervention.already-responded` | `AttackBranchTests.test_respond_guards_target_attacker_and_double_answers` |
+| `respond-intervention` 表态广播 | `InterventionResponded` 逐人实时公开，全员表态后按 0/1/≥2 分支结算 | `InterventionPollBranchTests.test_responses_are_broadcast_progressively`；分支见上方 issue 23 小节 |
+| `choose-intervention`/`decline-intervention` 阶段守卫 | 投票阶段使用 → `intervention.not-choice`；三选一阶段表态 → `intervention.not-poll` | `AttackBranchTests.test_choose_or_decline_during_poll_stage_is_rejected`、`InterventionPollBranchTests.test_respond_and_choose_stage_guards` |
+| `choose-intervention` 非自愿者 | `intervention.not-eligible` | `AttackBranchTests.test_choose_non_volunteer_responder_is_rejected` |
+| 干涉承伤（恰一人自愿/目标选定） | 响应者承伤、展示 rank、开技能窗、匕首归响应者 | `RulesEngineTests.test_single_volunteer_forces_intervention_without_target_consent`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window`、`test_intervention_responder_takes_the_dagger` |
+| `decline-intervention` 演员 | 非目标在三选一阶段操作 → `player.not-actor` | `InterventionPollBranchTests.test_respond_and_choose_stage_guards` |
+| 无人自愿/拒绝全部 | 目标承伤、攻击伤害可开技能窗、结算后匕首归目标（issue 22） | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`；`AttackBranchTests.test_all_declining_attack_leaves_dagger_with_wounded_target` |
 | `choose-skill` 窗口/演员 | `skill.not-open` / `player.not-actor` | `SkillBranchTests.test_choose_skill_without_window_is_rejected`、`test_wrong_actor_cannot_choose_skill` |
 | `choose-skill` 不使用 | `SkillDeclined` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window` |
 | `choose-skill` 已使用 | `skill.already-used`（注入） | `SkillBranchTests.test_skill_already_used_is_rejected` |
@@ -82,7 +101,7 @@ Issue 20 branch additions:
 | `distribute-curse` 合法 | `CurseDistributed`、诅咒清空 | `RulesEngineTests.test_curse_distribution_is_private_to_the_inquisitor_command` |
 | `_apply_damage` 首伤展示 rank / 后续展示 affiliation | `ClueRevealed` 种类 | `ProjectionTests.test_revealed_clues_appear_only_after_damage`；`SkillBranchTests.test_skill_window_only_opens_once_per_rank_reveal` |
 | `_apply_damage` 第 4 伤 | `PlayerCaptured` + `GameEnded`、立即终局 | `EndGameBranchTests` 四项；golden 全部 |
-| `_apply_damage` 攻击伤害开技能窗 | rank 1--9（rank 4 仅 intervention），仅 `source=attack`/`source=intervention` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_does_not_open_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_without_skill_window` |
+| `_apply_damage` 攻击伤害开技能窗 | rank 1--9（rank 4 仅 intervention），仅 `source=attack`/`source=intervention` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_does_not_open_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window` |
 | `_end_game` 捕获家族领袖 | `captured-leader`，攻击方胜 | `EndGameBranchTests.test_captured_leader_branch` |
 | `_end_game` 捕获普通成员 | `captured-player`，攻击方负 | `EndGameBranchTests.test_captured_non_leader_branch` |
 | `_end_game` 审判者被捕获 | `inquisitor-captured`，平局 | `EndGameBranchTests.test_inquisitor_captured_is_draw` |
@@ -100,9 +119,9 @@ Issue 20 branch additions:
 | 诅咒视图 | 仅审判者见 `cursesToDistribute` | `ProjectionTests.test_inquisitor_gets_private_curse_assignment_view` |
 | `legal_actions` 行动阶段 | 仅匕首持有者有 pass/attack；盾目标不可攻击 | `ProjectionTests.test_dagger_holder_actions_are_derived_from_authority` |
 | `legal_actions` 技能窗 | rank 2 列出目标；rank 1 无目标 | `ProjectionTests.test_rank_two_skill_window_offers_valid_targets`；`ProjectionBranchTests.test_elder_skill_window_offers_use_without_a_target` |
-| `legal_actions` 干涉窗 | 请求前后选项集合 | `ProjectionBranchTests.test_pending_intervention_actions_before_and_after_request` |
+| `legal_actions` 干涉窗 | 投票阶段逐人 respond、三选一阶段目标专属选项 | `ProjectionBranchTests.test_pending_intervention_actions_across_poll_and_choice_stages` |
 | `legal_actions` 终局/未知玩家 | 空列表 | `ProjectionBranchTests.test_legal_actions_empty_for_unknown_player_and_ended_game` |
-| `_pending_view` | 不暴露私有 context | `ProjectionBranchTests.test_pending_view_hides_private_context` |
+| `_pending_view` | 不暴露私有 context；stage/responses/volunteerPlayerIds 公开 | `ProjectionBranchTests.test_pending_view_hides_private_context_and_publishes_votes` |
 | 投影保密 sweep | 任意 viewer 不泄露 seed/他人身份/诅咒 | 性质 `ProjectionSecrecyPropertyTests` |
 
 ## 性质测试（tests/test_properties.py）

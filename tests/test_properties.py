@@ -54,7 +54,7 @@ def generate_walk(count: int, seed: str, *, max_turns: int = 500) -> tuple[tuple
 
     Returns ``(command_id, actor, command_type, payload)`` tuples. The walk
     drives a scratch engine with randomized but legal choices (pass/attack,
-    request/choose/decline intervention, use/decline skill), so replaying the
+    respond/choose/decline intervention, use/decline skill), so replaying the
     same tuples into a fresh engine with the same seed is exact.
     """
     cached = _WALK_CACHE.get((count, seed))
@@ -95,6 +95,25 @@ def generate_walk(count: int, seed: str, *, max_turns: int = 500) -> tuple[tuple
             else:
                 target = rng.choice(live_others).player_id
                 send(f"pass-{turn}", holder, "pass-dagger", {"targetPlayerId": target})
+            continue
+        if pending.kind == "intervention" and pending.context.get("stage") == "poll":
+            # multi-actor window: answer as a random eligible responder until
+            # the poll closes (choice stage or resolved attack)
+            responded = 0
+            while (
+                engine.state.pending is not None
+                and engine.state.pending.kind == "intervention"
+                and engine.state.pending.context.get("stage") == "poll"
+            ):
+                pending = engine.state.pending
+                responses = pending.context["responses"]
+                actor = next(player_id for player_id in pending.eligible_player_ids if player_id not in responses)
+                actions = engine.legal_actions(actor)
+                assert actions, "poll window without legal action"
+                action = rng.choice(actions)
+                payload = {key: value for key, value in action.items() if key != "type"}
+                send(f"respond-{turn}-{responded}", actor, action["type"], payload)
+                responded += 1
             continue
         actor = pending.actor_player_id
         actions = engine.legal_actions(actor)

@@ -95,9 +95,10 @@ Commands have `{commandId, gameId, actorPlayerId, expectedRevision, type, payloa
 | `start-game` | `seed` | setup, when 6--12 players joined |
 | `pass-dagger` | `targetPlayerId` | action, actor is dagger holder |
 | `attack` | `targetPlayerId` | action, actor is dagger holder |
-| `request-intervention` | none | intervention, actor is attack target |
-| `choose-intervention` | `responderPlayerId` | intervention, actor is attack target |
-| `decline-intervention` | none | intervention, actor is attack target |
+| `respond-intervention` | `volunteer: true/false` | intervention poll stage, actor is an eligible player who has not answered (multi-actor window; issue 23 / ADR 0002) |
+| `choose-intervention` | `responderPlayerId` | intervention choice stage (>=2 volunteers), actor is attack target |
+| `decline-intervention` | none | intervention choice stage, actor is attack target |
+| `timeout-intervention` | `stage` | server-internal: resolves an expired poll/choice window |
 | `choose-skill` | `use: true/false`, optional target/option | skill window, actor is skill owner |
 | `distribute-curse` | `assignments` | setup/curse window, Inquisitor only |
 
@@ -109,7 +110,7 @@ All events carry `{eventId, eventType, gameId, revision, timestamp, commandId, p
 
 Core event types:
 
-`GameCreated`, `PlayerJoined`, `GameStarted`, `ClueIconsShown`, `DaggerPassed`, `AttackDeclared`, `InterventionOpened`, `InterventionSelected`, `InterventionDeclined`, `DamageApplied`, `ClueRevealed`, `SkillWindowOpened`, `SkillUsed`, `SkillDeclined`, `ResourceGranted`, `ResourceSpent`, `ResourceReturned`, `CurseViewed`, `CurseDistributed`, `PlayerCaptured`, `GameEnded`.
+`GameCreated`, `PlayerJoined`, `GameStarted`, `ClueIconsShown`, `DaggerPassed`, `AttackDeclared`, `InterventionPollOpened`, `InterventionResponded`, `InterventionChoiceOpened`, `InterventionSelected`, `InterventionDeclined`, `DamageApplied`, `ClueRevealed`, `SkillWindowOpened`, `SkillUsed`, `SkillDeclined`, `ResourceGranted`, `ResourceSpent`, `ResourceReturned`, `CurseViewed`, `CurseDistributed`, `PlayerCaptured`, `GameEnded`.
 
 `ClueIconsShown` is appended once per game immediately after `GameStarted`; its payload records only the showing pairs (`{fromPlayerId, toPlayerId}` per player, seat order), never the icon values themselves.
 

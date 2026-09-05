@@ -12,6 +12,15 @@ def reveal_rank(engine, player_id, command_id="reveal-rank"):
         engine.apply(command(engine, command_id, player_id, "choose-reveal", token="rank"))
 
 
+def decline_poll(engine):
+    """Answer the open intervention poll: every eligible player declines to volunteer."""
+    while engine.state.pending and engine.state.pending.kind == "intervention" and engine.state.pending.context.get("stage") == "poll":
+        pending = engine.state.pending
+        responses = pending.context["responses"]
+        responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
+        engine.apply(command(engine, f"respond-{engine.state.revision}", responder, "respond-intervention", volunteer=False))
+
+
 class FixedClock:
     def __call__(self):
         return 1000.0
@@ -99,7 +108,7 @@ class ProjectionTests(unittest.TestCase):
         before = project_state(engine.state, holder)
         self.assertEqual(before["players"][0]["revealed"], {"markers": [None, None]})
         engine.apply(command(engine, "attack", holder, "attack", targetPlayerId=target))
-        engine.apply(command(engine, "decline", target, "decline-intervention"))
+        decline_poll(engine)
         reveal_rank(engine, target)
         after = project_state(engine.state, holder)
         target_view = next(p for p in after["players"] if p["playerId"] == target)
@@ -135,7 +144,7 @@ class ProjectionTests(unittest.TestCase):
         if holder != attacker:
             engine.apply(command(engine, "pass", holder, "pass-dagger", targetPlayerId=attacker))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=rank_two))
-        engine.apply(command(engine, "decline", rank_two, "decline-intervention"))
+        decline_poll(engine)
         reveal_rank(engine, rank_two)
         self.assertEqual(engine.state.pending.kind, "skill")
         self.assertEqual(engine.state.pending.rank, 2)

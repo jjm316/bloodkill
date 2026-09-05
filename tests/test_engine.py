@@ -41,6 +41,20 @@ def reveal_rank(engine, player_id, command_id="reveal-rank"):
         engine.apply(command(engine, command_id, player_id, "choose-reveal", token="rank"))
 
 
+def decline_poll(engine):
+    """Answer the open intervention poll: every eligible player declines to volunteer.
+
+    Returns the last command's events, which carry the poll's resolution.
+    """
+    events: tuple = ()
+    while engine.state.pending and engine.state.pending.kind == "intervention" and engine.state.pending.context.get("stage") == "poll":
+        pending = engine.state.pending
+        responses = pending.context["responses"]
+        responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
+        events = engine.apply(command(engine, f"respond-{engine.state.revision}", responder, "respond-intervention", volunteer=False))
+    return events
+
+
 class RulesEngineTests(unittest.TestCase):
     def started(self, count=6):
         engine = RulesEngine.new_game("g1", "fixed-seed", clock=FixedClock())
@@ -109,7 +123,7 @@ class RulesEngineTests(unittest.TestCase):
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank in (1, 2))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        events = engine.apply(command(engine, "decline", target, "decline-intervention"))
+        events = decline_poll(engine)
         reveal_rank(engine, target)
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
@@ -123,7 +137,7 @@ class RulesEngineTests(unittest.TestCase):
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid, player in engine.state.players.items() if pid != attacker and player.rank == 4)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        events = engine.apply(command(engine, "decline", target, "decline-intervention"))
+        events = decline_poll(engine)
         reveal_rank(engine, target)
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
@@ -136,22 +150,27 @@ class RulesEngineTests(unittest.TestCase):
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
         self.assertNotEqual(attacker, inquisitor)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=inquisitor))
-        engine.apply(command(engine, "decline", inquisitor, "decline-intervention"))
+        decline_poll(engine)
         reveal_rank(engine, inquisitor)
         self.assertEqual(engine.state.players[inquisitor].damage, 1)
         self.assertIsNone(engine.state.pending)
 
-    def test_intervention_requires_rank_in_supply(self):
+    def test_single_volunteer_forces_intervention_without_target_consent(self):
         engine = self.started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        engine.apply(command(engine, "request", target, "request-intervention"))
         responder = engine.state.pending.eligible_player_ids[0]
-        engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=responder))
+        for player_id in engine.state.pending.eligible_player_ids:
+            if player_id != responder:
+                engine.apply(command(engine, f"decline-{player_id}", player_id, "respond-intervention", volunteer=False))
+        events = engine.apply(command(engine, "volunteer", responder, "respond-intervention", volunteer=True))
         reveal_rank(engine, responder)
         self.assertEqual(engine.state.players[responder].damage, 1)
         self.assertIn("rank", engine.state.players[responder].revealed)
+        self.assertEqual(engine.state.players[target].damage, 0)
+        self.assertIn("InterventionSelected", [event.event_type for event in events])
+        self.assertNotIn("InterventionChoiceOpened", [event.event_type for event in events])
 
     def test_stale_revision_is_rejected(self):
         engine = self.started()

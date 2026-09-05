@@ -294,6 +294,7 @@ def _state_to_dict(state: EngineState) -> dict[str, Any]:
         "curses": list(state.curses),
         "curseAssignments": dict(sorted(state.curse_assignments.items())),
         "maxLeaderFactions": sorted(state.max_leader_factions),
+        "interventionTimeoutSeconds": state.intervention_timeout_seconds,
         "lastEventRevision": state.revision,
     }
 

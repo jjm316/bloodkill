@@ -90,6 +90,7 @@ Effort: `blood-oath-replica`
 - 2026-08-21：10 已解决；新增 49 项分支测试（[覆盖清单](../../docs/rule-branch-coverage.md)）、14 组 seed 的 stdlib 性质 sweep（确定性/恢复等价/幂等/投影保密/状态不变量，失败落盘 seed+命令序列）、6–12 人 golden replay fixtures（`tests/fixtures/`，规则变更导致漂移即失败），全量 91 项通过。测试网发现两个已实现规则缺陷并立案 15/16，详见 [10 票据](issues/10-testing-balance.md)。
 - 2026-08-22：14 已锁定产品方裁决（见票面「已裁决」）——身份标记模型 = 每玩家 1 等级 + 2 身份标记（1/5/6 红红·蓝蓝、2/3/4 ？？·？？、7/8/9 红？·蓝？；受伤自选揭示、第 3 点被迫亮 rank、挡刀被迫亮 rank 并开技能窗）；Elder 领袖 = 数字最大（覆盖来源 C「最小」）；Guardian 盾保留「可干涉」（覆盖来源 C「不能响应干涉」）；Mage 法杖 = 单效果「给一人 Staff、其身份标记全变问号」；Courtesan 扇 = 「他人不能干涉」。实现延后。
 - 2026-08-24：14 转为伞票并拆为顺序子票 [17](issues/17-identity-markers-reveal-flow.md)（标记模型与自选展示流程，地基，顺带修复 15/16）→ [18](issues/18-resource-economy-elder-leader.md)（资源经济骨架 + elder 领袖规则）→ [19](issues/19-targeted-abilities.md)（目标选择型能力 3/5/6/8/9）→ [20](issues/20-intervention-coupled-abilities.md)（干涉耦合型能力 4/7）。quill 按「消耗于改写继承顺序」建模（待产品方确认口径，见 18 票面）。
+- 2026-09-04：[24](issues/24-clue-slots-damage-display.md) 已解决；座位卡伤害格重构为三格线索槽（等级数字块 + 红「玫」/蓝「兽」/灰「？」标记点），填亮槽数即伤害（不变量与风险登记见票面裁决 2，14 号扩展能力时须复核）；等级文案全局去角色名；亮牌/归还窗口槽位高亮、自视未亮槽位暗色预填。纯前端改动，引擎/协议零变更。
 
 ## Fog
 
@@ -123,3 +124,4 @@ Effort: `blood-oath-replica`
 - [19 目标选择型能力：rank 3/5/6/8/9（14 子票）](issues/19-targeted-abilities.md)
 - [20 干涉耦合型能力：rank 4 alchemist / rank 7 berserker（14 子票）](issues/20-intervention-coupled-abilities.md)
 - [21 设置环节：阵营徽记定向展示（setup.clue-icon）](issues/21-clue-icon-neighbour-reveal.md)
+- [24 座位卡三格线索槽与伤害显示（fe_iconchange）](issues/24-clue-slots-damage-display.md)

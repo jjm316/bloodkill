@@ -66,6 +66,24 @@ def reveal_rank(engine, player_id, command_id="reveal-rank"):
         engine.apply(command(engine, command_id, player_id, "choose-reveal", token="rank"))
 
 
+def answer_poll(engine, *volunteers):
+    """Answer the open intervention poll in seat order; named players volunteer, the rest decline.
+
+    Stops once the poll stage closes (all answered), leaving a choice-stage
+    pending when two or more players volunteered. Returns the last command's
+    events, which carry the poll's resolution (or the choice-stage opening).
+    """
+    events: tuple = ()
+    while engine.state.pending and engine.state.pending.kind == "intervention" and engine.state.pending.context.get("stage") == "poll":
+        pending = engine.state.pending
+        responses = pending.context["responses"]
+        responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
+        events = engine.apply(
+            command(engine, f"respond-{engine.state.revision}", responder, "respond-intervention", volunteer=responder in volunteers)
+        )
+    return events
+
+
 class SetupBranchTests(unittest.TestCase):
     def test_join_after_start_is_rejected(self):
         engine = started()
@@ -187,18 +205,23 @@ class CommandGuardBranchTests(unittest.TestCase):
 
 
 class AttackBranchTests(unittest.TestCase):
-    def test_attack_declares_window_hands_dagger_and_lists_eligible(self):
+    def test_attack_opens_poll_hands_dagger_and_lists_eligible(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         events = engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         self.assertEqual(events[0].event_type, "AttackDeclared")
         self.assertEqual(events[0].payload, {"attackerPlayerId": attacker, "targetPlayerId": target})
+        self.assertEqual(events[1].event_type, "InterventionPollOpened")
+        self.assertEqual(events[1].payload["targetPlayerId"], target)
+        self.assertEqual(events[1].payload["attackerPlayerId"], attacker)
         self.assertEqual(engine.state.dagger_holder_id, target)
-        self.assertEqual(engine.state.phase, {"kind": "intervention", "activePlayerId": target})
+        self.assertEqual(engine.state.phase, {"kind": "intervention", "stage": "poll", "activePlayerId": target})
         pending = engine.state.pending
         self.assertEqual(pending.kind, "intervention")
         self.assertEqual(pending.context["attackerPlayerId"], attacker)
+        self.assertEqual(pending.context["stage"], "poll")
+        self.assertEqual(pending.context["responses"], {})
         self.assertNotIn(attacker, pending.eligible_player_ids)
         self.assertNotIn(target, pending.eligible_player_ids)
         for pid in pending.eligible_player_ids:
@@ -208,12 +231,12 @@ class AttackBranchTests(unittest.TestCase):
             {pid for pid in engine.state.players if pid not in (attacker, target)},
         )
 
-    def test_declined_attack_leaves_dagger_with_wounded_target(self):
+    def test_all_declining_attack_leaves_dagger_with_wounded_target(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        engine.apply(command(engine, "decline", target, "decline-intervention"))
+        answer_poll(engine)
         # corpus combat/attack-handoff and intervention/refused: once the attack
         # resolves without intervention, the wounded target keeps the dagger.
         engine.apply(command(engine, "reveal-marker", target, "choose-reveal", token="marker-0"))
@@ -236,15 +259,14 @@ class AttackBranchTests(unittest.TestCase):
         self.assertEqual(error.exception.code, "target.shielded")
         self.assertEqual(engine.state.revision, revision)
 
-    def test_shield_does_not_block_being_chosen_as_intervention_responder(self):
+    def test_shield_does_not_block_volunteering_as_responder(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         responder = next(pid for pid in engine.state.players if pid not in (attacker, target))
         engine.state.players[responder].resources["shield"] = 1
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        engine.apply(command(engine, "request", target, "request-intervention"))
-        engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=responder))
+        answer_poll(engine, responder)
         self.assertEqual(engine.state.players[responder].damage, 1)
 
     def test_inquisitor_cannot_attack_target_with_three_damage(self):
@@ -263,14 +285,13 @@ class AttackBranchTests(unittest.TestCase):
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.state.players[target].resources["fan"] = 1
-        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        # every other player still holds an unrevealed rank, yet nobody is eligible
-        self.assertEqual(engine.state.pending.eligible_player_ids, ())
-        events = engine.apply(command(engine, "request", target, "request-intervention"))
-        self.assertNotIn("InterventionOpened", [event.event_type for event in events])
+        events = engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        # every other player still holds an unrevealed rank, yet nobody is
+        # eligible: no poll opens and the attack resolves immediately
+        self.assertNotIn("InterventionPollOpened", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
 
-    def test_request_with_no_eligible_resolves_damage_directly(self):
+    def test_attack_with_no_eligible_resolves_damage_directly(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(
@@ -282,10 +303,8 @@ class AttackBranchTests(unittest.TestCase):
                 player = engine.state.players[pid]
                 player.damage = 1
                 player.revealed = {"rank"}
-        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        self.assertEqual(engine.state.pending.eligible_player_ids, ())
-        events = engine.apply(command(engine, "request", target, "request-intervention"))
-        self.assertNotIn("InterventionOpened", [event.event_type for event in events])
+        events = engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        self.assertNotIn("InterventionPollOpened", [event.event_type for event in events])
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
         self.assertEqual(engine.state.pending.kind, "reveal")
@@ -293,19 +312,29 @@ class AttackBranchTests(unittest.TestCase):
         # the directly resolved attack wound also leaves the dagger with the target
         self.assertEqual(engine.state.dagger_holder_id, target)
 
-    def test_wrong_actor_cannot_request_or_decline_intervention(self):
+    def test_respond_guards_target_attacker_and_double_answers(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
-        bystander = next(pid for pid in engine.state.players if pid not in (attacker, target))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        for kind in ("request-intervention", "decline-intervention"):
-            with self.subTest(kind=kind):
+        for actor in (attacker, target):
+            with self.subTest(actor=actor):
                 with self.assertRaises(RuleError) as error:
-                    engine.apply(command(engine, f"wrong-{kind}", bystander, kind))
-                self.assertEqual(error.exception.code, "player.not-actor")
+                    engine.apply(command(engine, f"wrong-{actor}", actor, "respond-intervention", volunteer=True))
+                self.assertEqual(error.exception.code, "intervention.not-eligible")
+        responder = next(pid for pid in engine.state.pending.eligible_player_ids)
+        engine.apply(command(engine, "first", responder, "respond-intervention", volunteer=False))
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "again", responder, "respond-intervention", volunteer=True))
+        self.assertEqual(error.exception.code, "intervention.already-responded")
 
-    def test_choose_intervention_before_request_is_rejected(self):
+    def test_respond_without_window_is_rejected(self):
+        engine = started()
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "nothing", "p0", "respond-intervention", volunteer=True))
+        self.assertEqual(error.exception.code, "intervention.not-open")
+
+    def test_choose_or_decline_during_poll_stage_is_rejected(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
@@ -313,7 +342,10 @@ class AttackBranchTests(unittest.TestCase):
         responder = next(pid for pid in engine.state.pending.eligible_player_ids)
         with self.assertRaises(RuleError) as error:
             engine.apply(command(engine, "jump", target, "choose-intervention", responderPlayerId=responder))
-        self.assertEqual(error.exception.code, "intervention.not-open")
+        self.assertEqual(error.exception.code, "intervention.not-choice")
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "early", target, "decline-intervention"))
+        self.assertEqual(error.exception.code, "intervention.not-choice")
 
     def test_choose_intervention_without_window_is_rejected(self):
         engine = started()
@@ -321,24 +353,25 @@ class AttackBranchTests(unittest.TestCase):
             engine.apply(command(engine, "nothing", "p0", "choose-intervention", responderPlayerId="p1"))
         self.assertEqual(error.exception.code, "intervention.not-open")
 
-    def test_choose_ineligible_responder_is_rejected(self):
+    def test_choose_non_volunteer_responder_is_rejected(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        engine.apply(command(engine, "request", target, "request-intervention"))
+        eligible = list(engine.state.pending.eligible_player_ids)
+        answer_poll(engine, eligible[0], eligible[1])
+        self.assertEqual(engine.state.pending.context["stage"], "choice")
         with self.assertRaises(RuleError) as error:
-            engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=attacker))
+            engine.apply(command(engine, "choose-silent", target, "choose-intervention", responderPlayerId=eligible[2]))
         self.assertEqual(error.exception.code, "intervention.not-eligible")
 
-    def test_intervention_damage_reveals_responder_rank_without_skill_window(self):
+    def test_intervention_damage_reveals_responder_rank_and_opens_skill_window(self):
         engine, found = started_with_ranks(6, 2)
         responder = found[2].player_id
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid not in (attacker, responder))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        engine.apply(command(engine, "request", target, "request-intervention"))
-        events = engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=responder))
+        events = answer_poll(engine, responder)
         reveal_rank(engine, responder)
         damage = next(event for event in events if event.event_type == "DamageApplied")
         self.assertEqual(damage.payload["source"], "intervention")
@@ -353,8 +386,7 @@ class AttackBranchTests(unittest.TestCase):
         target = next(pid for pid in engine.state.players if pid != attacker)
         responder = next(pid for pid in engine.state.players if pid not in (attacker, target))
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        engine.apply(command(engine, "request", target, "request-intervention"))
-        engine.apply(command(engine, "choose", target, "choose-intervention", responderPlayerId=responder))
+        answer_poll(engine, responder)
         # corpus scenario intervention/selected-responder: "C 接过匕首并承受该点伤害"
         if engine.state.pending and engine.state.pending.kind == "skill":
             engine.apply(command(engine, "decline-responder-skill", responder, "choose-skill", use=False))
@@ -371,7 +403,7 @@ class SkillBranchTests(unittest.TestCase):
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != berserker.player_id))
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack-7", attacker, "attack", targetPlayerId=berserker.player_id))
-        engine.apply(command(engine, "decline-7", berserker.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, berserker.player_id)
         self.assertEqual(engine.state.pending.rank, 7)
         events = engine.apply(command(engine, "use-7", berserker.player_id, "choose-skill", use=True))
@@ -394,7 +426,7 @@ class SkillBranchTests(unittest.TestCase):
             attacker = engine.state.dagger_holder_id
         engine.state.players[attacker].damage = 3
         engine.apply(command(engine, "attack-7-capture", attacker, "attack", targetPlayerId=berserker.player_id))
-        engine.apply(command(engine, "decline-7-capture", berserker.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, berserker.player_id)
         events = engine.apply(command(engine, "use-7-capture", berserker.player_id, "choose-skill", use=True))
         self.assertEqual(engine.state.status, "ended")
@@ -413,8 +445,7 @@ class SkillBranchTests(unittest.TestCase):
         protected.revealed = {"marker-0"}
         protected.revealed_values["marker-0"] = protected.identity_markers[0]
         engine.apply(command(engine, "attack-4", attacker, "attack", targetPlayerId=protected.player_id))
-        engine.apply(command(engine, "request-4", protected.player_id, "request-intervention"))
-        engine.apply(command(engine, "choose-4", protected.player_id, "choose-intervention", responderPlayerId=alchemist.player_id))
+        answer_poll(engine, alchemist.player_id)
         reveal_rank(engine, alchemist.player_id, "reveal-alchemist")
         events = engine.apply(command(engine, "harm-4", alchemist.player_id, "choose-skill", use=True, mode="harm"))
         self.assertEqual(engine.state.players[protected.player_id].damage, 1)
@@ -433,8 +464,7 @@ class SkillBranchTests(unittest.TestCase):
         protected.revealed = {"marker-0"}
         protected.revealed_values["marker-0"] = protected.identity_markers[0]
         engine.apply(command(engine, "attack-heal", attacker, "attack", targetPlayerId=protected.player_id))
-        engine.apply(command(engine, "request-heal", protected.player_id, "request-intervention"))
-        engine.apply(command(engine, "choose-heal", protected.player_id, "choose-intervention", responderPlayerId=alchemist.player_id))
+        answer_poll(engine, alchemist.player_id)
         reveal_rank(engine, alchemist.player_id, "reveal-heal-alchemist")
         engine.apply(command(engine, "heal", alchemist.player_id, "choose-skill", use=True, mode="heal"))
         self.assertEqual(engine.state.pending.kind, "token-return")
@@ -453,7 +483,7 @@ class SkillBranchTests(unittest.TestCase):
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != alchemist.player_id))
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack-direct-4", attacker, "attack", targetPlayerId=alchemist.player_id))
-        engine.apply(command(engine, "decline-direct-4", alchemist.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, alchemist.player_id, "reveal-direct-4")
         self.assertIsNone(engine.state.pending)
 
@@ -475,7 +505,7 @@ class SkillBranchTests(unittest.TestCase):
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != elder.player_id))
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=elder.player_id))
-        engine.apply(command(engine, "decline", elder.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, elder.player_id)
         bystander = next(pid for pid in engine.state.players if pid != elder.player_id)
         with self.assertRaises(RuleError) as error:
@@ -490,7 +520,7 @@ class SkillBranchTests(unittest.TestCase):
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != elder.player_id))
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=elder.player_id))
-        engine.apply(command(engine, "decline", elder.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, elder.player_id)
         events = engine.apply(command(engine, "use", elder.player_id, "choose-skill", use=True))
         self.assertIn("SkillUsed", [event.event_type for event in events])
@@ -592,7 +622,7 @@ class SkillBranchTests(unittest.TestCase):
             if pid not in (attacker, assassin.player_id) and player.damage == 0
         )
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=assassin.player_id))
-        engine.apply(command(engine, "decline", assassin.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, assassin.player_id)
         events = engine.apply(
             command(engine, "use", assassin.player_id, "choose-skill", use=True, targetPlayerId=victim)
@@ -613,7 +643,7 @@ class SkillBranchTests(unittest.TestCase):
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != assassin.player_id))
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=assassin.player_id))
-        engine.apply(command(engine, "decline", assassin.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, assassin.player_id)
         with self.assertRaises(RuleError) as error:
             engine.apply(
@@ -641,14 +671,14 @@ class SkillBranchTests(unittest.TestCase):
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != elder.player_id))
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack-1", attacker, "attack", targetPlayerId=elder.player_id))
-        engine.apply(command(engine, "decline-1", elder.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, elder.player_id, "reveal-1")
         self.assertEqual(engine.state.pending.kind, "skill")
         engine.apply(command(engine, "skill-decline", elder.player_id, "choose-skill", use=False))
         # second resolved attack reveals affiliation, not rank: no new window
         give_dagger_to(engine, attacker)
         engine.apply(command(engine, "attack-2", attacker, "attack", targetPlayerId=elder.player_id))
-        engine.apply(command(engine, "decline-2", elder.player_id, "decline-intervention"))
+        answer_poll(engine)
         if engine.state.pending and engine.state.pending.kind == "reveal":
             engine.apply(command(engine, "reveal-2", elder.player_id, "choose-reveal", token="marker-0"))
         self.assertIsNone(engine.state.pending)
@@ -664,7 +694,7 @@ class SkillBranchTests(unittest.TestCase):
         for _ in range(2):
             give_dagger_to(engine, attacker.player_id)
             engine.apply(command(engine, f"hit-{_}", attacker.player_id, "attack", targetPlayerId=victim.player_id))
-            engine.apply(command(engine, f"take-{_}", victim.player_id, "decline-intervention"))
+            answer_poll(engine)
             reveal_rank(engine, victim.player_id, f"reveal-{_}")
             if engine.state.pending and engine.state.pending.kind == "reveal":
                 engine.apply(command(engine, f"reveal-marker-{_}", victim.player_id, "choose-reveal", token="marker-0"))
@@ -672,7 +702,7 @@ class SkillBranchTests(unittest.TestCase):
                 engine.apply(command(engine, f"no-skill-{_}", victim.player_id, "choose-skill", use=False))
         give_dagger_to(engine, attacker.player_id)
         engine.apply(command(engine, "attack-ass", attacker.player_id, "attack", targetPlayerId=assassin.player_id))
-        engine.apply(command(engine, "decline-ass", assassin.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, assassin.player_id, "reveal-ass")
         engine.apply(
             command(engine, "use-ass", assassin.player_id, "choose-skill", use=True, targetPlayerId=victim.player_id)
@@ -749,7 +779,7 @@ class EndGameBranchTests(unittest.TestCase):
         mark_three_damage(engine, victim.player_id)
         give_dagger_to(engine, attacker.player_id)
         engine.apply(command(engine, "attack", attacker.player_id, "attack", targetPlayerId=victim.player_id))
-        engine.apply(command(engine, "decline", victim.player_id, "decline-intervention"))
+        answer_poll(engine)
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(engine.state.result["branch"], "captured-leader")
         self.assertEqual(engine.state.result["winner"], attacker.faction)
@@ -763,7 +793,7 @@ class EndGameBranchTests(unittest.TestCase):
         mark_three_damage(engine, victim.player_id)
         give_dagger_to(engine, attacker.player_id)
         engine.apply(command(engine, "attack", attacker.player_id, "attack", targetPlayerId=victim.player_id))
-        engine.apply(command(engine, "decline", victim.player_id, "decline-intervention"))
+        answer_poll(engine)
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(engine.state.result["branch"], "captured-player")
         # capturing a non-leader makes the attacker's clan lose
@@ -778,7 +808,7 @@ class EndGameBranchTests(unittest.TestCase):
         mark_three_damage(engine, inquisitor.player_id)
         give_dagger_to(engine, attacker.player_id)
         engine.apply(command(engine, "attack", attacker.player_id, "attack", targetPlayerId=inquisitor.player_id))
-        engine.apply(command(engine, "decline", inquisitor.player_id, "decline-intervention"))
+        answer_poll(engine)
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(engine.state.result["branch"], "inquisitor-captured")
         self.assertEqual(engine.state.result["winner"], "draw")
@@ -798,8 +828,7 @@ class EndGameBranchTests(unittest.TestCase):
         )
         give_dagger_to(engine, inquisitor.player_id)
         engine.apply(command(engine, "attack", inquisitor.player_id, "attack", targetPlayerId=target.player_id))
-        engine.apply(command(engine, "request", target.player_id, "request-intervention"))
-        engine.apply(command(engine, "choose", target.player_id, "choose-intervention", responderPlayerId=responder.player_id))
+        answer_poll(engine, responder.player_id)
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(engine.state.result["branch"], "inquisitor-active-capture")
         expected_winner = "rose" if responder.faction == "beast" else "beast"
@@ -820,7 +849,7 @@ class ProjectionBranchTests(unittest.TestCase):
             give_dagger_to(engine, next(pid for pid in engine.state.players if pid != elder.player_id))
             attacker = engine.state.dagger_holder_id
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=elder.player_id))
-        engine.apply(command(engine, "decline", elder.player_id, "decline-intervention"))
+        answer_poll(engine)
         reveal_rank(engine, elder.player_id)
         actions = legal_actions(engine.state, elder.player_id)
         self.assertEqual(
@@ -830,35 +859,209 @@ class ProjectionBranchTests(unittest.TestCase):
         # only the pending actor is offered anything
         self.assertEqual(legal_actions(engine.state, attacker), [])
 
-    def test_pending_intervention_actions_before_and_after_request(self):
+    def test_pending_intervention_actions_across_poll_and_choice_stages(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
-        before = legal_actions(engine.state, target)
+        eligible = list(engine.state.pending.eligible_player_ids)
+        # poll stage: each unanswered eligible player holds their own respond
+        # actions; the target and the attacker hold nothing
         self.assertEqual(
-            before,
-            [{"type": "request-intervention"}, {"type": "decline-intervention"}],
+            legal_actions(engine.state, eligible[0]),
+            [
+                {"type": "respond-intervention", "volunteer": True},
+                {"type": "respond-intervention", "volunteer": False},
+            ],
         )
-        engine.apply(command(engine, "request", target, "request-intervention"))
-        after = legal_actions(engine.state, target)
-        self.assertEqual(after[0], {"type": "decline-intervention"})
+        self.assertEqual(legal_actions(engine.state, target), [])
+        self.assertEqual(legal_actions(engine.state, attacker), [])
+        # after answering, the responder's actions are gone (no take-backs)
+        engine.apply(command(engine, "first", eligible[0], "respond-intervention", volunteer=True))
+        self.assertEqual(legal_actions(engine.state, eligible[0]), [])
         self.assertEqual(
-            {action["type"] for action in after[1:]},
-            {"choose-intervention"},
+            legal_actions(engine.state, eligible[1]),
+            [
+                {"type": "respond-intervention", "volunteer": True},
+                {"type": "respond-intervention", "volunteer": False},
+            ],
         )
+        # two volunteers move the window to the target's choice stage
+        engine.apply(command(engine, "second", eligible[1], "respond-intervention", volunteer=True))
+        for player_id in eligible[2:]:
+            engine.apply(command(engine, f"rest-{player_id}", player_id, "respond-intervention", volunteer=False))
+        self.assertEqual(engine.state.pending.context["stage"], "choice")
+        actions = legal_actions(engine.state, target)
+        self.assertEqual(actions[0], {"type": "decline-intervention"})
         self.assertEqual(
-            {action["responderPlayerId"] for action in after[1:]},
-            set(engine.state.pending.eligible_player_ids),
+            {action["responderPlayerId"] for action in actions[1:]},
+            {eligible[0], eligible[1]},
         )
+        # only the target chooses; volunteers and bystanders wait
+        self.assertEqual(legal_actions(engine.state, eligible[0]), [])
+        self.assertEqual(legal_actions(engine.state, eligible[2]), [])
 
-    def test_pending_view_hides_private_context(self):
+    def test_pending_view_hides_private_context_and_publishes_votes(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        eligible = list(engine.state.pending.eligible_player_ids)
+        engine.apply(command(engine, "yes", eligible[0], "respond-intervention", volunteer=True))
         view = project_state(engine.state, target)
         self.assertNotIn("context", view["pending"])
+        # stage, live votes, and the shared countdown deadline are public
+        self.assertEqual(view["pending"]["stage"], "poll")
+        self.assertEqual(view["pending"]["responses"], {eligible[0]: True})
+        self.assertEqual(view["pending"]["volunteerPlayerIds"], [eligible[0]])
+        # spectators see the same public vote state
+        spectator = project_state(engine.state, None)
+        self.assertEqual(spectator["pending"]["responses"], {eligible[0]: True})
+
+
+class InterventionPollBranchTests(unittest.TestCase):
+    """The volunteer poll model (issue 23 / ADR 0002)."""
+
+    def started_with_timeout(self, seconds, count=6, seed="poll-seed"):
+        engine = RulesEngine.new_game("poll-game", seed, clock=FixedClock())
+        for index in range(count):
+            engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}"))
+        engine.apply(command(engine, "start", None, "start-game", interventionTimeoutSeconds=seconds))
+        return engine
+
+    def attack(self, engine):
+        attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid != attacker)
+        engine.apply(command(engine, "attack-1", attacker, "attack", targetPlayerId=target))
+        return attacker, target
+
+    def test_host_timeout_configuration_is_fixed_at_start(self):
+        engine = self.started_with_timeout(30)
+        self.assertEqual(engine.state.intervention_timeout_seconds, 30)
+        started_event = next(event for event in engine.state.events if event.event_type == "GameStarted")
+        self.assertEqual(started_event.payload["interventionTimeoutSeconds"], 30)
+        _, target = self.attack(engine)
+
+    def test_default_timeout_is_ninety_seconds(self):
+        engine = started()
+        self.assertEqual(engine.state.intervention_timeout_seconds, 90)
+
+    def test_invalid_timeout_choice_is_rejected(self):
+        engine = RulesEngine.new_game("poll-game", "poll-seed", clock=FixedClock())
+        for index in range(6):
+            engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}"))
+        for bad in (0, 45, "90", True):
+            with self.subTest(bad=bad):
+                with self.assertRaises(RuleError) as error:
+                    engine.apply(command(engine, f"start-{bad}", None, "start-game", interventionTimeoutSeconds=bad))
+                self.assertEqual(error.exception.code, "game.invalid-timeout")
+        engine.apply(command(engine, "start-ok", None, "start-game"))
+
+    def test_poll_timeout_with_no_volunteers_resolves_the_attack(self):
+        engine = started()
+        attacker, target = self.attack(engine)
+        pending = engine.state.pending
+        responder = pending.eligible_player_ids[0]
+        engine.apply(command(engine, "one-no", responder, "respond-intervention", volunteer=False))
+        events = engine.apply(command(engine, "timeout", None, "timeout-intervention", stage="poll"))
+        declined = next(event for event in events if event.event_type == "InterventionDeclined")
+        self.assertEqual(declined.payload["reason"], "no-volunteers")
+        # the timeout treated every silent player as declining to volunteer
+        self.assertEqual(engine.state.pending.kind, "reveal")
+
+    def test_poll_timeout_keeps_a_single_volunteer_forced(self):
+        engine = started()
+        attacker, target = self.attack(engine)
+        responder = engine.state.pending.eligible_player_ids[0]
+        engine.apply(command(engine, "one-yes", responder, "respond-intervention", volunteer=True))
+        events = engine.apply(command(engine, "timeout", None, "timeout-intervention", stage="poll"))
+        self.assertIn("InterventionSelected", [event.event_type for event in events])
+        self.assertEqual(engine.state.players[responder].damage, 1)
+        self.assertEqual(engine.state.players[target].damage, 0)
+
+    def test_poll_timeout_with_two_volunteers_opens_the_choice_stage(self):
+        engine = self.started_with_timeout(120)
+        attacker, target = self.attack(engine)
+        eligible = engine.state.pending.eligible_player_ids
+        engine.apply(command(engine, "yes-0", eligible[0], "respond-intervention", volunteer=True))
+        engine.apply(command(engine, "yes-1", eligible[1], "respond-intervention", volunteer=True))
+        events = engine.apply(command(engine, "timeout", None, "timeout-intervention", stage="poll"))
+        opened = next(event for event in events if event.event_type == "InterventionChoiceOpened")
+        self.assertEqual(opened.payload["volunteerPlayerIds"], [eligible[0], eligible[1]])
+        self.assertEqual(engine.state.pending.context["stage"], "choice")
+
+    def test_choice_timeout_auto_declines_all_volunteers(self):
+        engine = started()
+        attacker, target = self.attack(engine)
+        eligible = list(engine.state.pending.eligible_player_ids)
+        answer_poll(engine, eligible[0], eligible[1])
+        events = engine.apply(command(engine, "timeout", None, "timeout-intervention", stage="choice"))
+        declined = next(event for event in events if event.event_type == "InterventionDeclined")
+        self.assertEqual(declined.payload["reason"], "timeout-declined")
+        self.assertEqual(engine.state.players[target].damage, 1)
+        self.assertEqual(engine.state.players[eligible[0]].damage, 0)
+
+    def test_target_picks_one_volunteer_and_declines_all(self):
+        engine = started()
+        attacker, target = self.attack(engine)
+        eligible = list(engine.state.pending.eligible_player_ids)
+        answer_poll(engine, eligible[0], eligible[1])
+        engine.apply(command(engine, "pick", target, "choose-intervention", responderPlayerId=eligible[1]))
+        reveal_rank(engine, eligible[1])
+        if engine.state.pending and engine.state.pending.kind == "skill":
+            engine.apply(command(engine, "no-skill", eligible[1], "choose-skill", use=False))
+        self.assertEqual(engine.state.players[eligible[1]].damage, 1)
+        self.assertEqual(engine.state.players[eligible[0]].damage, 0)
+        self.assertEqual(engine.state.players[target].damage, 0)
+
+        attacker2 = engine.state.dagger_holder_id
+        target2 = next(pid for pid in engine.state.players if pid != attacker2 and engine.state.players[pid].damage == 0)
+        engine.apply(command(engine, "attack-2", attacker2, "attack", targetPlayerId=target2))
+        eligible2 = list(engine.state.pending.eligible_player_ids)
+        if len(eligible2) >= 2:
+            answer_poll(engine, eligible2[0], eligible2[1])
+            events = engine.apply(command(engine, "decline-all", target2, "decline-intervention"))
+            declined = next(event for event in events if event.event_type == "InterventionDeclined")
+            self.assertEqual(declined.payload["reason"], "target-declined")
+            self.assertEqual(engine.state.players[target2].damage, 1)
+
+    def test_respond_and_choose_stage_guards(self):
+        engine = started()
+        attacker, target = self.attack(engine)
+        eligible = list(engine.state.pending.eligible_player_ids)
+        answer_poll(engine, eligible[0], eligible[1])
+        # volunteers can no longer respond once the choice stage opened
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "late", eligible[2], "respond-intervention", volunteer=True))
+        self.assertEqual(error.exception.code, "intervention.not-poll")
+        # only the target may choose
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "steal", eligible[0], "choose-intervention", responderPlayerId=eligible[0]))
+        self.assertEqual(error.exception.code, "player.not-actor")
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "steal-decline", eligible[0], "decline-intervention"))
+        self.assertEqual(error.exception.code, "player.not-actor")
+
+    def test_timeout_guards(self):
+        engine = started()
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "nothing", None, "timeout-intervention", stage="poll"))
+        self.assertEqual(error.exception.code, "intervention.not-open")
+        attacker, target = self.attack(engine)
+        pending = engine.state.pending
+        pending.context["stage"] = "choice"  # synthetic: mismatch the armed poll stage
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "wrong-stage", None, "timeout-intervention", stage="poll"))
+        self.assertEqual(error.exception.code, "intervention.not-open")
+
+    def test_responses_are_broadcast_progressively(self):
+        engine = started()
+        attacker, target = self.attack(engine)
+        eligible = list(engine.state.pending.eligible_player_ids)
+        events = engine.apply(command(engine, "r0", eligible[0], "respond-intervention", volunteer=True))
+        self.assertEqual([event.event_type for event in events], ["InterventionResponded"])
+        self.assertEqual(events[0].payload, {"playerId": eligible[0], "volunteer": True})
+        self.assertEqual(engine.state.pending.context["responses"], {eligible[0]: True})
 
 
 if __name__ == "__main__":

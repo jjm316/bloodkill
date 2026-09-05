@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandAck, GameEvent, RoomState, ServerError } from "./types";
 
-const PROTOCOL_VERSION = "1";
+const PROTOCOL_VERSION = "2";
 
 export function newCommandId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -18,7 +18,7 @@ export interface SocketHandle {
   reconnecting: boolean;
   takenOver: boolean;
   send: (command: string, payload?: Record<string, unknown>) => void;
-  sendHost: (action: string) => void;
+  sendHost: (action: string, payload?: Record<string, unknown>) => void;
 }
 
 /**
@@ -146,8 +146,8 @@ export function useGameSocket(code: string, name: string, token: string | null):
     }
   }, []);
 
-  const sendHost = useCallback((action: string) => {
-    wsRef.current?.send(JSON.stringify({ type: "host", action }));
+  const sendHost = useCallback((action: string, payload: Record<string, unknown> = {}) => {
+    wsRef.current?.send(JSON.stringify({ type: "host", action, ...payload }));
   }, []);
 
   return { state, events, error, closed, reconnecting, takenOver, send, sendHost };

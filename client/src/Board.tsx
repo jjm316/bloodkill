@@ -32,12 +32,89 @@ function Resources({ resources }: { resources: Record<string, number> }) {
   );
 }
 
-const Seat = memo(function Seat({ player, dagger, identity, clueLine }: { player: PlayerView; dagger: boolean; identity?: Identity; clueLine?: string }) {
-  const clues: string[] = [];
-  if (player.revealed.rank !== undefined) clues.push(displayRank(player.revealed.rank));
-  player.revealed.markers.forEach((marker) => {
-    if (marker !== null) clues.push(displayFaction(marker));
+// 每名玩家恰好三张线索 token：1 等级 + 2 身份标记（组合由等级决定）。
+// 槽位填亮数与伤害严格同步（唯一 +1 在 _continue_damage、唯一 -1 是炼金归还，二者同动），
+// 因此填亮的槽位本身就是伤害计数（issue 23 裁决）。
+const MARKER_DOTS: Record<string, { label: string; tone: string; name: string }> = {
+  rose: { label: "玫", tone: "rose", name: "玫瑰家族标记" },
+  beast: { label: "兽", tone: "beast", name: "野兽家族标记" },
+  unknown: { label: "？", tone: "unknown", name: "未知标记" },
+};
+
+function ClueSlots({
+  player,
+  selfMarkers,
+  selfRank,
+  highlight,
+}: {
+  player: PlayerView;
+  selfMarkers?: string[];
+  selfRank?: number | string;
+  highlight?: string[];
+}) {
+  const hot = new Set(highlight ?? []);
+  const slots: { token: string; className: string; label: string; title: string }[] = [];
+  const described: string[] = [];
+  if (player.revealed.rank !== undefined) {
+    const rank = player.revealed.rank;
+    slots.push({
+      token: "rank",
+      className: "slot tile filled",
+      label: rank === "fleur-cross" ? "审" : String(rank),
+      title: displayRank(rank),
+    });
+    described.push(`已亮出${displayRank(rank)}`);
+  } else {
+    const dim = selfRank === undefined ? "" : selfRank === "fleur-cross" ? "审" : String(selfRank);
+    slots.push({ token: "rank", className: `slot tile empty${dim ? " dim" : ""}`, label: dim, title: "未亮出的等级" });
+  }
+  player.revealed.markers.forEach((marker, index) => {
+    const token = `marker-${index}`;
+    if (marker !== null) {
+      const dot = MARKER_DOTS[marker] ?? { label: "？", tone: "unknown", name: String(marker) };
+      slots.push({ token, className: `slot dot filled ${dot.tone}`, label: dot.label, title: dot.name });
+      described.push(`已亮出${dot.name}`);
+    } else {
+      const raw = selfMarkers?.[index];
+      if (raw === "wild") {
+        slots.push({ token, className: "slot dot empty dim", label: "任", title: "未亮出的任选标记（亮出时自选红/蓝）" });
+      } else if (raw && MARKER_DOTS[raw]) {
+        slots.push({ token, className: "slot dot empty dim", label: MARKER_DOTS[raw].label, title: `未亮出的${MARKER_DOTS[raw].name}` });
+      } else {
+        slots.push({ token, className: "slot dot empty", label: "", title: "未亮出的身份标记" });
+      }
+    }
   });
+  return (
+    <div
+      className="clue-slots"
+      role="img"
+      aria-label={`受到 ${player.damage} 点伤害${described.length ? `，${described.join("，")}` : "，尚未亮出线索"}`}
+    >
+      {slots.map((slot) => (
+        <span key={slot.token} className={`${slot.className}${hot.has(slot.token) ? " hot" : ""}`} title={slot.title}>
+          {slot.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const Seat = memo(function Seat({
+  player,
+  dagger,
+  identity,
+  clueLine,
+  selfMarkers,
+  highlight,
+}: {
+  player: PlayerView;
+  dagger: boolean;
+  identity?: Identity;
+  clueLine?: string;
+  selfMarkers?: string[];
+  highlight?: string[];
+}) {
   return (
     <article role="listitem" className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`} aria-label={`${player.displayName}${player.captured ? "，已被捕获" : ""}`}>
       <div className="seat-name">
@@ -55,12 +132,7 @@ const Seat = memo(function Seat({ player, dagger, identity, clueLine }: { player
         )}
       </div>
       {identity && clueLine && <div className="own-clue-icon">{clueLine}</div>}
-      <div className="damage" role="img" aria-label={`${player.displayName}受到 ${player.damage} 点伤害`}>
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} className={i < player.damage ? "pip filled" : "pip"} />
-        ))}
-      </div>
-      {clues.length > 0 && <div className="revealed">{clues.join(" · ")}</div>}
+      <ClueSlots player={player} selfMarkers={selfMarkers} selfRank={identity?.rank} highlight={highlight} />
       <Resources resources={player.resources} />
     </article>
   );
@@ -69,10 +141,24 @@ const Seat = memo(function Seat({ player, dagger, identity, clueLine }: { player
 function PendingBanner({ pending, players }: { pending: PendingView; players: PlayerView[] }) {
   if (pending.kind === "intervention") {
     const target = nameOf(players, pending.targetPlayerId);
-    const eligible = pending.eligiblePlayerIds.map((id) => nameOf(players, id)).join(", ");
+    const responses = pending.responses ?? {};
+    if (pending.stage === "choice") {
+      const volunteers = (pending.volunteerPlayerIds ?? []).map((id) => nameOf(players, id)).join("、");
+      return (
+        <div className="pending">
+          <strong>{target}</strong> 被攻击，{volunteers} 愿意挡刀，等待其选择其一或全部拒绝。
+        </div>
+      );
+    }
+    const answered = pending.eligiblePlayerIds.filter((id) => responses[id] !== undefined);
+    const waiting = pending.eligiblePlayerIds.filter((id) => responses[id] === undefined);
+    const summary = answered.length
+      ? answered.map((id) => `${nameOf(players, id)}（${responses[id] ? "挡刀" : "不干涉"}）`).join("、")
+      : "暂无表态";
     return (
       <div className="pending">
-        <strong>{target}</strong> 被攻击，可以请求他人干预或拒绝干预。可响应玩家：{eligible || "无"}。
+        <strong>{target}</strong> 被攻击，干涉投票进行中：{summary}
+        {waiting.length > 0 ? `；等待 ${waiting.map((id) => nameOf(players, id)).join("、")} 表态。` : "。"}
       </div>
     );
   }
@@ -80,7 +166,7 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
     return (
       <div className="pending">
         <strong>{nameOf(players, pending.actorPlayerId)}</strong> 的技能窗口已开启
-        {typeof pending.rank === "number" ? `（${displayRank(pending.rank)}）` : ""}。
+        {typeof pending.rank === "number" || pending.rank === "fleur-cross" ? `（${displayRank(pending.rank)}）` : ""}。
       </div>
     );
   }
@@ -115,6 +201,14 @@ function ResultBanner({ result, players }: { result: NonNullable<GameState["resu
   );
 }
 
+// 亮牌 / 归还标记窗口：当事玩家的可选槽位高亮（甲）。
+function highlightFor(pending: PendingView | null, playerId: string): string[] | undefined {
+  if (!pending) return undefined;
+  if (pending.kind !== "reveal" && pending.kind !== "token-return") return undefined;
+  if (pending.actorPlayerId !== playerId) return undefined;
+  return pending.eligibleTokens;
+}
+
 export function Board({ game }: { game: GameState }) {
   const viewer = game.viewer;
   const viewerId = viewer?.playerId ?? null;
@@ -135,6 +229,8 @@ export function Board({ game }: { game: GameState }) {
             dagger={game.daggerHolderId === player.playerId}
             identity={viewerId === player.playerId ? viewer?.identity : undefined}
             clueLine={viewerId === player.playerId ? clueLine : undefined}
+            selfMarkers={viewerId === player.playerId ? viewer?.identityMarkers : undefined}
+            highlight={highlightFor(game.pending, player.playerId)}
           />
         ))}
       </div>
