@@ -1,5 +1,5 @@
-import { memo } from "react";
-import type { GameState, Identity, PendingView, PlayerView } from "./types";
+import { memo, useEffect, useState } from "react";
+import type { Action, GameState, Identity, PendingView, PlayerView } from "./types";
 import { displayClueIcon, displayFaction, displayRank, displayResource } from "./types";
 
 // The shared projection component: the live game and the replay render the
@@ -41,18 +41,60 @@ const MARKER_DOTS: Record<string, { label: string; tone: string; name: string }>
   unknown: { label: "？", tone: "unknown", name: "未知标记" },
 };
 
+const TOKEN_LABELS: Record<string, string> = { rank: "等级标记", "marker-0": "身份标记 1", "marker-1": "身份标记 2" };
+const COLOR_LABELS: Record<string, string> = { rose: "玫瑰", beast: "野兽" };
+const tokenLabel = (token: string) => TOKEN_LABELS[token] ?? token;
+
+// 浮层的预估尺寸（px）：定位时用于贴边与上下翻转的保守估计。
+const PICKER_EST_SIZE = 132;
+
 function ClueSlots({
   player,
   selfMarkers,
   selfRank,
   highlight,
+  selfActions,
+  onSlotAction,
 }: {
   player: PlayerView;
   selfMarkers?: string[];
   selfRank?: number | string;
   highlight?: string[];
+  /** 仅自身座位：token -> 该槽位的合法动作（恰 2 个 = wild 标记需选阵营） */
+  selfActions?: Record<string, Action[]>;
+  onSlotAction?: (action: Action) => void;
 }) {
+  const [picker, setPicker] = useState<{ token: string; options: Action[]; rect: DOMRect } | null>(null);
   const hot = new Set(highlight ?? []);
+  const self = selfActions !== undefined && onSlotAction !== undefined;
+  // 浮层跟随 pending 存活：亮牌/归还窗口一旦结算（hot 消失）即视为关闭
+  const activePicker = picker && hot.has(picker.token) ? picker : null;
+  useEffect(() => {
+    if (!activePicker) return;
+    const close = () => setPicker(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [activePicker]);
+
+  const pickSlot = (token: string, rect: DOMRect) => {
+    const options = selfActions?.[token];
+    if (!options || options.length === 0) return;
+    if (options.length === 1) {
+      onSlotAction?.(options[0]);
+      return;
+    }
+    setPicker({ token, options, rect });
+  };
+
   const slots: { token: string; className: string; label: string; title: string }[] = [];
   const described: string[] = [];
   if (player.revealed.rank !== undefined) {
@@ -86,17 +128,70 @@ function ClueSlots({
     }
   });
   return (
-    <div
-      className="clue-slots"
-      role="img"
-      aria-label={`受到 ${player.damage} 点伤害${described.length ? `，${described.join("，")}` : "，尚未亮出线索"}`}
-    >
-      {slots.map((slot) => (
-        <span key={slot.token} className={`${slot.className}${hot.has(slot.token) ? " hot" : ""}`} title={slot.title}>
-          {slot.label}
-        </span>
-      ))}
-    </div>
+    <>
+      <div
+        className="clue-slots"
+        role={self ? "group" : "img"}
+        aria-label={`受到 ${player.damage} 点伤害${described.length ? `，${described.join("，")}` : "，尚未亮出线索"}`}
+      >
+        {slots.map((slot) => {
+          const isHot = self && hot.has(slot.token);
+          if (!self) {
+            return (
+              <span key={slot.token} className={`${slot.className}${isHot ? " hot" : ""}`} title={slot.title}>
+                {slot.label}
+              </span>
+            );
+          }
+          return (
+            <button
+              key={slot.token}
+              type="button"
+              className={`${slot.className}${isHot ? " hot" : ""}`}
+              aria-label={slot.title}
+              disabled={!isHot}
+              onClick={(e) => pickSlot(slot.token, e.currentTarget.getBoundingClientRect())}
+            >
+              {slot.label}
+            </button>
+          );
+        })}
+      </div>
+      {activePicker && (
+        <>
+          <div className="slot-picker-backdrop" onClick={() => setPicker(null)} />
+          <div
+            className="slot-picker"
+            role="dialog"
+            aria-label={`亮出${tokenLabel(activePicker.token)}时选择阵营`}
+            style={{
+              left: Math.max(8, Math.min(activePicker.rect.left, window.innerWidth - PICKER_EST_SIZE)),
+              top:
+                activePicker.rect.bottom + PICKER_EST_SIZE > window.innerHeight
+                  ? Math.max(8, activePicker.rect.top - PICKER_EST_SIZE)
+                  : activePicker.rect.bottom + 8,
+            }}
+          >
+            <span className="slot-picker-label">亮出{tokenLabel(activePicker.token)}时选择阵营：</span>
+            {activePicker.options.map((a, index) => (
+              <button
+                key={a.color ?? index}
+                autoFocus={index === 0}
+                onClick={() => {
+                  setPicker(null);
+                  onSlotAction?.(a);
+                }}
+              >
+                <span aria-hidden="true" className={`slot dot filled ${a.color === "rose" ? "rose" : "beast"}`}>
+                  {MARKER_DOTS[a.color ?? ""]?.label ?? "？"}
+                </span>
+                {COLOR_LABELS[a.color ?? ""] ?? a.color}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -107,6 +202,8 @@ const Seat = memo(function Seat({
   clueLine,
   selfMarkers,
   highlight,
+  selfActions,
+  onSlotAction,
 }: {
   player: PlayerView;
   dagger: boolean;
@@ -114,6 +211,8 @@ const Seat = memo(function Seat({
   clueLine?: string;
   selfMarkers?: string[];
   highlight?: string[];
+  selfActions?: Record<string, Action[]>;
+  onSlotAction?: (action: Action) => void;
 }) {
   return (
     <article role="listitem" className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`} aria-label={`${player.displayName}${player.captured ? "，已被捕获" : ""}`}>
@@ -132,7 +231,7 @@ const Seat = memo(function Seat({
         )}
       </div>
       {identity && clueLine && <div className="own-clue-icon">{clueLine}</div>}
-      <ClueSlots player={player} selfMarkers={selfMarkers} selfRank={identity?.rank} highlight={highlight} />
+      <ClueSlots player={player} selfMarkers={selfMarkers} selfRank={identity?.rank} highlight={highlight} selfActions={selfActions} onSlotAction={onSlotAction} />
       <Resources resources={player.resources} />
     </article>
   );
@@ -209,7 +308,7 @@ function highlightFor(pending: PendingView | null, playerId: string): string[] |
   return pending.eligibleTokens;
 }
 
-export function Board({ game }: { game: GameState }) {
+export function Board({ game, onSlotAction }: { game: GameState; onSlotAction?: (action: Action) => void }) {
   const viewer = game.viewer;
   const viewerId = viewer?.playerId ?? null;
   const clueLine = viewer
@@ -217,6 +316,15 @@ export function Board({ game }: { game: GameState }) {
         viewer.seenNeighbourClue ? ` · 已看到 ${nameOf(game.players, viewer.seenNeighbourClue.playerId)} 的：${displayClueIcon(viewer.seenNeighbourClue.icon)}` : ""
       }`
     : undefined;
+  // 亮牌 / 归还窗口：把当事玩家的合法动作按 token 分组交给可点击槽位（甲）。
+  const slotActions: Record<string, Action[]> = {};
+  const pending = game.pending;
+  if (onSlotAction && pending && (pending.kind === "reveal" || pending.kind === "token-return") && pending.actorPlayerId === viewerId) {
+    for (const action of game.legalActions) {
+      if ((action.type !== "choose-reveal" && action.type !== "choose-return") || !action.token) continue;
+      (slotActions[action.token] ??= []).push(action);
+    }
+  }
   return (
     <section className="board" aria-label="对局桌面">
       {game.status === "ended" && game.result && <ResultBanner result={game.result} players={game.players} />}
@@ -231,6 +339,8 @@ export function Board({ game }: { game: GameState }) {
             clueLine={viewerId === player.playerId ? clueLine : undefined}
             selfMarkers={viewerId === player.playerId ? viewer?.identityMarkers : undefined}
             highlight={highlightFor(game.pending, player.playerId)}
+            selfActions={onSlotAction && player.playerId === viewerId ? slotActions : undefined}
+            onSlotAction={player.playerId === viewerId ? onSlotAction : undefined}
           />
         ))}
       </div>

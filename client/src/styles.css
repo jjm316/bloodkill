@@ -230,6 +230,10 @@ h2 {
   color: transparent;
   background: transparent;
   flex: none;
+  /* 自身座位的槽位渲染为 <button>：抵消全局按钮样式，保持原有外观 */
+  min-height: 0;
+  padding: 0;
+  font-family: inherit;
 }
 
 .slot.tile {
@@ -278,6 +282,58 @@ h2 {
   50% {
     outline-offset: 3px;
   }
+}
+
+/* 自身座位的槽位是 <button>：非 hot 态禁用但保持原外观；hot 态才是按钮式反馈 */
+.slot:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.slot.hot {
+  cursor: pointer;
+}
+
+.slot.hot:hover:not(:disabled),
+.slot.hot:active:not(:disabled) {
+  outline: 3px solid #ffd84d;
+  filter: brightness(1.2);
+}
+
+/* wild 标记亮出时的阵营选择浮层（issue 25） */
+
+.slot-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.slot-picker {
+  position: fixed;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 128px;
+  padding: 8px;
+  background: #1a1e29;
+  border: 1px solid #f5c518;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.slot-picker-label {
+  font-size: 12px;
+  color: #9aa0b4;
+}
+
+.slot-picker button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 10px;
 }
 
 .resources {
