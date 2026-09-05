@@ -13,8 +13,8 @@
 
 常用示例（仓库根目录）：
 
+    .venv/Scripts/python.exe scripts/test_toolkit.py up               # 默认 7 人：奇数局，含审判者
     .venv/Scripts/python.exe scripts/test_toolkit.py up --players 6   # 偶数局
-    .venv/Scripts/python.exe scripts/test_toolkit.py up --players 7   # 奇数局：含审判者
     .venv/Scripts/python.exe scripts/test_toolkit.py restart
     .venv/Scripts/python.exe scripts/test_toolkit.py down
     .venv/Scripts/python.exe scripts/test_toolkit.py status
@@ -481,7 +481,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="子命令")
 
     up = sub.add_parser("up", help="关闭旧窗口→构建→确保服务端→建房→平铺开窗自动进房")
-    up.add_argument("--players", type=int, default=6, help="玩家数 6-12（奇数局含审判者），默认 6")
+    up.add_argument("--players", type=int, default=7, help="玩家数 6-12（奇数局含审判者），默认 7")
     _add_port(up)
     up.add_argument("--cols", type=int, default=None, help="平铺列数（默认：6 人及以下 3 列，更多 4 列）")
     up.add_argument("--no-build", action="store_true", help="跳过前端构建")
