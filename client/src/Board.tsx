@@ -1,4 +1,6 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
+import type { MemoApi, MemoColor, MemoEntry, MemoMark, MemoPatch } from "./memoMarkers";
+import { memoColorOf } from "./memoMarkers";
 import type { Action, GameState, Identity, PendingView, PlayerView } from "./types";
 import { displayClueIcon, displayFaction, displayRank, displayResource } from "./types";
 
@@ -8,6 +10,24 @@ import { displayClueIcon, displayFaction, displayRank, displayResource } from ".
 function nameOf(players: PlayerView[], playerId: string | null | undefined): string {
   const player = players.find((p) => p.playerId === playerId);
   return player ? player.displayName : "?";
+}
+
+// 浮层通用关闭：Escape、尺寸或滚动变化（fixed 定位的浮层会脱离锚点）；点 backdrop 由调用方自备
+function useDismissOverlay(active: boolean, close: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [active, close]);
 }
 
 const RESOURCE_ICONS: Record<string, string> = {
@@ -45,6 +65,24 @@ const TOKEN_LABELS: Record<string, string> = { rank: "等级标记", "marker-0":
 const COLOR_LABELS: Record<string, string> = { rose: "玫瑰", beast: "野兽" };
 const tokenLabel = (token: string) => TOKEN_LABELS[token] ?? token;
 
+// 备忘角标的三色语言复用线索槽配色（玫红/兽蓝/灰），但造型是右上角徽章，与槽位明显不同
+const MEMO_COLORS: { value: MemoColor; label: string; name: string }[] = [
+  { value: "rose", label: "玫", name: "玫瑰红" },
+  { value: "beast", label: "兽", name: "野兽蓝" },
+  { value: "gray", label: "？", name: "灰（未知）" },
+];
+const MEMO_MARKS: MemoMark[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, "审"];
+
+// 备忘选择器浮层的预估尺寸（px）：定位贴边与上下翻转的保守估计
+const MEMO_PICKER_EST = { width: 240, height: 260 };
+
+// 每个座位的私有备忘：entry 为空对象时角标显示空态；change/clear 只改本机 localStorage
+interface SeatMemo {
+  entry: MemoEntry | undefined;
+  onChange: (patch: MemoPatch) => void;
+  onClear: () => void;
+}
+
 // 浮层的预估尺寸（px）：定位时用于贴边与上下翻转的保守估计。
 const PICKER_EST_SIZE = 132;
 
@@ -65,25 +103,12 @@ function ClueSlots({
   onSlotAction?: (action: Action) => void;
 }) {
   const [picker, setPicker] = useState<{ token: string; options: Action[]; rect: DOMRect } | null>(null);
+  const closePicker = useCallback(() => setPicker(null), []);
   const hot = new Set(highlight ?? []);
   const self = selfActions !== undefined && onSlotAction !== undefined;
   // 浮层跟随 pending 存活：亮牌/归还窗口一旦结算（hot 消失）即视为关闭
   const activePicker = picker && hot.has(picker.token) ? picker : null;
-  useEffect(() => {
-    if (!activePicker) return;
-    const close = () => setPicker(null);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
-    };
-  }, [activePicker]);
+  useDismissOverlay(Boolean(activePicker), closePicker);
 
   const pickSlot = (token: string, rect: DOMRect) => {
     const options = selfActions?.[token];
@@ -204,6 +229,7 @@ const Seat = memo(function Seat({
   highlight,
   selfActions,
   onSlotAction,
+  memoBadge,
 }: {
   player: PlayerView;
   dagger: boolean;
@@ -213,7 +239,19 @@ const Seat = memo(function Seat({
   highlight?: string[];
   selfActions?: Record<string, Action[]>;
   onSlotAction?: (action: Action) => void;
+  /** 私有备忘角标：不传 = 不渲染（自己座位 / 回放屏） */
+  memoBadge?: SeatMemo;
 }) {
+  const [memoPickerRect, setMemoPickerRect] = useState<DOMRect | null>(null);
+  const closeMemoPicker = useCallback(() => setMemoPickerRect(null), []);
+  // 备忘选择器同样跟随锚点存活：Escape / 点外部 / 尺寸或滚动变化即关闭
+  useDismissOverlay(Boolean(memoPickerRect), closeMemoPicker);
+
+  const memoEntry = memoBadge?.entry;
+  const memoColor = memoColorOf(memoEntry);
+  const selectedColor = memoEntry?.color ?? "gray";
+  const selectedMark = memoEntry?.mark ?? null;
+
   return (
     <article role="listitem" className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`} aria-label={`${player.displayName}${player.captured ? "，已被捕获" : ""}`}>
       <div className="seat-name">
@@ -233,6 +271,75 @@ const Seat = memo(function Seat({
       {identity && clueLine && <div className="own-clue-icon">{clueLine}</div>}
       <ClueSlots player={player} selfMarkers={selfMarkers} selfRank={identity?.rank} highlight={highlight} selfActions={selfActions} onSlotAction={onSlotAction} />
       <Resources resources={player.resources} />
+      {memoBadge && (
+        <button
+          type="button"
+          className={`memo-badge${memoColor ? ` ${memoColor}` : " empty"}`}
+          title="备忘标记（仅保存在本设备）"
+          aria-label={`${player.displayName} 的备忘标记${memoColor ? "" : "（空）"}`}
+          onClick={(e) => setMemoPickerRect(e.currentTarget.getBoundingClientRect())}
+        >
+          {memoEntry?.mark ?? ""}
+        </button>
+      )}
+      {memoBadge && memoPickerRect && (
+        <>
+          <div className="memo-picker-backdrop" onClick={closeMemoPicker} />
+          <div
+            className="memo-picker"
+            role="dialog"
+            aria-label={`${player.displayName} 的备忘标记`}
+            style={{
+              left: Math.max(8, Math.min(memoPickerRect.right - MEMO_PICKER_EST.width, window.innerWidth - MEMO_PICKER_EST.width - 8)),
+              top:
+                memoPickerRect.bottom + MEMO_PICKER_EST.height > window.innerHeight
+                  ? Math.max(8, memoPickerRect.top - MEMO_PICKER_EST.height)
+                  : memoPickerRect.bottom + 8,
+            }}
+          >
+            <span className="memo-picker-label">备忘：{player.displayName}</span>
+            <div className="memo-colors" role="group" aria-label="猜测的阵营颜色">
+              {MEMO_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  className={`memo-swatch ${color.value}${selectedColor === color.value ? " selected" : ""}`}
+                  aria-pressed={selectedColor === color.value}
+                  title={color.name}
+                  onClick={() => memoBadge.onChange({ color: color.value })}
+                >
+                  {color.label}
+                </button>
+              ))}
+            </div>
+            <div className="memo-marks" role="group" aria-label="猜测的等级或审判者">
+              {MEMO_MARKS.map((mark) => (
+                <button
+                  key={String(mark)}
+                  type="button"
+                  className={selectedMark === mark ? "selected" : ""}
+                  aria-pressed={selectedMark === mark}
+                  title={mark === "审" ? "审判者" : `等级 ${mark}`}
+                  onClick={() => memoBadge.onChange({ mark })}
+                >
+                  {mark}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="memo-clear"
+              onClick={() => {
+                memoBadge.onClear();
+                closeMemoPicker();
+              }}
+            >
+              清除备忘
+            </button>
+            <span className="memo-picker-note">仅保存在本设备</span>
+          </div>
+        </>
+      )}
     </article>
   );
 });
@@ -308,7 +415,7 @@ function highlightFor(pending: PendingView | null, playerId: string): string[] |
   return pending.eligibleTokens;
 }
 
-export function Board({ game, onSlotAction }: { game: GameState; onSlotAction?: (action: Action) => void }) {
+export function Board({ game, onSlotAction, memos }: { game: GameState; onSlotAction?: (action: Action) => void; memos?: MemoApi }) {
   const viewer = game.viewer;
   const viewerId = viewer?.playerId ?? null;
   const clueLine = viewer
@@ -341,6 +448,15 @@ export function Board({ game, onSlotAction }: { game: GameState; onSlotAction?: 
             highlight={highlightFor(game.pending, player.playerId)}
             selfActions={onSlotAction && player.playerId === viewerId ? slotActions : undefined}
             onSlotAction={player.playerId === viewerId ? onSlotAction : undefined}
+            memoBadge={
+              memos && viewerId !== player.playerId
+                ? {
+                    entry: memos.markers[player.playerId],
+                    onChange: (patch) => memos.change(player.playerId, patch),
+                    onClear: () => memos.clear(player.playerId),
+                  }
+                : undefined
+            }
           />
         ))}
       </div>

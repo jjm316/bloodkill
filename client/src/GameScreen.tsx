@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Board } from "./Board";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useMemoMarkers } from "./memoMarkers";
 import type { Action, GameEvent, GameState, PlayerView, RoomState } from "./types";
 import { actionToCommand, displayPhase, displayStatus } from "./types";
 import { useGameSocket } from "./useSocket";
@@ -125,6 +126,9 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
     send("respond-intervention", { volunteer: false });
   }, [noBlock, respondAction, pollKey, send]);
 
+  // 备忘标记（ADR 0004）：纯本机私有状态，Hook 必须位于所有条件 return 之前。
+  const memos = useMemoMarkers(credentials.code, state?.game);
+
   if (takenOver) return <Banner title="座位已被接管" detail="同名的新连接已接管此座位，请使用其他姓名重新加入，或等待连接恢复。" onBack={onLeave} />;
   if (closed && !state && !reconnecting) return <Banner title="连接已断开" detail="房间连接在收到游戏状态前已关闭。" onBack={onLeave} />;
   if (error && !state) return <Banner title="无法加入房间" detail={errorText(error.code, error.message)} onBack={onLeave} />;
@@ -144,5 +148,5 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
     send(c.command, c.payload);
   };
 
-  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked ? " 🔒" : ""} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && <label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => toggleNoBlock(e.target.checked)} />默认不挡刀</label>}<button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} />{pending?.kind === "intervention" && <InterventionPollLayer game={game} serverTime={state.serverTime} noBlock={noBlock} send={send} />}<ActionsPanel game={game} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}<EventLog events={events} players={game?.players} /></div>;
+  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked ? " 🔒" : ""} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && <label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => toggleNoBlock(e.target.checked)} />默认不挡刀</label>}<button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{pending?.kind === "intervention" && <InterventionPollLayer game={game} serverTime={state.serverTime} noBlock={noBlock} send={send} />}<ActionsPanel game={game} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}<EventLog events={events} players={game?.players} /></div>;
 }

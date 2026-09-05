@@ -43,7 +43,9 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
+/* .slot 与 .memo-badge 不吃全局按钮 hover 填色：前者有自己的 hot 反馈（否则亮牌窗口的
+   空槽 hover 被填成灰圆），后者色底即备忘内容（hover 填色会盖掉玫/兽/灰底色） */
+button:hover:not(:disabled):not(.slot):not(.memo-badge) {
   background: #2f3547;
 }
 
@@ -174,6 +176,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: relative; /* 备忘角标的定位锚 */
 }
 
 .seat[aria-label] { min-width: 0; }
@@ -334,6 +337,137 @@ h2 {
   gap: 8px;
   min-height: 36px;
   padding: 4px 10px;
+}
+
+/* 备忘标记：右上角私有备忘角标（ADR 0004，仅本设备）。
+   色值沿用线索槽配色，但造型是贴角徽章（深色描边圈+投影），与公开的线索槽明显不同。 */
+
+.memo-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-family: inherit;
+  border: 2px solid #1a1e29;
+  background: #4a5063;
+  color: #e8eaf0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.memo-badge.rose {
+  background: #b8433a;
+  color: #fff;
+}
+
+.memo-badge.beast {
+  background: #3d6fa5;
+  color: #fff;
+}
+
+.memo-badge.empty {
+  background: transparent;
+  border: 1.5px dashed #454b5e;
+  color: transparent;
+  box-shadow: none;
+}
+
+.memo-badge.empty:hover {
+  border-color: #8a91a6;
+}
+
+.memo-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.memo-picker {
+  position: fixed;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(244px, calc(100vw - 16px));
+  padding: 10px;
+  background: #1a1e29;
+  border: 1px solid #4a4f5e;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.memo-picker-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.memo-colors {
+  display: flex;
+  gap: 8px;
+}
+
+.memo-colors button {
+  width: auto;
+  flex: 1;
+  min-height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.memo-swatch.rose {
+  background: #b8433a;
+  border-color: #d05a50;
+  color: #fff;
+}
+
+.memo-swatch.beast {
+  background: #3d6fa5;
+  border-color: #5588bd;
+  color: #fff;
+}
+
+.memo-swatch.gray {
+  background: #4a5063;
+  border-color: #5f667c;
+  color: #e8eaf0;
+}
+
+.memo-marks {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.memo-marks button {
+  width: auto;
+  min-height: 36px;
+  padding: 0;
+}
+
+.memo-colors button.selected,
+.memo-marks button.selected {
+  outline: 2px solid #e8eaf0;
+  outline-offset: 1px;
+}
+
+.memo-picker-note {
+  font-size: 12px;
+  color: #9aa0b4;
+  text-align: center;
 }
 
 .resources {
