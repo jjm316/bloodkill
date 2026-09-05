@@ -42,6 +42,7 @@ def cmd_open():
     base.cmd_setup()
     base.cmd_start(30)
     client = base.Client("P1")
+    client.close()
     print(json.dumps({
         "holder": name_of_pid(client, client.state["game"]["daggerHolderId"]),
         "inquisitor": base.load()["inquisitor"],
@@ -55,8 +56,11 @@ def cmd_hit(target):
     attacker = next(n for n in base.live_names(client) if n not in (target, holder))
     if holder != target:
         base.hand_dagger(client, attacker)
+        client.close()
     else:
-        # 目标本人持匕首：先让目标把匕首传给攻击者（目标无浏览器会话时才可用）
+        # 目标本人持匕首：以目标名义连接传匕首。注意这会接管该座位的同名浏览器会话，
+        # 浏览器端会出现"座位已被接管"，验收前需重新加入。
+        print(f"警告：{target} 本人持匕首，将以目标名义连接传匕首（其同名浏览器会话会被接管）", file=sys.stderr)
         passer = base.Client(target)
         passer.send("pass-dagger", {"targetPlayerId": base.player_id_of(passer, attacker)})
         passer.close()
@@ -66,6 +70,7 @@ def cmd_hit(target):
         cur = base.Client(attacker)
         pending = cur.state["game"]["pending"]
         if cur.state["game"]["status"] == "ended" or pending is None:
+            cur.close()
             print(json.dumps({"stopped": None}))
             return
         kind = pending["kind"]
@@ -73,9 +78,11 @@ def cmd_hit(target):
             if pending.get("stage") == "poll":
                 answer_poll_decline(cur)
                 continue
+            cur.close()
             raise AssertionError(f"干涉进入 choice 阶段，驱动未覆盖：{pending}")
         if kind in ("reveal", "token-return"):
             actor = name_of_pid(cur, pending["actorPlayerId"])
+            cur.close()
             print(json.dumps({
                 "stopped": kind,
                 "actor": actor,
@@ -89,12 +96,15 @@ def cmd_hit(target):
             decliner = base.Client(actor)
             decliner.send("choose-skill", {"use": False})
             decliner.close()
+            cur.close()
             continue
+        cur.close()
         raise AssertionError(f"未知窗口 {kind}")
 
 
 def cmd_status(name=None):
     client = base.Client(name or "P1")
+    client.close()
     game = client.state["game"]
     print(json.dumps({
         "status": game["status"],

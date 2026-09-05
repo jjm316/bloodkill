@@ -28,3 +28,12 @@ Status: resolved
 - 过程中抓到并修复一个真 bug：ActionsPanel 单行 JSX 内插入的 `//` 注释被当可见文字渲染，已移到 return 之前。
 - 归还窗口未做独立浏览器验收（场上无人持法杖，无法低成本铺到）；其与亮牌共用同一段分组/发送代码（`choose-return` 每槽恰 1 动作 → 直发路径，已被③覆盖等价路径），风险登记于此。
 - 干涉承伤 / 第 3 点 forceRank 的单槽直发路径与③同理走 `pickSlot` 单动作分支，未单独铺局。
+
+## Comments
+
+**2026-09-05 code-review 修复（bcb0983 评审跟进）**：两轴评审（Standards/Spec）发现两个真实视觉 bug，均已修复并浏览器回归：
+
+1. 全局 `button:hover:not(:disabled)` 填色（特异性 (0,2,1)）压过 `.slot` 的透明底，亮牌窗口 hover 空 hot 槽会被填成灰圆 → 全局规则改为 `:not(.slot)` 排除槽位。实测 hover 背景 rgba(0,0,0,0)、金色 3px 描边反馈保留。备注：并行备忘标记会话随后把该规则进一步扩展为 `:not(.slot):not(.memo-badge)`（徽章彩底同理），该扩展随其功能提交。
+2. `.slot.hot` 的金色脉冲 outline (0,2,0) 盖过全局 `button:focus-visible` (0,1,1)，键盘焦点不可辨 → 新增 `.slot.hot:focus-visible { outline: 3px solid #72b7ff; }`。实测聚焦 hot 槽为蓝环、未聚焦为金脉冲，Enter 开浮层 / Esc 关闭链路通畅。
+
+教训：验收 hover 类修复要量 `background` 的计算值，不能只看 outline（首轮验收即因此漏掉 bug 1）。评审判断题清单（sendSlotAction 第 4 份拷贝、slotInteraction 数据捆、"基数即 wild 语义"等）记录在案，暂不动。
