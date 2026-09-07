@@ -548,12 +548,75 @@ h2 {
 .log {
   font-size: 13px;
   color: #9aa0b4;
+  /* 类别色：互相可辨、适配深色主题；选项卡与行首标签共用同一底色 */
+  --cat-dagger: #d05a50;
+  --cat-intervention: #f5c518;
+  --cat-skill: #9a6fd0;
+  --cat-reveal: #4fae7a;
+  --cat-resource: #4f9bd0;
+  --cat-flow: #8a91a6;
 }
 
 .log ol {
   max-height: 200px;
   overflow-y: auto;
   padding-left: 20px;
+}
+
+/* 类别选项卡：选中=类别色填充+深色字，未选中=透明底+类别色字 */
+.log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.filter-tab {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 13px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.filter-tab.selected {
+  color: #12141a;
+  font-weight: 600;
+}
+
+/* 行首类别标签：与对应选项卡同底色 */
+.cat-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  color: #12141a;
+  vertical-align: 1px;
+}
+
+.log-empty {
+  margin: 8px 0;
+}
+
+/* 每类一行把类别色收进 --cat，下面的通用规则统一消费 */
+.cat-dagger { --cat: var(--cat-dagger); }
+.cat-intervention { --cat: var(--cat-intervention); }
+.cat-skill { --cat: var(--cat-skill); }
+.cat-reveal { --cat: var(--cat-reveal); }
+.cat-resource { --cat: var(--cat-resource); }
+.cat-flow { --cat: var(--cat-flow); }
+
+.cat-tag,
+.filter-tab.selected {
+  /* "全选"无类别色，选中时用中性灰兜底 */
+  background: var(--cat, #8a91a6);
+}
+
+.filter-tab:not(.selected) {
+  color: var(--cat);
 }
 
 /* replay */
@@ -652,6 +715,8 @@ h2 {
   #root { padding: 8px; }
   button, input, select { width: 100%; }
   .room-header button { width: auto; }
+  /* 类别选项卡保持自适应宽度换行，不吃全局按钮 100% 宽；加大触达面防误触 */
+  .log-filters button { width: auto; min-height: 38px; padding: 6px 14px; }
   .action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .action-buttons button { min-width: 0; }
 }
