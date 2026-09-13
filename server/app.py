@@ -253,7 +253,8 @@ async def ws_endpoint(websocket: WebSocket, code: str) -> None:
     await websocket.accept()
     room = manager.get_room(code)
     if room is None:
-        await send_safe(websocket, error_message("room.not-found", "Room not found.", code=code))
+        # details 键名不能是 code：error_message 首参同名，关键字传参会 TypeError。
+        await send_safe(websocket, error_message("room.not-found", "Room not found.", roomCode=code))
         await websocket.close()
         return
 

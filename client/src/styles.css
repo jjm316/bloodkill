@@ -1,5 +1,7 @@
 :root {
   color-scheme: light dark;
+  /* 居中卡片的视口自适应上限：窄屏左右各留 16px，消灭横向溢出 */
+  --panel-max-width: min(380px, calc(100vw - 32px));
 }
 
 * {
@@ -11,6 +13,8 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   background: #12141a;
   color: #e8eaf0;
+  /* 兜底：任何局部溢出不再撑出整页横向滚动（座位网格化后正常情况不应触发） */
+  overflow-x: hidden;
 }
 
 #root {
@@ -102,7 +106,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 380px;
+  max-width: var(--panel-max-width);
   margin: 40px auto;
 }
 
@@ -625,7 +629,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 380px;
+  max-width: var(--panel-max-width);
   margin: 40px auto;
 }
 
@@ -639,7 +643,7 @@ h2 {
 /* banner */
 
 .banner {
-  max-width: 420px;
+  max-width: min(420px, calc(100vw - 32px));
   margin: 40px auto;
   display: flex;
   flex-direction: column;
@@ -673,7 +677,7 @@ h2 {
   border: 1px solid #4a4f5e;
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  max-width: 380px;
+  max-width: var(--panel-max-width);
   width: 100%;
   padding: 16px;
   display: flex;
@@ -715,6 +719,11 @@ h2 {
   #root { padding: 8px; }
   button, input, select { width: 100%; }
   .room-header button { width: auto; }
+  /* 座位区改网格：座位不再被 flex 挤成三列溢出，按 ≥140px 强制换行 */
+  .players {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
   /* 类别选项卡保持自适应宽度换行，不吃全局按钮 100% 宽；加大触达面防误触 */
   .log-filters button { width: auto; min-height: 38px; padding: 6px 14px; }
   .action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

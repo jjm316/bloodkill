@@ -20,6 +20,7 @@
 
 连接 `ws://<host>/ws/{code}`（客户端按 `location.host` 同源推导，HTTP 页面用 ws，HTTPS 页面用 wss）。
 连上后**第一条消息必须是 `hello`**。
+房间不存在：accept 后先返回 `room.not-found` 错误帧（details 带 `roomCode`），随后关闭连接。
 
 ### 客户端 → 服务器
 

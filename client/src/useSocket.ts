@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandAck, GameEvent, RoomState, ServerError } from "./types";
 
 const PROTOCOL_VERSION = "2";
+// 初始进房超时：从未收到过状态投影的连接，超过此时长仍未应答视为进房失败
+// （房间号错误 / 服务器未启动 / 网络不通）。已收到过状态的断线重连不受影响。
+const JOIN_TIMEOUT_MS = 10_000;
 
 export function newCommandId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -17,6 +20,8 @@ export interface SocketHandle {
   closed: boolean;
   reconnecting: boolean;
   takenOver: boolean;
+  /** 初始进房超时：从未收到状态且 10 秒无应答，已停止重连，只能返回大厅。 */
+  failed: boolean;
   send: (command: string, payload?: Record<string, unknown>) => void;
   sendHost: (action: string, payload?: Record<string, unknown>) => void;
 }
@@ -33,6 +38,7 @@ export function useGameSocket(code: string, name: string, token: string | null):
   const [closed, setClosed] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
+  const [failed, setFailed] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const stateRef = useRef<RoomState | null>(null);
   const pendingCommandsRef = useRef(
@@ -43,6 +49,7 @@ export function useGameSocket(code: string, name: string, token: string | null):
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     let disposed = false;
     let reconnectTimer: number | undefined;
+    let joinTimer: number | undefined;
     let reconnectAttempt = 0;
     let canReconnect = true;
 
@@ -83,6 +90,10 @@ export function useGameSocket(code: string, name: string, token: string | null):
         const typed = message as { type?: string };
         if (typed.type === "state") {
           const next = message as RoomState;
+          if (joinTimer !== undefined) {
+            window.clearTimeout(joinTimer);
+            joinTimer = undefined;
+          }
           stateRef.current = next;
           setState(next);
           setReconnecting(false);
@@ -125,9 +136,23 @@ export function useGameSocket(code: string, name: string, token: string | null):
 
     connect();
 
+    // 初始进房超时：只武装在从未收到过状态的连接上（含连不上、握手无应答；
+    // 计时从挂载起算而非从 ws 打开起算，服务器未启动也能按时失败）。
+    // 首份状态到达即解除；此后断线走原有指数退避重连，不会进入失败态。
+    if (!stateRef.current) {
+      joinTimer = window.setTimeout(() => {
+        // canReconnect 必须先于 close() 置 false：onclose 依赖它跳过重连排程
+        canReconnect = false;
+        if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+        setFailed(true);
+        wsRef.current?.close();
+      }, JOIN_TIMEOUT_MS);
+    }
+
     return () => {
       disposed = true;
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (joinTimer !== undefined) window.clearTimeout(joinTimer);
       wsRef.current?.close();
     };
   }, [code, name, token]);
@@ -150,5 +175,5 @@ export function useGameSocket(code: string, name: string, token: string | null):
     wsRef.current?.send(JSON.stringify({ type: "host", action, ...payload }));
   }, []);
 
-  return { state, events, error, closed, reconnecting, takenOver, send, sendHost };
+  return { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost };
 }

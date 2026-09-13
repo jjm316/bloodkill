@@ -296,7 +296,11 @@ class FakeWebSocket:
     def __init__(self, inbound=None):
         self.inbound = inbound
         self.sent = []
+        self.accepted = False
         self.closed = False
+
+    async def accept(self):
+        self.accepted = True
 
     async def receive_json(self):
         if self.inbound is None:
@@ -308,6 +312,42 @@ class FakeWebSocket:
 
     async def close(self):
         self.closed = True
+
+
+@unittest.skipUnless(FASTAPI_AVAILABLE, "requires server/requirements.txt")
+class WsHandshakeTests(unittest.TestCase):
+    def setUp(self):
+        from server import app
+        from server.rooms import RoomManager
+
+        self.app = app
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.original_manager = app.manager
+        self.original_conns = app.conns.copy()
+        self.addCleanup(self._restore_globals)
+        app.manager = RoomManager(Path(self._tmp.name))
+        app.conns.clear()
+
+    def _restore_globals(self):
+        self.app.manager = self.original_manager
+        self.app.conns.clear()
+        self.app.conns.update(self.original_conns)
+
+    def test_unknown_room_gets_error_frame_then_clean_close(self):
+        # 回归：错误帧的房间号曾以 code= 关键字传入 error_message，与首参同名
+        # 冲突抛 TypeError，客户端只能看到连接异常而非 room.not-found。
+        ws = FakeWebSocket()
+
+        asyncio.run(self.app.ws_endpoint(ws, "000000"))
+
+        self.assertTrue(ws.accepted)
+        self.assertEqual(len(ws.sent), 1)
+        error = ws.sent[0]
+        self.assertEqual(error["type"], "error")
+        self.assertEqual(error["code"], "room.not-found")
+        self.assertEqual(error["details"], {"roomCode": "000000"})
+        self.assertTrue(ws.closed)
 
 
 if __name__ == "__main__":

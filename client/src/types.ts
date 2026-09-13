@@ -163,3 +163,6 @@ export function displayPhase(phase: string): string {
 export function displayResource(resource: string): string {
   return ({ quill: "羽毛笔", shield: "盾牌", sword: "剑", staff: "法杖", fan: "扇子" } as Record<string, string>)[resource] ?? resource;
 }
+
+// 标签页标题基准：与 index.html 的 <title> 保持一致；进房后 GameScreen 附加 #房间号。
+export const APP_TITLE = "鲜血盟约";

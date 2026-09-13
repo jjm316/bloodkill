@@ -5,7 +5,7 @@ import { EVENT_CATEGORIES, categoryOf, isLogVisible, loadMutedCategories, saveMu
 import type { EventCategoryId } from "./eventLog";
 import { useMemoMarkers } from "./memoMarkers";
 import type { Action, GameEvent, GameState, PlayerView, RoomState } from "./types";
-import { actionToCommand, displayFaction, displayPhase, displayRank, displayResource, displayStatus } from "./types";
+import { actionToCommand, APP_TITLE, displayFaction, displayPhase, displayRank, displayResource, displayStatus } from "./types";
 import { useGameSocket } from "./useSocket";
 import type { RoomCredentials } from "./Lobby";
 
@@ -78,7 +78,7 @@ function EventLog({ events, players }: { events: GameEvent[]; players?: PlayerVi
   </details>;
 }
 function Banner({ title, detail, onBack }: { title: string; detail: string; onBack: () => void }) { return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p><button onClick={onBack}>返回大厅</button></section>; }
-const errorText = (code: string, _message: string) => ({ "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "game.player-count": "玩家人数必须为 6–12 人。", "player.name-required": "姓名不能为空。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
+const errorText = (code: string, _message: string) => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "game.player-count": "玩家人数必须为 6–12 人。", "player.name-required": "姓名不能为空。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
 
 /** 服务端墙钟锚定 + 本地每秒跳动的倒计时；仅在干涉窗口存在时启用。 */
 function useDeadlineSeconds(deadline: number | null | undefined, serverTime: number | undefined) {
@@ -130,7 +130,7 @@ function InterventionPollLayer({ game, serverTime, noBlock, send }: { game: Game
 }
 
 export function GameScreen({ credentials, onLeave }: { credentials: RoomCredentials; onLeave: () => void }) {
-  const { state, events, error, closed, reconnecting, takenOver, send, sendHost } = useGameSocket(credentials.code, credentials.name, credentials.token);
+  const { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost } = useGameSocket(credentials.code, credentials.name, credentials.token);
   const [noBlock, setNoBlock] = useState(() => localStorage.getItem(NO_BLOCK_KEY) === "1");
   const lastAutoPollKey = useRef<string | null>(null);
   const pending = state?.game?.pending ?? null;
@@ -150,9 +150,22 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
   // 备忘标记（ADR 0004）：纯本机私有状态，Hook 必须位于所有条件 return 之前。
   const memos = useMemoMarkers(credentials.code, state?.game);
 
+  // 标签页标题：进房后带房间号，多窗口/手机多标签可区分；卸载（离开房间）还原。
+  // 同样必须位于条件 return 之前。
+  const roomCodeOfState = state?.roomCode;
+  useEffect(() => {
+    if (!roomCodeOfState) return;
+    document.title = `${APP_TITLE} #${roomCodeOfState}`;
+    return () => {
+      document.title = APP_TITLE;
+    };
+  }, [roomCodeOfState]);
+
   if (takenOver) return <Banner title="座位已被接管" detail="同名的新连接已接管此座位，请使用其他姓名重新加入，或等待连接恢复。" onBack={onLeave} />;
   if (closed && !state && !reconnecting) return <Banner title="连接已断开" detail="房间连接在收到游戏状态前已关闭。" onBack={onLeave} />;
   if (error && !state) return <Banner title="无法加入房间" detail={errorText(error.code, error.message)} onBack={onLeave} />;
+  // 初始进房超时（服务器未启动/网络不通/无应答）：服务端错误帧优先给出具体原因。
+  if (failed && !state) return <Banner title="无法加入房间" detail="连接超时，请核对房间号；若房间号正确，请确认服务器已启动。" onBack={onLeave} />;
   if (!state) return <div className="loading" role="status" aria-live="polite">正在连接……</div>;
   const spectating = state.yourPlayerId === null;
   const showTable = state.roomStatus === "playing" || state.roomStatus === "ended";
