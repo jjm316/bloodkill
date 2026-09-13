@@ -248,7 +248,9 @@ const Seat = memo(function Seat({
   onSlotAction?: (action: Action) => void;
   /** 私有备忘角标：不传 = 不渲染（自己座位 / 回放屏） */
   memoBadge?: SeatMemo;
-  /** 圆桌坐标（容器百分比）：窄屏网格下 position 非 absolute，left/top 自动失效 */
+  /** 圆桌坐标（容器百分比）：以 CSS 变量注入，仅 ≥720px 圆桌分支的 CSS 消费
+   * （left: var(--seat-x)）；窄屏网格分支不消费变量，避免 relative 定位下
+   * 百分比 left/top 变成从网格单元格平移的偏移量 */
   style?: React.CSSProperties;
 }) {
   const [memoPickerRect, setMemoPickerRect] = useState<DOMRect | null>(null);
@@ -481,7 +483,7 @@ export function Board({ game, onSlotAction, memos }: { game: GameState; onSlotAc
                 highlight={highlightFor(game.pending, player.playerId)}
                 selfActions={onSlotAction && isSelf ? slotActions : undefined}
                 onSlotAction={isSelf ? onSlotAction : undefined}
-                style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                style={{ "--seat-x": `${pos.x}%`, "--seat-y": `${pos.y}%` } as React.CSSProperties}
                 memoBadge={
                   memos && !isSelf
                     ? {

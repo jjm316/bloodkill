@@ -858,6 +858,10 @@ h2 {
 
   .table-area .seat {
     position: absolute;
+    /* 座位坐标只在此分支消费（JS 注入的 --seat-x/--seat-y）；窄屏网格分支
+       .seat 是 relative，若直接给 left/top 会变成从网格单元格平移的偏移 */
+    left: var(--seat-x, 50%);
+    top: var(--seat-y, 50%);
     width: var(--seat-w, 208px);
     transform: translate(-50%, -50%); /* 座位中心对准坐标点 */
     background: linear-gradient(180deg, rgba(255, 240, 235, 0.03), transparent 40%), var(--card);
