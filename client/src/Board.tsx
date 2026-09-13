@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useState } from "react";
+import { Icon, type IconName } from "./icons";
 import type { MemoApi, MemoColor, MemoEntry, MemoMark, MemoPatch } from "./memoMarkers";
 import { memoColorOf } from "./memoMarkers";
+import { seatPosition, seatTier, tableShape, type SeatTier } from "./tableSeats";
 import type { Action, GameState, Identity, PendingView, PlayerView } from "./types";
 import { displayClueIcon, displayFaction, displayRank, displayResource } from "./types";
 
@@ -30,12 +32,13 @@ function useDismissOverlay(active: boolean, close: () => void) {
   }, [active, close]);
 }
 
-const RESOURCE_ICONS: Record<string, string> = {
-  quill: "🪶",
-  shield: "🛡",
-  sword: "⚔",
-  staff: "🪄",
-  fan: "🌀",
+// 资源图标映射：emoji 换内联 SVG（spec 2026-09-13 拍板），未知资源退回中文本地化名
+const RESOURCE_ICONS: Record<string, IconName> = {
+  quill: "quill",
+  shield: "shield",
+  sword: "sword",
+  staff: "staff",
+  fan: "fan",
 };
 
 function Resources({ resources }: { resources: Record<string, number> }) {
@@ -45,7 +48,7 @@ function Resources({ resources }: { resources: Record<string, number> }) {
     <div className="resources">
       {held.map(([name, count]) => (
         <span key={name} title={displayResource(name)}>
-          {RESOURCE_ICONS[name] ?? name}×{count}
+          {RESOURCE_ICONS[name] ? <Icon name={RESOURCE_ICONS[name]} /> : displayResource(name)}×{count}
         </span>
       ))}
     </div>
@@ -223,6 +226,7 @@ function ClueSlots({
 const Seat = memo(function Seat({
   player,
   dagger,
+  self,
   identity,
   clueLine,
   selfMarkers,
@@ -230,9 +234,12 @@ const Seat = memo(function Seat({
   selfActions,
   onSlotAction,
   memoBadge,
+  style,
 }: {
   player: PlayerView;
   dagger: boolean;
+  /** viewer 自己的座位：桌面端圆桌固定在正下方（CSS .seat.self 描金边） */
+  self?: boolean;
   identity?: Identity;
   clueLine?: string;
   selfMarkers?: string[];
@@ -241,6 +248,8 @@ const Seat = memo(function Seat({
   onSlotAction?: (action: Action) => void;
   /** 私有备忘角标：不传 = 不渲染（自己座位 / 回放屏） */
   memoBadge?: SeatMemo;
+  /** 圆桌坐标（容器百分比）：窄屏网格下 position 非 absolute，left/top 自动失效 */
+  style?: React.CSSProperties;
 }) {
   const [memoPickerRect, setMemoPickerRect] = useState<DOMRect | null>(null);
   const closeMemoPicker = useCallback(() => setMemoPickerRect(null), []);
@@ -253,11 +262,16 @@ const Seat = memo(function Seat({
   const selectedMark = memoEntry?.mark ?? null;
 
   return (
-    <article role="listitem" className={`seat${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`} aria-label={`${player.displayName}${player.captured ? "，已被捕获" : ""}`}>
+    <article
+      role="listitem"
+      className={`seat${self ? " self" : ""}${player.captured ? " captured" : ""}${dagger ? " dagger" : ""}`}
+      style={style}
+      aria-label={`${player.displayName}${player.captured ? "，已被捕获" : ""}`}
+    >
       <div className="seat-name">
         {dagger && (
           <span className="dagger-icon" title="持有匕首">
-            🗡️
+            <Icon name="dagger" />
           </span>
         )}
         {player.displayName}
@@ -415,6 +429,9 @@ function highlightFor(pending: PendingView | null, playerId: string): string[] |
   return pending.eligibleTokens;
 }
 
+// 档位 → 圆桌 CSS 类（styles.css 按档给座位宽度；xl 另有紧凑卡片）
+const TIER_CLASS: Record<SeatTier, string> = { base: "", lg: " size-lg", xl: " size-xl" };
+
 export function Board({ game, onSlotAction, memos }: { game: GameState; onSlotAction?: (action: Action) => void; memos?: MemoApi }) {
   const viewer = game.viewer;
   const viewerId = viewer?.playerId ?? null;
@@ -432,33 +449,52 @@ export function Board({ game, onSlotAction, memos }: { game: GameState; onSlotAc
       (slotActions[action.token] ??= []).push(action);
     }
   }
+  // 圆桌几何（spec 2026-09-13 拍板）：座位坐标来自纯函数 tableSeats，viewer 座位
+  // 旋转到正下方、数组前驱（引擎 seenNeighbourClue 的"左邻"）落在其左手边；
+  // 回放/旁观无 viewer 时锚定 0 号座位。窄屏坐标由 CSS 网格接管（left/top 失效）。
+  const total = game.players.length;
+  const viewerIndex = Math.max(0, game.players.findIndex((p) => p.playerId === viewerId));
+  const shape = tableShape(total);
   return (
     <section className="board" aria-label="对局桌面">
       {game.status === "ended" && game.result && <ResultBanner result={game.result} players={game.players} />}
-      {game.pending && <PendingBanner pending={game.pending} players={game.players} />}
-      <div className="players" role="list" aria-label="玩家座位">
-        {game.players.map((player) => (
-          <Seat
-            key={player.playerId}
-            player={player}
-            dagger={game.daggerHolderId === player.playerId}
-            identity={viewerId === player.playerId ? viewer?.identity : undefined}
-            clueLine={viewerId === player.playerId ? clueLine : undefined}
-            selfMarkers={viewerId === player.playerId ? viewer?.identityMarkers : undefined}
-            highlight={highlightFor(game.pending, player.playerId)}
-            selfActions={onSlotAction && player.playerId === viewerId ? slotActions : undefined}
-            onSlotAction={player.playerId === viewerId ? onSlotAction : undefined}
-            memoBadge={
-              memos && viewerId !== player.playerId
-                ? {
-                    entry: memos.markers[player.playerId],
-                    onChange: (patch) => memos.change(player.playerId, patch),
-                    onClear: () => memos.clear(player.playerId),
-                  }
-                : undefined
-            }
-          />
-        ))}
+      <div
+        className={`table-area${TIER_CLASS[seatTier(total)]}`}
+        style={{ "--table-h": `${shape.height}px`, "--table-rx": `${shape.rx}%`, "--table-ry": `${shape.ry}%` } as React.CSSProperties}
+      >
+        {/* 纯 CSS 椭圆桌（深绯红渐变 + 金描边）：装饰性，窄屏隐藏 */}
+        <div className="table-oval" aria-hidden="true" />
+        {game.pending && <PendingBanner pending={game.pending} players={game.players} />}
+        <div className="players" role="list" aria-label="玩家座位">
+          {game.players.map((player, index) => {
+            const isSelf = player.playerId === viewerId;
+            const pos = seatPosition(index, total, viewerIndex);
+            return (
+              <Seat
+                key={player.playerId}
+                player={player}
+                dagger={game.daggerHolderId === player.playerId}
+                self={isSelf}
+                identity={isSelf ? viewer?.identity : undefined}
+                clueLine={isSelf ? clueLine : undefined}
+                selfMarkers={isSelf ? viewer?.identityMarkers : undefined}
+                highlight={highlightFor(game.pending, player.playerId)}
+                selfActions={onSlotAction && isSelf ? slotActions : undefined}
+                onSlotAction={isSelf ? onSlotAction : undefined}
+                style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                memoBadge={
+                  memos && !isSelf
+                    ? {
+                        entry: memos.markers[player.playerId],
+                        onChange: (patch) => memos.change(player.playerId, patch),
+                        onClear: () => memos.clear(player.playerId),
+                      }
+                    : undefined
+                }
+              />
+            );
+          })}
+        </div>
       </div>
     </section>
   );
