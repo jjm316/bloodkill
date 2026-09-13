@@ -1,7 +1,7 @@
 # 桌游观感升级：圆桌座位 / 绯红金主题 / SVG 图标
 
 Type: task
-Status: ready-for-agent
+Status: resolved（2026-09-13 实现，commit e63e4e2；视觉验收与对比度记录见本文件末尾 Comments）
 批次: 第二批（P1，依赖第一批完成后的布局基线）
 验收基准截图: .scratch/ui-review/06-board-attacker.png（现状：流式两行座位 + 下半屏空置）
 视觉基准: .scratch/ui-table-theme/mockups/（2026-09-13 grill 产出：compare-board-desktop / compare-board-mobile / compare-waiting-desktop / icon-strip 四张前后对比图；after-*.html 为可改源稿，桌形与色值以参考稿为准）
@@ -67,3 +67,23 @@ Status: ready-for-agent
 
 - 本 spec 视觉方向已经 2026-09-12 评估确认（规则库给出的桌游类基准同为"深底 + 强对比强调色"）；2026-09-13 grill 拍板四项并回写正文：①画椭圆桌形本体 ②图标 7 个（"8 个"系笔误）③waiting-banner 不进桌心 ④配色走参考稿紫红黑方向。色值以参考稿为起点、实现时按对比度校验微调即可。
 - 圆桌是三个批次中唯一动组件结构的项；若实施中发现破坏性过大，可独立回退而不影响主题与图标两项。
+
+## Comments
+
+### 2026-09-13 实现记录（commit e63e4e2）
+
+实现与验收要点：
+
+- **座位几何**（`client/src/tableSeats.ts`）：`seatPosition(index, total, viewerIndex)` 与 `tableShape(total)`，`seatTier` 分档（base ≤8 / lg 9–10 / xl 11–12）是宽度/高度的单一出处；方位遵循参考稿坐标——viewer 在参数角 90°（6 点位），**数组后继在其逆时针侧（右手边）**、数组前驱（引擎 `seenNeighbourClue` 的展示者＝UI 里的"左邻"）在左手边。注意 spec 正文"其余按座位顺序顺时针排布"与参考稿坐标及"'左邻'即数组前驱"不变量相矛盾，实现取后两者（用户故事 1/2 是承重墙，review 已确认）。
+- **几何约束**写进了 `tableSeats.test.ts`：除 spec 要求的三项（等分/viewer 正下方/6 与 12 人不重叠）外，另加卡片级不重叠回归（镜像 CSS 座位宽度表，6–12 人 × 720/1440 视口 × 桌心横幅 110px 预算）。推导中修正了三处会重叠的参数组合（6 人容器 650px、9–10 人 680px、xl 档紧凑卡片）。
+- **横幅宽度公式**：`max-width: min(430px, calc(74.6vw - 190px))`（74.6vw = 2·rx(base)，防 3/9 点座位被桌心横幅遮住）。
+- **图标**（`client/src/icons.tsx`）：7 个 stroke SVG，造型取自 icon-strip 参考稿；玫瑰/野兽维持"字+色块"。
+- **主题**（`client/src/styles.css`）：全部硬编码色收敛为 `:root` 变量（含玫红/兽蓝/灰三组槽位-备忘共用 token 与 `--accent-crimson-glow/deep`）；h1/h2、`.pending strong`、`.result strong` 用衬线栈。
+- **对比度**：`.scratch/ui-table-theme/contrast_check.py` 抽查 23 组文字/背景组合，全部 ≥4.5:1（最低 4.86:1），无需微调参考稿色值。
+
+### 2026-09-13 视觉验收记录
+
+- 驱动：`.scratch/ui-table-theme/scene.py scene|waiting|waiting-lock`（同名接管"阿紫"浏览器座位；12 人局用 `- <<EOF` 覆写 NAMES）。截图在 `.scratch/ui-table-theme/shots/`。
+- visual-verifier 判定 14 项中 12 项 PASS：1440×900 八人圆桌与参考稿逐座偏差 ≤10px；390×844 与第一批基线布局一致（仅主题色变化，符合预期）；等待房/大厅主题统一。
+- 遗留（非本批回归，预存问题）：移动端等待/待办横幅长名单时"（剩 N 秒）"右缘截断，第一批基线 07 同样存在——留给后续批次（建议允许换行或缩字号）。
+- 实现过程中修掉一个布局 bug：flex 列容器子项 `margin: 0 auto` 会失去 cross-axis stretch，`.table-area` 宽度塌成 0（内部全绝对定位时 fit-content=0），需显式 `width: 100%`。
