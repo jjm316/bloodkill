@@ -188,7 +188,7 @@ def assert_state_invariants(testcase: unittest.TestCase, state) -> None:
         testcase.assertIsNone(state.result)
     if state.status == "ended":
         testcase.assertIsNotNone(state.result)
-        testcase.assertIn(state.result["winner"], {"rose", "beast", "draw"})
+        testcase.assertIn(state.result["winner"], {"rose", "beast", "draw", "secret-order"})
         testcase.assertIn("branch", state.result)
         testcase.assertEqual(len(state.result["ranking"]), len(state.players))
         testcase.assertEqual(state.phase, {"kind": "ended"})

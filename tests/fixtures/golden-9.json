@@ -268,53 +268,53 @@
     },
     "pending": null,
     "result": {
-      "winner": "draw",
+      "winner": "secret-order",
       "branch": "inquisitor-captured",
       "capturedPlayerId": "p5",
       "activePlayerId": "p1",
       "ranking": [
         {
-          "playerId": "p0",
+          "playerId": "p5",
           "place": 1,
-          "score": 0
+          "score": 1
         },
         {
-          "playerId": "p1",
+          "playerId": "p0",
           "place": 2,
           "score": 0
         },
         {
-          "playerId": "p2",
+          "playerId": "p1",
           "place": 3,
           "score": 0
         },
         {
-          "playerId": "p3",
+          "playerId": "p2",
           "place": 4,
           "score": 0
         },
         {
-          "playerId": "p4",
+          "playerId": "p3",
           "place": 5,
           "score": 0
         },
         {
-          "playerId": "p6",
+          "playerId": "p4",
           "place": 6,
           "score": 0
         },
         {
-          "playerId": "p7",
+          "playerId": "p6",
           "place": 7,
           "score": 0
         },
         {
-          "playerId": "p8",
+          "playerId": "p7",
           "place": 8,
           "score": 0
         },
         {
-          "playerId": "p5",
+          "playerId": "p8",
           "place": 9,
           "score": 0
         }
@@ -1836,53 +1836,53 @@
         "timestamp": 0.0,
         "commandId": "respond-4-p8",
         "payload": {
-          "winner": "draw",
+          "winner": "secret-order",
           "branch": "inquisitor-captured",
           "capturedPlayerId": "p5",
           "activePlayerId": "p1",
           "ranking": [
             {
-              "playerId": "p0",
+              "playerId": "p5",
               "place": 1,
-              "score": 0
+              "score": 1
             },
             {
-              "playerId": "p1",
+              "playerId": "p0",
               "place": 2,
               "score": 0
             },
             {
-              "playerId": "p2",
+              "playerId": "p1",
               "place": 3,
               "score": 0
             },
             {
-              "playerId": "p3",
+              "playerId": "p2",
               "place": 4,
               "score": 0
             },
             {
-              "playerId": "p4",
+              "playerId": "p3",
               "place": 5,
               "score": 0
             },
             {
-              "playerId": "p6",
+              "playerId": "p4",
               "place": 6,
               "score": 0
             },
             {
-              "playerId": "p7",
+              "playerId": "p6",
               "place": 7,
               "score": 0
             },
             {
-              "playerId": "p8",
+              "playerId": "p7",
               "place": 8,
               "score": 0
             },
             {
-              "playerId": "p5",
+              "playerId": "p8",
               "place": 9,
               "score": 0
             }
@@ -1891,7 +1891,7 @@
         }
       },
       "previousHash": "7701f4ff81d93e3441ded2bd0b6c3f484f66216a3ae9737c2746f85498a80ed1",
-      "hash": "b70a6067b39b26cef2f7682a149288b545e36763870fcd0129ce01305afe9d30"
+      "hash": "27be692c2b8b6e2598ec705a28b773390526ceab55e5019d3208f540a2f0d13a"
     },
     {
       "event": {
@@ -1912,8 +1912,8 @@
           }
         }
       },
-      "previousHash": "b70a6067b39b26cef2f7682a149288b545e36763870fcd0129ce01305afe9d30",
-      "hash": "49a9c89141e74f4ddb3bfb3da450150b6b6505d520d10805c7a2c44b6b3b29da"
+      "previousHash": "27be692c2b8b6e2598ec705a28b773390526ceab55e5019d3208f540a2f0d13a",
+      "hash": "0dee25b274d3328842af5eb70dc42fafce4825669fd2ad1e1498a5fa7b4f49d6"
     }
   ],
   "commands": [
@@ -2413,7 +2413,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "49a9c89141e74f4ddb3bfb3da450150b6b6505d520d10805c7a2c44b6b3b29da",
-    "snapshotHash": "c06c18604076bdea0dea4ded9719b06b7a41f2eb36c736a8139689a1ff35572d"
+    "eventHead": "0dee25b274d3328842af5eb70dc42fafce4825669fd2ad1e1498a5fa7b4f49d6",
+    "snapshotHash": "843851b079413c3f536e0884414ebf19fb0a51968ef11b681dc47fe8ae9e3f13"
   }
 }

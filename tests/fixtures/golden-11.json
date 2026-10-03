@@ -320,63 +320,63 @@
     },
     "pending": null,
     "result": {
-      "winner": "draw",
+      "winner": "secret-order",
       "branch": "inquisitor-captured",
       "capturedPlayerId": "p0",
       "activePlayerId": "p3",
       "ranking": [
         {
-          "playerId": "p1",
+          "playerId": "p0",
           "place": 1,
-          "score": 0
+          "score": 1
         },
         {
-          "playerId": "p10",
+          "playerId": "p1",
           "place": 2,
           "score": 0
         },
         {
-          "playerId": "p2",
+          "playerId": "p10",
           "place": 3,
           "score": 0
         },
         {
-          "playerId": "p3",
+          "playerId": "p2",
           "place": 4,
           "score": 0
         },
         {
-          "playerId": "p4",
+          "playerId": "p3",
           "place": 5,
           "score": 0
         },
         {
-          "playerId": "p5",
+          "playerId": "p4",
           "place": 6,
           "score": 0
         },
         {
-          "playerId": "p6",
+          "playerId": "p5",
           "place": 7,
           "score": 0
         },
         {
-          "playerId": "p7",
+          "playerId": "p6",
           "place": 8,
           "score": 0
         },
         {
-          "playerId": "p8",
+          "playerId": "p7",
           "place": 9,
           "score": 0
         },
         {
-          "playerId": "p9",
+          "playerId": "p8",
           "place": 10,
           "score": 0
         },
         {
-          "playerId": "p0",
+          "playerId": "p9",
           "place": 11,
           "score": 0
         }
@@ -2074,63 +2074,63 @@
         "timestamp": 0.0,
         "commandId": "respond-4-p10",
         "payload": {
-          "winner": "draw",
+          "winner": "secret-order",
           "branch": "inquisitor-captured",
           "capturedPlayerId": "p0",
           "activePlayerId": "p3",
           "ranking": [
             {
-              "playerId": "p1",
+              "playerId": "p0",
               "place": 1,
-              "score": 0
+              "score": 1
             },
             {
-              "playerId": "p10",
+              "playerId": "p1",
               "place": 2,
               "score": 0
             },
             {
-              "playerId": "p2",
+              "playerId": "p10",
               "place": 3,
               "score": 0
             },
             {
-              "playerId": "p3",
+              "playerId": "p2",
               "place": 4,
               "score": 0
             },
             {
-              "playerId": "p4",
+              "playerId": "p3",
               "place": 5,
               "score": 0
             },
             {
-              "playerId": "p5",
+              "playerId": "p4",
               "place": 6,
               "score": 0
             },
             {
-              "playerId": "p6",
+              "playerId": "p5",
               "place": 7,
               "score": 0
             },
             {
-              "playerId": "p7",
+              "playerId": "p6",
               "place": 8,
               "score": 0
             },
             {
-              "playerId": "p8",
+              "playerId": "p7",
               "place": 9,
               "score": 0
             },
             {
-              "playerId": "p9",
+              "playerId": "p8",
               "place": 10,
               "score": 0
             },
             {
-              "playerId": "p0",
+              "playerId": "p9",
               "place": 11,
               "score": 0
             }
@@ -2139,7 +2139,7 @@
         }
       },
       "previousHash": "85736b5a05c8093c379dbb353fccdc06411b3645fee6eb389d707feb013876d0",
-      "hash": "db1096c3fb2f51a4202cb6c76c52b8291662606f625ec14627bd4f81157c8970"
+      "hash": "5e80df6b8044d495834944d2bf7915c6397e0b9e75e919f15818875c37971f82"
     },
     {
       "event": {
@@ -2160,8 +2160,8 @@
           }
         }
       },
-      "previousHash": "db1096c3fb2f51a4202cb6c76c52b8291662606f625ec14627bd4f81157c8970",
-      "hash": "47a7b9be97ff020399d06ad4f36843a89432e63466d1033d6bc6fbe390ac55c7"
+      "previousHash": "5e80df6b8044d495834944d2bf7915c6397e0b9e75e919f15818875c37971f82",
+      "hash": "06b13fece649396ae82d8637bdb07ded52bb4c33fecb9e0dc8f14841a083b84f"
     }
   ],
   "commands": [
@@ -2763,7 +2763,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "47a7b9be97ff020399d06ad4f36843a89432e63466d1033d6bc6fbe390ac55c7",
-    "snapshotHash": "096767ccc5bc756d336a1bd96c1351816abe90da838f3eafa8b6af0c0795cce3"
+    "eventHead": "06b13fece649396ae82d8637bdb07ded52bb4c33fecb9e0dc8f14841a083b84f",
+    "snapshotHash": "a757c54a9a0011b1f4a2ef92d9d3f68e8af05ca4218d9b9764e5c09c1be07eab"
   }
 }

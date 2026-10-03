@@ -870,7 +870,10 @@ class RulesEngine:
             winner = active.faction if captured_is_leader else ("beast" if active.faction == "rose" else "rose")
             branch = "captured-leader" if captured_is_leader else "captured-player"
         else:
-            winner = "draw"
+            # ADR 0007: the corpus rules the captured inquisitor's line a
+            # solo win for the inquisitor, not a draw; the true-curse
+            # override below only rewrites family winners, so it stays out.
+            winner = "secret-order"
             branch = "inquisitor-captured"
         if winner in {"rose", "beast"} and self._winning_leader_has_true_curse(state, winner):
             winner = "secret-order"

@@ -1282,7 +1282,10 @@ class EndGameBranchTests(unittest.TestCase):
         # capturing a non-leader makes the attacker's clan lose
         self.assertEqual(engine.state.result["winner"], "rose")
 
-    def test_inquisitor_captured_is_draw(self):
+    def test_inquisitor_captured_gives_the_inquisitor_a_solo_win(self):
+        # ADR 0007: capturing the inquisitor is the inquisitor's solo win,
+        # not a draw; the true-curse override never applies here because it
+        # only rewrites rose/beast winners.
         engine = started(7)
         inquisitor = next(
             player for player in engine.state.players.values() if player.faction == "secret-order"
@@ -1294,7 +1297,7 @@ class EndGameBranchTests(unittest.TestCase):
         answer_poll(engine)
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(engine.state.result["branch"], "inquisitor-captured")
-        self.assertEqual(engine.state.result["winner"], "draw")
+        self.assertEqual(engine.state.result["winner"], "secret-order")
 
     def test_inquisitor_active_capture_branch(self):
         # reachable once the alchemist can return a revealed rank token

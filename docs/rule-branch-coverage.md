@@ -104,7 +104,7 @@ Issue 20 branch additions:
 | `_after_damage` 开窗总则（ADR 0009） | 本次伤害新亮出 rank 即开技能窗（攻击/挡刀/技能/反伤，自选或被迫，`trigger` 可为 None）；唯一例外 = 感应者强制亮出（封印，永不再开）；rank 4 仅 intervention 开窗（语料"仅在自己干涉后"）；已使用/已弃用/已封印永不再开；技能伤害永不触发干涉投票 | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window`；`SkillBranchTests.test_assassin_victim_self_chosen_rank_reveal_opens_skill_window_and_defers_dagger`、`test_alchemist_harm_third_point_forced_rank_opens_victim_window`、`test_berserker_reaction_third_point_forced_rank_opens_attacker_window`、`test_berserker_window_from_skill_damage_counters_the_skill_user`、`test_skill_window_only_opens_once_per_rank_reveal`、`test_mentalist_seal_kills_the_curse_path_and_heal_cannot_unseal` |
 | `_end_game` 捕获家族领袖 | `captured-leader`，攻击方胜 | `EndGameBranchTests.test_captured_leader_branch` |
 | `_end_game` 捕获普通成员 | `captured-player`，攻击方负 | `EndGameBranchTests.test_captured_non_leader_branch` |
-| `_end_game` 审判者被捕获 | `inquisitor-captured`，平局 | `EndGameBranchTests.test_inquisitor_captured_is_draw` |
+| `_end_game` 审判者被捕获 | `inquisitor-captured`，审判者独赢（ADR 0007，原平局作废） | `EndGameBranchTests.test_inquisitor_captured_gives_the_inquisitor_a_solo_win` |
 | `_end_game` 审判者为行动者 | `inquisitor-active-capture`（注入，14 后自然可达） | `EndGameBranchTests.test_inquisitor_active_capture_branch` |
 | `_is_leader` 领袖判定 | 家族存活者最低 rank | 上述 leader/non-leader 两测试 |
 | 状态校验 | damage/capture、revealed、匕首持有者不变量 | 性质 `StateInvariantPropertyTests`；`RulesEngineTests.test_checkpoint_resume_continues_without_double_applying` |

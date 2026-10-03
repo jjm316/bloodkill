@@ -216,43 +216,43 @@
     },
     "pending": null,
     "result": {
-      "winner": "draw",
+      "winner": "secret-order",
       "branch": "inquisitor-captured",
       "capturedPlayerId": "p3",
       "activePlayerId": "p5",
       "ranking": [
         {
-          "playerId": "p0",
+          "playerId": "p3",
           "place": 1,
-          "score": 0
+          "score": 1
         },
         {
-          "playerId": "p1",
+          "playerId": "p0",
           "place": 2,
           "score": 0
         },
         {
-          "playerId": "p2",
+          "playerId": "p1",
           "place": 3,
           "score": 0
         },
         {
-          "playerId": "p4",
+          "playerId": "p2",
           "place": 4,
           "score": 0
         },
         {
-          "playerId": "p5",
+          "playerId": "p4",
           "place": 5,
           "score": 0
         },
         {
-          "playerId": "p6",
+          "playerId": "p5",
           "place": 6,
           "score": 0
         },
         {
-          "playerId": "p3",
+          "playerId": "p6",
           "place": 7,
           "score": 0
         }
@@ -1598,43 +1598,43 @@
         "timestamp": 0.0,
         "commandId": "respond-4-p6",
         "payload": {
-          "winner": "draw",
+          "winner": "secret-order",
           "branch": "inquisitor-captured",
           "capturedPlayerId": "p3",
           "activePlayerId": "p5",
           "ranking": [
             {
-              "playerId": "p0",
+              "playerId": "p3",
               "place": 1,
-              "score": 0
+              "score": 1
             },
             {
-              "playerId": "p1",
+              "playerId": "p0",
               "place": 2,
               "score": 0
             },
             {
-              "playerId": "p2",
+              "playerId": "p1",
               "place": 3,
               "score": 0
             },
             {
-              "playerId": "p4",
+              "playerId": "p2",
               "place": 4,
               "score": 0
             },
             {
-              "playerId": "p5",
+              "playerId": "p4",
               "place": 5,
               "score": 0
             },
             {
-              "playerId": "p6",
+              "playerId": "p5",
               "place": 6,
               "score": 0
             },
             {
-              "playerId": "p3",
+              "playerId": "p6",
               "place": 7,
               "score": 0
             }
@@ -1643,7 +1643,7 @@
         }
       },
       "previousHash": "dfca1b579d8d0e20f74757aa97c2e6c4e37542611c56b4425cf2993f491914e1",
-      "hash": "0f1042a0f992ff5248ac2e0b6f1143555a4bbb2d1a81ee27c2ee4e62745be5e7"
+      "hash": "e43987ed617e214fe64f9f30ec7bac68e0d2ce325bbdafb957664ac9270772a1"
     },
     {
       "event": {
@@ -1664,8 +1664,8 @@
           }
         }
       },
-      "previousHash": "0f1042a0f992ff5248ac2e0b6f1143555a4bbb2d1a81ee27c2ee4e62745be5e7",
-      "hash": "3a2e2c4fe5096e8120500054f1ad3d0b35cf3da52dec99395821cbe108260526"
+      "previousHash": "e43987ed617e214fe64f9f30ec7bac68e0d2ce325bbdafb957664ac9270772a1",
+      "hash": "b49b72c8fb99d442fb511053ea53ae548a339c68dbf0ff7d856c6d2940c3c030"
     }
   ],
   "commands": [
@@ -2063,7 +2063,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "3a2e2c4fe5096e8120500054f1ad3d0b35cf3da52dec99395821cbe108260526",
-    "snapshotHash": "06b2123c9c688733f06b7dff260a37b32936cdf611013c16180364d838e1dde2"
+    "eventHead": "b49b72c8fb99d442fb511053ea53ae548a339c68dbf0ff7d856c6d2940c3c030",
+    "snapshotHash": "417470394b92ddf755084867237cc8d624b8d903e9dbc887d1d4365ce60b9b9f"
   }
 }
