@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>规则耦合点 Review · Blood Bound（ruleset 0.4）</title>
+<style>
+  :root{
+    --bg:#141014; --panel:#1e181e; --panel2:#251d25; --line:#3a2f3a;
+    --ink:#efe6e9; --ink-dim:#b9a9b0; --ink-faint:#8d7d85;
+    --crimson:#d84a5f; --crimson-dim:#a03848; --gold:#d9a441; --gold-dim:#9a7430;
+    --ok:#4fb37f; --dev:#e07840; --undef:#7f9fd4; --bug:#e05656; --risk:#c9a0e0; --conflict:#d4b25e;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.75 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;padding-bottom:80px}
+  code,.mono{font-family:Consolas,"Cascadia Mono",monospace;font-size:.92em;color:var(--gold);background:#2b2028;padding:1px 6px;border-radius:4px;white-space:nowrap}
+  a{color:var(--gold);text-decoration:none}
+
+  header{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,#1a1218 0%,#17111a 100%);border-bottom:1px solid var(--line);padding:14px 22px 10px;box-shadow:0 4px 18px rgba(0,0,0,.45)}
+  .h-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:19px;margin:0;color:var(--gold);letter-spacing:.5px}
+  h1 small{color:var(--ink-faint);font-weight:400;font-size:12px;margin-left:8px}
+  .stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+  .chip{font-size:12.5px;padding:2px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink-dim);cursor:pointer;user-select:none}
+  .chip.active{border-color:var(--gold);color:var(--gold);background:rgba(217,164,65,.08)}
+  .chip b{font-weight:600}
+  .toolbar{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;align-items:center}
+  .toolbar input[type=search]{background:#0f0b0f;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 12px;width:220px;font-size:13px}
+  .btn{background:var(--gold-dim);color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13.5px;cursor:pointer}
+  .btn:hover{background:var(--gold)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink-dim)}
+  .btn.ghost:hover{border-color:var(--crimson);color:var(--crimson)}
+
+  main{max-width:1080px;margin:0 auto;padding:22px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;margin:18px 0}
+  .box h2{font-size:16.5px;color:var(--gold);margin:0 0 10px;border-left:3px solid var(--crimson);padding-left:10px}
+  .box h3{font-size:14.5px;color:var(--ink);margin:14px 0 6px}
+
+  .answer{border:1px solid var(--gold-dim);background:linear-gradient(135deg,#241a10 0%,#1e181e 70%)}
+  .answer .q{font-size:15.5px;color:var(--gold);margin-bottom:8px}
+  .answer .a{font-size:15px}
+  .verdict{display:inline-block;font-size:17px;font-weight:700;color:var(--crimson);border-bottom:2px solid var(--crimson-dim);margin:2px 0 8px}
+  .steps{margin:10px 0 4px;padding-left:0;list-style:none}
+  .steps li{margin:7px 0;padding-left:26px;position:relative}
+  .steps li::before{content:attr(data-n);position:absolute;left:0;top:2px;width:19px;height:19px;border-radius:50%;background:var(--crimson-dim);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .note{font-size:13px;color:var(--ink-faint);border-top:1px dashed var(--line);margin-top:12px;padding-top:8px}
+
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--ink-dim)}
+  .flow .node{background:#0f0b0f;border:1px solid var(--line);border-radius:8px;padding:5px 10px}
+  .flow .node.hot{border-color:var(--crimson-dim);color:var(--crimson)}
+  .flow .arr{color:var(--gold)}
+
+  section{margin:26px 0 8px}
+  .sec-title{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .sec-title .n{background:var(--crimson-dim);color:#fff;border-radius:8px;font-size:13px;padding:2px 10px}
+  .sec-title h2{font-size:17px;color:var(--gold);margin:0}
+  .sec-sub{color:var(--ink-faint);font-size:13px;margin:0 0 12px 8px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin:14px 0;padding:16px 20px;position:relative}
+  .card.decided{border-color:var(--gold-dim)}
+  .card-head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .cid{font-size:13px;color:var(--crimson);font-weight:700;letter-spacing:.5px}
+  .chain{font-size:15.5px;font-weight:600;color:var(--ink)}
+  .badge{font-size:12px;padding:1px 10px;border-radius:99px;font-weight:600;flex-shrink:0}
+  .b-ok{background:rgba(79,179,127,.14);color:var(--ok);border:1px solid rgba(79,179,127,.4)}
+  .b-dev{background:rgba(224,120,64,.14);color:var(--dev);border:1px solid rgba(224,120,64,.4)}
+  .b-undef{background:rgba(127,159,212,.14);color:var(--undef);border:1px solid rgba(127,159,212,.4)}
+  .b-bug{background:rgba(224,86,86,.16);color:var(--bug);border:1px solid rgba(224,86,86,.45)}
+  .b-risk{background:rgba(201,160,224,.14);color:var(--risk);border:1px solid rgba(201,160,224,.4)}
+  .b-conflict{background:rgba(212,178,94,.14);color:var(--conflict);border:1px solid rgba(212,178,94,.4)}
+  .kv{margin:9px 0;padding-left:12px;border-left:2px solid #332833}
+  .kv .k{font-size:12.5px;color:var(--ink-faint);letter-spacing:1px;margin-bottom:2px}
+  .kv .v{font-size:14px;color:var(--ink-dim)}
+  .kv .v em{color:var(--ink);font-style:normal;font-weight:600}
+  .proposal{background:rgba(217,164,65,.06);border:1px dashed var(--gold-dim);border-radius:8px;padding:8px 12px;font-size:13.5px;color:var(--ink-dim);margin-top:10px}
+  .proposal b{color:var(--gold)}
+
+  .decide{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .decide label{font-size:12.5px;color:var(--ink-faint);margin-right:2px}
+  .decide select{background:#0f0b0f;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 8px;font-size:13px}
+  .decide textarea{width:100%;background:#0f0b0f;border:1px solid var(--line);color:var(--ink-dim);border-radius:6px;padding:6px 10px;font-size:13px;font-family:inherit;min-height:34px;resize:vertical}
+  .dec-mark{font-size:12px;color:var(--gold)}
+
+  table.plan{border-collapse:collapse;width:100%;font-size:13.5px}
+  table.plan th,table.plan td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+  table.plan th{color:var(--gold);background:#241b24;font-weight:600}
+  table.plan td{color:var(--ink-dim)}
+  table.plan td b{color:var(--ink)}
+
+  dialog{background:var(--panel2);color:var(--ink);border:1px solid var(--gold-dim);border-radius:12px;max-width:860px;width:92%;padding:20px}
+  dialog::backdrop{background:rgba(0,0,0,.65)}
+  dialog textarea{width:100%;height:420px;background:#0f0b0f;color:var(--ink-dim);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:Consolas,monospace;font-size:12.5px;line-height:1.6}
+  footer{max-width:1080px;margin:30px auto 0;color:var(--ink-faint);font-size:12.5px;border-top:1px solid var(--line);padding:14px 22px 0}
+  .hidden{display:none!important}
+  @media(max-width:640px){ main{padding:12px} .card{padding:12px 14px} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-row">
+    <h1>规则耦合点 Review<small>Blood Bound 兼容实现 · ruleset 0.4 · 基于 master@ac31bdb · 2026-10-03</small></h1>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="搜索：刺客 / 盾 / rank / 引擎行号…">
+    <button class="btn" id="exportBtn">导出共识决议 (Markdown)</button>
+    <button class="btn ghost" id="resetBtn">清空全部拍板</button>
+    <span class="dec-mark" id="progress"></span>
+  </div>
+</header>
+
+<main>
+
+  <div class="box answer">
+    <div class="q">开路问题（你的示例）：刺客打了两点伤害之后，被打的人从亮一个标记到亮两个标记和数字——这时候被打的人还能放技能吗？</div>
+    <div class="verdict">不能。引擎现状：技能造成的伤害不开任何窗口，且这两张牌都不是受害者自己选的。</div>
+    <ol class="steps">
+      <li data-n="1">技能伤害不开窗：<code>engine.py:795-801</code> 只认 trigger ∈ {attack, intervention} 才开技能窗；这与帮助文案「技能造成的伤害不产生新的干涉投票，也不会开出新的技能窗口」、规则书 <code>skill.reveal-rank</code>（因<strong>攻击</strong>伤害展示 rank 时才可发动）三处一致。</li>
+      <li data-n="2">两张亮牌均无选择：第 1 点引擎直接亮 rank（若未亮），第 2 点自动亮剩下的一张标记——<em>哪张由 Python 集合迭代序决定，实测随 PYTHONHASHSEED 翻转，是确定性缺陷</em>（A1/A2）。规则书 <code>damage.reveal</code> 说 1–2 点应由玩家自选，只有感应者（rank 5）技能文本写明「通常强制其展示 rank」。</li>
+      <li data-n="3">连锁后果（封印效应，A4）：受害者的 rank 被技能伤害抢先亮出后，其技能窗<strong>永远不会再开</strong>——之后受攻击伤害只能亮标记，rankRevealed 永假。唯一解药：另一名炼金治疗他退回 rank，再被攻击伤害亮出 rank 才重新开窗。规则书没写这条连锁，需要拍板是否有意保留。</li>
+      <li data-n="4">边界：若受害者已 2 伤，这 2 点的第 2 点即第 4 点 → 立即捕获终局，终局按「active = 刺客」判定（捕到敌方领袖 → 刺客阵营胜；捕到非领袖 → 刺客阵营负，B13）。</li>
+    </ol>
+    <div class="note">「不能放技能」这一半是三方一致的共识（规则书 / 引擎 / 帮助文案）；「怎么亮牌」那一半是本页第一条要拍的 A1/A2。</div>
+  </div>
+
+  <div class="box">
+    <h2>耦合主线速览：一条伤害落地要穿过多少规则</h2>
+    <div class="flow">
+      <span class="node">伤害源<br><small>attack / skill / reaction / intervention</small></span><span class="arr">→</span>
+      <span class="node">盾拦截判定<br><small>仅 attack·skill·reaction 源</small></span><span class="arr">→</span>
+      <span class="node">伤害点循环<br><small>每点 +1 伤 + 亮 1 牌</small></span><span class="arr">→</span>
+      <span class="node">亮牌权<br><small>自选窗 / 被迫 rank / 引擎自动</small></span><span class="arr">→</span>
+      <span class="node">第 4 点？<br><small>捕获→终局分支</small></span><span class="arr">→</span>
+      <span class="node hot">技能窗<br><small>仅 attack·intervention 且 rank 新亮</small></span><span class="arr">→</span>
+      <span class="node">技能效果<br><small>又可能产生新伤害回到起点</small></span>
+    </div>
+    <div class="note">几乎所有耦合点都挂在这条链的某个环节上：亮牌权（A 组）、盾/扇/剑的拦截（B 组）、窗口资格（C 组）、终局按「谁造成的」判（D 组）。</div>
+  </div>
+
+  <div id="sections"></div>
+
+  <div class="box">
+    <h2>共识怎么记录、后续执行怎么用上（推荐方案）</h2>
+    <table class="plan">
+      <tr><th style="width:110px">层</th><th>落在哪</th><th>写什么</th></tr>
+      <tr>
+        <td><b>① 正典层</b><br>规则事实</td>
+        <td><code>.scratch/blood-oath-replica/rules-corpus-user-extract.md</code></td>
+        <td>沿用既有惯例：追加「<b>产品方裁决（2026-10-03）</b>」小节，逐条写入本页拍板结论，并同步改写对应规则行（damage.reveal / skill.reveal-rank / inquisitor.curse 等）。语料是既有的规则单一事实源，后续会话直接读它。</td>
+      </tr>
+      <tr>
+        <td><b>② 语言层</b><br>领域词汇</td>
+        <td><code>CONTEXT.md</code></td>
+        <td>耦合共识中产生新概念或需要精确化旧词条的（例如「技能伤害亮牌」「封印效应」「反应伤害」），增改词条。CONTEXT.md 是每个会话都加载的领域语言文件。</td>
+      </tr>
+      <tr>
+        <td><b>③ 决策层</b><br>不可逆裁决</td>
+        <td><code>docs/adr/0006….md</code> 起</td>
+        <td>有争议且改变对局形态的裁决各记一条 ADR（候选：D4 审判者被捕获结果、B5 治疗退 rank 后技能再发动、A1 技能伤害亮牌权、B3 持盾狂战士禁反伤）。格式沿用 ADR 0002/0003。</td>
+      </tr>
+      <tr>
+        <td><b>④ 执行钩子</b><br>让共识长牙</td>
+        <td>测试 + 版本 + 入口约束</td>
+        <td>引擎行为变更 → <code>ruleset_version</code> bump + <code>docs/rule-branch-coverage.md</code> 加行 + golden 回放同步（既有惯例）；<code>AGENTS.md</code> 增加一句「规则争议以规则语料 + ADR 为准，不得在代码里临时发明规则」，约束所有后续 agent 会话；帮助文案（helpContent）按定案同步补齐 E1 清单。</td>
+      </tr>
+      <tr>
+        <td><b>⑤ 工具层</b><br>本页</td>
+        <td><code>.scratch/rule-coupling-review/index.html</code></td>
+        <td>本页就是拍板工具：逐条选决议 + 备注 →「导出共识决议 (Markdown)」→ 把导出文本交给下一个会话，按 ①②③④ 落盘。拍板结果存在浏览器 localStorage，关页不丢。</td>
+      </tr>
+    </table>
+  </div>
+
+</main>
+
+<footer>
+  依据：规则语料 rules-corpus-user-extract.md（来源 C + 产品裁决 2026-08-19/22、09-04/05）· CONTEXT.md · blood_bound/engine.py 与 projection.py（ruleset 0.4）· server/deadlines.py · client/src/helpContent.ts · tests/test_rule_branches.py · docs/rule-branch-coverage.md · rule-conflicts-from-chinese-manual.md。
+  确定性缺陷 A2 的证据：PYTHONHASHSEED=0…5 各跑一次刺客技能，marker-0/marker-1 出现两种结果（seed=1、5 选 marker-1，其余选 marker-0）。
+</footer>
+
+<dialog id="exportDlg">
+  <h3 style="margin-top:0;color:var(--gold)">共识决议导出（复制后交给 agent 落盘）</h3>
+  <textarea id="exportText" readonly></textarea>
+  <div style="margin-top:10px;display:flex;gap:10px">
+    <button class="btn" id="copyBtn">复制到剪贴板</button>
+    <button class="btn ghost" id="closeDlg">关闭</button>
+  </div>
+</dialog>
+
+<script>
+const STATUS = {
+  ok:      {label:'一致', cls:'b-ok'},
+  dev:     {label:'偏差', cls:'b-dev'},
+  undef:   {label:'未定义', cls:'b-undef'},
+  bug:     {label:'缺陷', cls:'b-bug'},
+  risk:    {label:'风险', cls:'b-risk'},
+  conflict:{label:'文档矛盾', cls:'b-conflict'},
+};
+const DECISIONS = [
+  ['pending','待定'],
+  ['keep','认可现状（写入规则书）'],
+  ['fix-engine','改引擎对齐规则书'],
+  ['fix-doc','改文档/文案即可'],
+  ['other','另行裁决（看备注）'],
+];
+
+const SECTIONS = [
+  {n:'一', title:'伤害 → 亮牌 → 技能窗口 主线耦合', sub:'每一点伤害落在谁头上、亮什么牌、谁有权选、开不开窗——耦合密度最高的链路。'},
+  {n:'二', title:'技能 × 技能 / 资源耦合', sub:'盾、扇、剑、羽毛、法杖、羽毛笔在技能之间互相拦截或放大。'},
+  {n:'三', title:'干涉投票（挡刀）耦合', sub:'谁能挡刀、什么时候不能、挡了之后触发什么。'},
+  {n:'四', title:'审判者 · 诅咒 · 终局分支耦合', sub:'胜负判定是最重的耦合：同一事件按「谁造成、捕到谁、领袖是谁、有没有真诅咒」四层解释。'},
+  {n:'五', title:'呈现与工程一致性', sub:'帮助文案、覆盖清单、风险兜底。'},
+];
+
+const ITEMS = [
+// ================= 一、主线 =================
+{ id:'A1', sec:0, status:'dev', also:['conflict'],
+  chain:'技能伤害 × 受害者亮牌选择权（刺客 2 伤 / 感应者 1 伤 / 炼金 harm 1 伤）',
+  rule:'语料 damage.reveal：「每点伤害展示一个此前未展示的标记：玩家自选等级（rank）或身份标记（红/蓝/？）」，第 3 点才被迫亮 rank；九级技能表里只有感应者写「通常强制其展示 rank」。刺客与炼金术师的技能文本均未写要强制亮牌。',
+  engine:'engine.py:734-736：凡 source="skill" 的伤害完全剥夺选择——rank 未亮则第 1 点直接亮 rank，否则自动亮一张标记，全程不开亮牌窗。docs/rule-branch-coverage.md 第 102 行却把它记载为既定行为（「首伤展示 rank / 后续展示 affiliation」）。',
+  trace:'刺客打一名 0 伤新玩家：第 1 点亮 rank、第 2 点自动亮一张标记；受害者全程没有任何输入。对 1 伤玩家（已亮 1 标记）：rank + 剩余标记，恰好凑满 3 格。',
+  proposal:'建议：<b>感应者维持强制 rank</b>（规则书明写）；<b>刺客与炼金 harm 的每一点改回「受害者自选」</b>（开 reveal 窗），与 damage.reveal 对齐；至少必须先修 A2。同时修正 coverage 文档第 102 行的记载口径。'},
+
+{ id:'A2', sec:0, status:'bug',
+  chain:'引擎自动亮牌 × Python 集合迭代序（跨进程不确定性）',
+  rule:'ADR 0001：事件日志是对局事实的审计轨迹，同 seed + 同命令序列必须得到同一日志（回放/断线重连/golden 的根基）。',
+  engine:'engine.py:735 用 next(iter(available)) 从 {"marker-0","marker-1"} 里挑一张——set 迭代序随进程哈希种子变化。实测 PYTHONHASHSEED=0…5：seed=1、5 亮 marker-1，其余亮 marker-0。触发面：刺客第 2 点、感应者/炼金 harm 打已亮 rank 的目标。',
+  trace:'后果三连：① 同一存档在两台机器回放出不同日志；② golden 回放只要覆盖到该分支就会随机挂；③ 玩家桌面看到的亮牌结果不可复现、也非任何人的选择。',
+  proposal:'建议：<b>必修</b>。正确解法随 A1（开窗自选则此分支消失）；若维持引擎自动亮牌，则必须改成确定序（如 marker-0 优先）并补跨进程 golden。'},
+
+{ id:'A3', sec:0, status:'ok',
+  chain:'技能伤害 × 干涉投票 / 技能窗口（均不触发）',
+  rule:'语料 skill.reveal-rank：因「攻击」伤害展示 rank 时才可发动技能；CONTEXT.md「技能窗口」词条同义。',
+  engine:'engine.py:795-801：_after_damage 只在 trigger ∈ {attack, intervention} 且本次伤害新亮出 rank 时开窗。测试 test_assassin_skill_deals_two_damage_hands_dagger_and_opens_no_new_window 断言无任何窗口。',
+  trace:'帮助文案 helpContent.ts:108 已原文写明此条；玩家可在「？」帮助浮层读到。',
+  proposal:'建议：<b>保持现状</b>。三方（规则书/引擎/文案）一致，无需动。'},
+
+{ id:'A4', sec:0, status:'undef',
+  chain:'技能伤害亮出 rank × 技能窗永久封死（「封印效应」）',
+  rule:'规则书没有写这条连锁——damage.reveal 只管亮牌，skill.reveal-rank 只管攻击亮牌开窗，两条规定相交产生的「再也无法开窗」是推论，不是明文。',
+  engine:'rank 被技能伤害亮出 → 无窗（A3）→ 之后受攻击伤害只能亮标记 → rankRevealed 永假 → 技能窗永不为其开。唯一恢复链：炼金治疗退回 rank（engine.py:590-608）→ 再受攻击伤害自选亮 rank → 开窗（前提该玩家 skills_used 为空，B5）。',
+  trace:'刺客事实上成为「封印工具」：打敌人封技能、打队友主动亮 rank 换领袖/终局信息。这是高强度战略耦合，玩家几乎不可能自行从帮助文案推出。',
+  proposal:'建议：拍板「<b>有意保留</b>」（刺客的战略定位）→ 写入规则书裁决小节 + CONTEXT.md 词条 + 帮助文案；若不认可 → 需改为技能伤害亮出的 rank 也开窗（改动大，波及 D1 诅咒窗「技能伤害不触发」的对称性，不建议）。'},
+
+{ id:'A5', sec:0, status:'ok',
+  chain:'第 3 点伤害 × 强制亮 rank',
+  rule:'语料 damage.reveal 待验收重点：「第 3 点被迫展示 rank、第 4 点被捕获」。',
+  engine:'engine.py:733：force_rank = 干涉承伤 或 damage ≥ 3；rank 已亮则回落为亮剩余标记（engine.py:737-746）。wild 标记只剩一格时开窗自选色（engine.py:739-745）。',
+  trace:'6–12 人局每名玩家恰好 3 格：第 3 点必是 rank（除非 rank 已亮）。',
+  proposal:'建议：<b>保持现状</b>。'},
+
+{ id:'A6', sec:0, status:'ok',
+  chain:'第 4 点伤害 × 捕获 × 不亮第 4 张牌',
+  rule:'语料 game.end：任一玩家第 4 点伤害被捕获时立即结束。',
+  engine:'engine.py:726-731：damage ≥ 4 直接 PlayerCaptured + GameEnded，不再走亮牌；刺客 2 点连击时第 4 点打断循环立即终局，剩余点数作废。',
+  trace:'被捕获玩家最终亮 3 张牌（rank + 2 标记或其组合），第 4 点只有终局意义。',
+  proposal:'建议：<b>保持现状</b>。'},
+
+{ id:'A7', sec:0, status:'dev',
+  chain:'审判者万能标记（wild）自选色 × 技能伤害强制路径',
+  rule:'CONTEXT.md「线索 token」：审判者的两张身份标记是万能标记，「亮出时由本人自选玫或兽色」；语料 damage.reveal 待验收重点同义（「仅审判者 wild 可取任意颜色身份标记」）。',
+  engine:'普通亮牌窗给了 rose/beast 双选项（projection.py:102-105）；但技能伤害路径 engine.py:736 一律传 color="rose"——wild 标记被自动定成玫色，无窗无选择。',
+  trace:'例：刺客打审判者第 2 点落到 wild 标记上 → 公开显示玫色。审判者丧失一次误导机会，且哪张被亮由 A2 的随机序决定。',
+  proposal:'建议：wild 被任何路径亮出时都应保留自选色（开色选窗）；若产品嫌打断节奏而想维持强制，至少改为可预期行为并记 ADR——但「强制玫色」连规则书边都摸不着，<b>倾向修引擎</b>。'},
+// ================= 二、技能×技能/资源 =================
+{ id:'B1', sec:1, status:'ok',
+  chain:'盾 × 攻击 / 技能指定（持盾者不可被指定为目标）',
+  rule:'产品裁决 2026-08-22（守护者条目）：受盾保护者不能成为攻击或强制伤害目标。帮助文案已写「持有盾牌的玩家不可被攻击，也不可被技能指定伤害」。',
+  engine:'attack 声明拦截（engine.py:326-327）；_apply_damage 对 attack/skill/reaction 源统一拦截（engine.py:705）；刺客/感应者的合法目标列表过滤持盾者（projection.py:73、120）。',
+  trace:'小瑕疵：炼金 harm 的选项生成（projection.py:63-65）不过滤持盾的被保护者，玩家点了才报 target.shielded——与其他技能的 affordance 口径不一致。',
+  proposal:'建议：<b>保持现状</b>；顺手把炼金 harm 的合法选项也过滤盾目标（纯 projection 改动，归入 fix-doc 级别的小修）。'},
+
+{ id:'B2', sec:1, status:'ok',
+  chain:'盾 × 挡刀（持盾者可干涉并正常承伤）',
+  rule:'产品裁决 2026-08-22：盾挡「被指定为目标」，不挡自愿承伤——持盾者可响应干涉并正常承伤。',
+  engine:'干涉资格名单不看盾（engine.py:331-338）；intervention 伤害源不在盾拦截集合 {attack,skill,reaction}（engine.py:705）→ 持盾志愿者照常掉血亮牌。测试 test_shield_does_not_block_volunteering_as_responder。',
+  trace:'这是「盾 + 挡刀 + 承伤开窗」三连的入口：持盾者挡刀承伤 → 被迫亮 rank → 自己的技能窗照开（含炼金——炼金唯一开窗路径正是挡刀，见 D 组之外 B5）。',
+  proposal:'建议：<b>保持现状</b>（已有明文裁决 + 测试）。'},
+
+{ id:'B3', sec:1, status:'undef',
+  chain:'狂战士 × 自己持盾 → 反伤被禁止',
+  rule:'规则书里盾的语义只有「不可成为攻击或强制伤害目标」，没有「持盾者不能发动技能」或「持盾吸收伤害」的条目。',
+  engine:'engine.py:580-581：owner 自己有盾 → 直接 raise target.shielded，反伤完全禁止；legal_actions 同步只给「放弃」选项（projection.py:59-60）。',
+  trace:'触发场景唯一：持盾狂战士志愿挡刀承伤（B2）→ 开出技能窗 → 却因自己的盾不能反伤。效果上盾反而「没收」了狂战士的技能。攻击者持盾挡反伤是合理的（B1），禁止自己反伤没有规则出处。',
+  proposal:'建议：拍板。倾向<b>放开</b>（删 owner 盾检查，保留攻击者持盾拦截）；若要维持，须记 ADR 说明设计意图。'},
+
+{ id:'B4', sec:1, status:'ok', also:['conflict'],
+  chain:'狂战士反伤 × 捕获终局（active = 狂战士）',
+  rule:'语料 game.end 按 active player 判定家族胜负；终局分支规则通用。',
+  engine:'engine.py:582-587：反伤 source="reaction"，active_player_id=狂战士本人；若打满 4 点捕获，走家族分支（test_berserker_reaction_capture_uses_berserker_as_active_player）。反伤本身不开新窗（trigger=None，同 A3）。',
+  trace:'矛盾点在文档：rule-conflicts-from-chinese-manual.md 第 7 条写「该伤害可正常触发线索展示、<b>技能窗口</b>和第 4 点捕获」——「技能窗口」四字与引擎（不开窗）和测试（without_new_window）直接矛盾。',
+  proposal:'建议：引擎行为<b>保持现状</b>；<b>修正 rule-conflicts 第 7 条</b>，删去「技能窗口」或改为「不触发技能窗口」。'},
+
+{ id:'B5', sec:1, status:'dev',
+  chain:'炼金治疗退回 rank × 该玩家技能可否再次发动',
+  rule:'语料 rank 4 技能文本：「若退回 rank，之后重新展示 rank 时可再次使用能力」；skill.reveal-rank 待验收重点同样写「炼金治疗后若退回 rank，可在下次重新取得 rank 时再发动」。另有 2026-08-22 澄清注记「decline = 永久失去技能」。',
+  engine:'skills_used 只增不减（engine.py:492、497），开窗检查 engine.py:801 挡住一切二次发动；_choose_return（engine.py:590-608）退 token 时不清除 skills_used。测试只覆盖退标记（test_alchemist_heal_opens_token_return_and_returns_marker），「退 rank 再亮再发动」路径无测试——实现与规则书相反。',
+  trace:'例：已用技能的长老被炼金治疗退回 rank → 再被攻击亮出 rank → 规则书说可再发动（再翻一次领袖），引擎说不行。',
+  proposal:'建议：拍板。若对齐规则书：<b>治疗退回 rank 时清除该玩家的 skills_used 对应项</b>；需一并调和「decline 永久失去」——倾向：已弃用=不可恢复、已使用=退 rank 后可恢复（规则书两条注记都能成立）。改动在 _choose_return 加一行 + 分支测试 + ruleset bump。'},
+
+{ id:'B6', sec:1, status:'ok',
+  chain:'长老羽毛 × 领袖改「数字最大」× 终局与真诅咒判定',
+  rule:'产品裁决 2026-08-22：领袖改为数字最大者（推翻来源 C 的「代领」文案）。',
+  engine:'engine.py:505-518：quill 即发即耗（两个事件，资源净变化 0），faction 记入 max_leader_factions；_is_leader 按 min/max 切换（engine.py:869-880）；终局 captured-leader 分支与真诅咒持有者判定都用终局时点的领袖（engine.py:838-840、882-892）。',
+  trace:'耦合纵深：长老亮 rank（通常是被攻击或挡刀）→ 用技能 → 该家族「值得捕的人」瞬间换人 → 影响捕获胜负与真诅咒结算。被捕获瞬间，刚被捕者仍按捕获时点计入领袖判定（engine.py:874-877）。',
+  proposal:'建议：<b>保持现状</b>（有裁决、有测试、覆盖文档一致）。'},
+
+{ id:'B7', sec:1, status:'ok',
+  chain:'守护者 × 第 3 点伤害归还剑与盾（跨所有伤害源）',
+  rule:'语料 rank 6：「持 Sword 的 Guardian 第 3 点伤害时，归还该 Sword 与对应 Shield」。',
+  engine:'engine.py:789-794：_after_damage 里 rank==6 且 damage≥3 且 ward 仍配对 → 双归还（ResourceReturned ×2）。attack/intervention/skill/reaction 源一视同仁——规则书没区分，引擎也没区分。',
+  trace:'边界：连击跳过归还——守护者 2 伤时吃刺客 2 点，第 3 点在连击循环内不经过 _after_damage，第 4 点直接终局，剑盾不还（游戏已结束，无实际影响）；单独 1 点技能伤害到 3 则正常归还。',
+  proposal:'建议：<b>保持现状</b>；把「技能伤害也触发归还」补进规则书裁决小节即可。'},
+
+{ id:'B8', sec:1, status:'ok',
+  chain:'法师 × 已亮标记的公开改写（「？」抹除已公开情报）',
+  rule:'语料 rank 8：「该玩家的身份标记全部变为问号（?）」——未区分未亮/已亮。产品裁决 2026-09：单一效果。',
+  engine:'engine.py:568-575：identity_markers 全变 unknown，<b>已亮出的标记值也被改写为「？」</b>（revealed_values 覆写），但 revealed 集合不变 → 填亮槽数与伤害同步不变（CONTEXT「线索槽」不变量保住）。帮助文案已写「包括已亮出的」。',
+  trace:'战略面：法师可以抹掉敌方已亮的阵营证据（信息战），也可以抹掉己方被看穿的标记（洗白）；与备忘标记（玩家私有笔记）互不干扰——桌面的私笔记不会被抹，形成「官方线索 vs 私人记录」的信息差。',
+  proposal:'建议：<b>保持现状</b>；帮助文案已覆盖。'},
+
+{ id:'B9', sec:1, status:'undef',
+  chain:'法师 × 审判者万能标记（自选色永久丧失）',
+  rule:'规则书未定义此交互：rank 8 只写「全部变为问号」，没说审判者的 wild 标记是否例外。',
+  engine:'engine.py:571 不区分目标身份——审判者的 wild 标记也变 unknown；之后 _reveal_token（engine.py:757-765）按普通 unknown 处理，亮出固定「？」，自选玫/兽的能力永久消失。',
+  trace:'法师给审判者法杖 = 剥夺其标记误导能力（原本两张都能任选颜色）。对审判者Player是纯削弱，对家族阵营是反审判者工具。',
+  proposal:'建议：拍板。倾向<b>维持现状并记入裁决</b>（字面执行规则书，且给家族一个对抗审判者的手段）；若要保护审判者则需加例外分支。'},
+
+{ id:'B10', sec:1, status:'ok',
+  chain:'交际花之扇 × 干涉资格（扇只挡投票不挡伤害；可给自己）',
+  rule:'产品裁决 2026-08-22：「他人不能为该玩家干涉」（被攻击时无法请求干涉的旧文案被推翻）。',
+  engine:'engine.py:331-338：目标持扇 → 资格集直接为空 → 不开投票、直接结算伤害（engine.py:340-345）。扇不影响攻击合法性、不影响传递匕首。合法目标含自己（projection.py:82-87，engine 同）。',
+  trace:'持扇者被攻击：无投票、直接掉血亮牌——「免挡刀」同时也是「免信息」（少一次全员表态的社交信息）。交际花给自己扇 = 自保。',
+  proposal:'建议：<b>保持现状</b>；「扇可以给自己」在规则书裁决小节补一句明示。'},
+
+{ id:'B11', sec:1, status:'ok',
+  chain:'小丑 × 身份透视（含审判者完全暴露；仅自己可见）',
+  rule:'语料 rank 3：「秘密查看两名玩家的角色」。',
+  engine:'engine.py:527-536：两名互异存活目标（不可含自己），faction+rank 写入 owner.inspections；投影只在 viewer 块输出（projection.py:168），他人与旁观者不可见。',
+  trace:'透视审判者会直接拿到 faction="secret-order"、rank="fleur-cross"——小丑是唯一能硬证据定位审判者的角色；信息不进任何事件日志（私密能力无公开痕迹）。',
+  proposal:'建议：<b>保持现状</b>。'},
+
+{ id:'B12', sec:1, status:'ok',
+  chain:'刺客/感应者技能 × 匕首移交（伤害后匕首归受害者）',
+  rule:'语料 rank 2 / rank 5：「再将匕首交给该玩家」。',
+  engine:'engine.py:524-526、560-562：技能结算后（未终局、无挂起窗口）匕首与行动阶段移交受害者；若技能导致捕获则终局清空匕首。',
+  trace:'与攻击移交规则（攻击声明即移交匕首给目标，engine.py:330）方向一致：动手的结果都是「匕首在受害者手里」。',
+  proposal:'建议：<b>保持现状</b>。'},
+
+{ id:'B13', sec:1, status:'ok',
+  chain:'技能捕获 × 终局分支（误捕非领袖 = 技能方阵营负）',
+  rule:'语料 game.end：家族 active player 按领袖规则判定——通用规则不区分伤害来自攻击还是技能。',
+  engine:'_apply_damage 默认 active=命令发起者（engine.py:676-680）→ _end_game 家族分支（engine.py:831-834）：捕到敌方领袖 → 技能方胜；捕到非领袖 → <b>技能方阵营输</b>。',
+  trace:'刺客是双刃剑：2 点伤害可以直接终结 2 伤的敌方领袖赢下比赛；打错人则亲手葬送自己阵营。感应者/炼金 harm/狂战反伤同理。',
+  proposal:'建议：<b>保持现状</b>；此战略后果值得写进帮助文案（见 E1）。'},
+// ================= 三、干涉 =================
+{ id:'C1', sec:2, status:'ok',
+  chain:'干涉资格 × rank 已亮者永不可挡刀（⇒ 3 伤玩家无挡刀资格）',
+  rule:'语料 intervention.poll 明写资格：存活、非攻击方、非目标、rank 未展示、目标未持扇。',
+  engine:'engine.py:336："rank" not in player.revealed。推论链：第 3 点必亮 rank（A5）→ 3 伤玩家 rank 必已亮 → 永远不进资格名单。',
+  trace:'玩家容易误解「我血厚所以我挡」——实际血越厚（rank 已亮）越没资格挡。帮助文案未说明这条推论。',
+  proposal:'建议：<b>保持现状</b>（规则书明文）；帮助文案补一句「已亮出等级的玩家不能再挡刀」(E1)。'},
+
+{ id:'C2', sec:2, status:'undef',
+  chain:'审判者 3 伤攻击限制 × 声明时校验 × 志愿者自杀终局',
+  rule:'语料 inquisitor.attack-limit：「审判者不能攻击已受 3 点伤害的玩家」——只限制攻击声明，未提挡刀路径。',
+  engine:'engine.py:328-329 仅在 attack 声明时校验目标的伤害；挡刀承伤不校验志愿者的伤害。3 伤志愿者替人挡下审判者的攻击 → 第 4 点捕获 → 终局走「审判者 active」分支（engine.py:828-829）→ 胜方=志愿者阵营的<b>对方</b>。',
+  trace:'志愿者用自己的第 4 点把胜利送给敌方家族——「义挡」变「投敌」。任何 3 伤玩家在奇数局都应知道这条，但规则书与帮助文案都没写。',
+  proposal:'建议：<b>保持现状</b>（限制语义正确）；把后果写进帮助文案与规则书裁决小节（E1）。若产品认为不该发生，需另拍（如 3 伤者自动无资格挡刀——但 C1 已保证 3 伤者 rank 必亮 → 其实 3 伤者本来就没资格挡刀！所以此分支仅在「rank 已亮但伤害 3」下不可达……实际不可达性见 trace 补充）。',
+  trace2:'再核对：3 伤 ⇒ rank 必亮（A5）⇒ 无挡刀资格（C1）⇒ 该自杀分支实际上<b>不可达</b>。留作规则书「推论一致性」注记即可，无需改代码。'},
+
+{ id:'C3', sec:2, status:'risk',
+  chain:'reveal / skill / token-return 窗口 × 无超时兜底（断线卡死全局）',
+  rule:'语料只定义了干涉超时（intervention.timeout，房主配置 30–180 秒）；其余窗口规则书未定义超时行为。',
+  engine:'server/deadlines.py:36-39 只为干涉 poll/choice 两阶段挂定时器代发 timeout-intervention；引擎命令集里也没有其他窗口的 timeout 命令。玩家在亮牌窗/技能窗/退牌窗断线 → 对局永久停摆，只能等重连。',
+  trace:'对比：干涉窗有完整超时（未表态=不干涉、三选一超时=全拒绝）。同为「单人窗口」的技能窗却没有同等兜底。',
+  proposal:'建议：开一个小 spec 拍超时行为（到期视为放弃技能/自动亮首张可亮 token / 房主代行三选一），加 timeout 命令 + 服务端定时器。属产品决策，本页不定案。'},
+// ================= 四、审判者/终局 =================
+{ id:'D1', sec:3, status:'ok',
+  chain:'诅咒窗 × 三路触发一致性（自选亮 / 第 3 点被迫 / 挡刀被迫；技能伤害不触发）',
+  rule:'ADR 0003（产品裁决 2026-09-05）：诅咒分发=审判者亮等级技能，与 rank 1–9 同一套窗口流程；技能伤害不触发；一次为限。',
+  engine:'engine.py:795-805 与 _REVEAL_SKILL_RANKS（含 "fleur-cross"）；CurseBranchTests 四路测试（自选/第3点/挡刀/技能伤害不触发）。',
+  trace:'对齐 A3/A4 的同一原理：只有 attack/intervention 伤害亮出的 fleur-cross 才开诅咒窗——所以「封印审判者诅咒」同样成立（A4 的审判者版）。',
+  proposal:'建议：<b>保持现状</b>（有 ADR + 四路测试）。'},
+
+{ id:'D2', sec:3, status:'ok',
+  chain:'诅咒分发 × 目标约束（任意两名互异存活玩家，可含自己）',
+  rule:'语料 inquisitor.curse：「将真诅咒与假诅咒暗置分发给不同玩家，或放弃」。',
+  engine:'engine.py:643-654：只校验存活 + 互异；可含审判者自己、可含本轮被攻击者。收件人互相不知道彼此（每卡一条私密事件）。',
+  trace:'真诅咒给自己=永废（审判者永不为家族领袖，engine.py:884-887 只查家族玩家）；实战里等价于自弃半张牌。',
+  proposal:'建议：<b>保持现状</b>；「可以发给自己但等于浪费」补进帮助文案。'},
+
+{ id:'D3', sec:3, status:'ok',
+  chain:'真诅咒 × 终局时点领袖（含长老退位后的领袖）',
+  rule:'语料 inquisitor.curse：True Curse 在正常胜方<b>领袖</b>持有时夺胜——领袖是谁要用终局时点的定义。',
+  engine:'engine.py:838-840 调 _winning_leader_has_true_curse（engine.py:882-892）：按终局时点各家族存活领袖（含 max_leader_factions 切换、排除刚被捕获者）检查真诅咒归属。',
+  trace:'与 B6 联动：长老翻领袖可以「甩掉」真诅咒（把领袖换到没拿诅咒的人头上）——反诅咒手段。审判者的分发时机（越早越好）对阵营的退位操作形成博弈。',
+  proposal:'建议：<b>保持现状</b>。'},
+
+{ id:'D4', sec:3, status:'dev',
+  chain:'审判者被捕获 × 胜负结果（语料「独赢」 vs 引擎「平局」）——本页最重的矛盾',
+  rule:'语料两处写「独赢」：inquisitor.curse 待验收重点「审判者被捕获也独赢」；fleur cross 行「被捕获或满足 True Curse 夺胜条件时独赢」。',
+  engine:'engine.py:835-837：审判者被捕获 → winner="draw"、branch="inquisitor-captured"；测试 test_inquisitor_captured_is_draw 与 coverage 文档同口径。<b>没有任何 ADR 记录过「改成平局」的裁决</b>——这不是有记录的产品决策，更像实现时的静默偏离。',
+  trace:'对局形态天差地别：采「独赢」→ 审判者可以刻意暴露求捕（钓捕玩法），家族必须忍住不打审判者；采「平局」→ 审判者纯被动躲藏，被捕获=全员无胜者。语料来源 C 的原文倾向前者。',
+  proposal:'建议：<b>必拍板</b>。二选一：a) 采语料改引擎（winner=secret-order + 分支语义 + 测试 + golden + ruleset bump）；b) 采引擎平局（改语料两处 + 记 ADR 说明理由）。倾向 a（语料是规范依据、且无反向裁决记录），但这是产品决策。'},
+
+{ id:'D5', sec:3, status:'ok',
+  chain:'误捕非领袖 × 攻击方阵营负',
+  rule:'语料 game.end + 验收场景 game/end-on-leader 的对偶分支（captured-player）。',
+  engine:'engine.py:831-834：captured_is_leader ? 攻击方胜 : 攻击方阵营负。',
+  trace:'全游戏的核心压力来源：捕获是不可撤销的一次性赌注。',
+  proposal:'建议：<b>保持现状</b>。'},
+
+{ id:'D6', sec:3, status:'ok',
+  chain:'「active player（谁造成的第 4 点）」× 判定链',
+  rule:'语料 game.end：家族 active player 按领袖规则判定；审判者 active 走独立分支。',
+  engine:'active 归属链（engine.py:676-680 默认 + 各调用点显式传参）：攻击=攻击者；挡刀承伤=原攻击者（engine.py:419、435）；技能=技能使用者；狂战反伤=狂战士（engine.py:586）。',
+  trace:'例：A 攻击 B，C 挡刀承第 4 点被捕获 → active=A（不是 C 也不是 B）→ 按 A vs C 的阵营判定领袖分支。',
+  proposal:'建议：<b>保持现状</b>；把这条归属链写进规则书裁决小节（现在是代码里的事实约定，文档没明说挡刀捕获算谁的）。'},
+// ================= 五、呈现与工程 =================
+{ id:'E1', sec:4, status:'conflict',
+  chain:'帮助文案 / 覆盖文档 × 引擎语义的缺口与矛盾清单',
+  rule:'AGENTS.md：界面文案须与规则语义一致；ADR 0005：帮助浮层是玩家理解规则的入口。',
+  engine:'缺口：① 技能伤害自动亮牌且无选择（A1/A2）未写；② 封印效应（A4）未写；③ 「已亮 rank 者不能挡刀」（C1）未写；④ 审判者被捕获结果（D4 定案后）未写；⑤ 挡刀捕获的 active 归属（D6）未写。矛盾：coverage 第 102 行认可「首伤亮 rank」、rule-conflicts 第 7 条称 reaction 伤害「可触发技能窗口」——两处都与语料/引擎不一致（各归 A1/B4）。',
+  trace:'玩家目前无法从任何玩家侧文档推出刺客封印、3 伤免挡刀这些高影响推论。',
+  proposal:'建议：等 A/B/C/D 各条拍板后统一补 helpContent + 修正两处文档矛盾；本条归 fix-doc。'},
+];
+
+// ---------- render ----------
+const LS_KEY = 'bk-coupling-review-2026-10-03';
+let store = {};
+try { store = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) { store = {}; }
+
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// render [[...]] or `...` refs as <code>
+function rich(s){ return esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>'); }
+
+function renderStats(){
+  const counts = {}; Object.values(STATUS).forEach(v=>counts[v.label]=0);
+  ITEMS.forEach(it=>counts[STATUS[it.status].label]++);
+  const decided = ITEMS.filter(it=>store[it.id] && store[it.id].d && store[it.id].d!=='pending').length;
+  const el = document.getElementById('stats');
+  el.innerHTML = `<span class="chip active" data-st="all">全部 <b>${ITEMS.length}</b></span>` +
+    Object.entries(STATUS).map(([k,v])=>`<span class="chip" data-st="${k}">${v.label} <b>${counts[v.label]}</b></span>`).join('') +
+    `<span class="chip" data-st="decided">已拍板 <b>${decided}</b></span>`;
+  el.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ filterStatus = c.dataset.st; renderStats(); renderItems(); });
+  document.getElementById('progress').textContent = `拍板进度 ${decided}/${ITEMS.length}`;
+}
+
+let filterStatus='all', filterText='';
+function itemMatches(it){
+  if(filterStatus==='decided') return store[it.id] && store[it.id].d && store[it.id].d!=='pending';
+  if(filterStatus!=='all' && it.status!==filterStatus) return false;
+  if(!filterText) return true;
+  const hay = [it.id,it.chain,it.rule,it.engine,it.trace,it.proposal].join(' ').toLowerCase();
+  return hay.includes(filterText.toLowerCase());
+}
+
+function renderItems(){
+  const host = document.getElementById('sections');
+  let html='';
+  SECTIONS.forEach((sec,si)=>{
+    const items = ITEMS.filter(it=>it.sec===si && itemMatches(it));
+    if(!items.length) return;
+    html += `<section><div class="sec-title"><span class="n">${sec.n}</span><h2>${sec.title}</h2></div><p class="sec-sub">${sec.sub}</p>`;
+    items.forEach(it=>{
+      const st = STATUS[it.status];
+      const d = store[it.id]||{};
+      const dec = d.d||'pending';
+      const badges = `<span class="badge ${st.cls}">${st.label}</span>` + (it.also||[]).map(a=>`<span class="badge ${STATUS[a].cls}">${STATUS[a].label}</span>`).join('');
+      html += `<div class="card ${dec!=='pending'?'decided':''}" id="card-${it.id}">
+        <div class="card-head"><span class="cid">${it.id}</span><span class="chain">${esc(it.chain)}</span>${badges}</div>
+        <div class="kv"><div class="k">规则书依据</div><div class="v">${rich(it.rule)}</div></div>
+        <div class="kv"><div class="k">引擎现状</div><div class="v">${rich(it.engine)}</div></div>
+        <div class="kv"><div class="k">推演 / 例子</div><div class="v">${rich(it.trace)}</div></div>
+        ${it.trace2?`<div class="kv"><div class="k">补充核对</div><div class="v">${rich(it.trace2)}</div></div>`:''}
+        <div class="proposal"><b>建议</b>　${rich(it.proposal)}</div>
+        <div class="decide">
+          <label>拍板：</label>
+          <select data-id="${it.id}" class="dec-sel">
+            ${DECISIONS.map(([v,l])=>`<option value="${v}" ${dec===v?'selected':''}>${l}</option>`).join('')}
+          </select>
+          <span class="dec-mark">${dec!=='pending'?'✔ 已记录（localStorage）':''}</span>
+          <textarea class="dec-note" data-id="${it.id}" placeholder="备注 / 理由 / 附加裁决细节…">${esc(d.n||'')}</textarea>
+        </div>
+      </div>`;
+    });
+    html += `</section>`;
+  });
+  host.innerHTML = html || '<div class="box">没有匹配的条目。</div>';
+  host.querySelectorAll('.dec-sel').forEach(sel=>sel.onchange=()=>{
+    const id=sel.dataset.id; store[id]=store[id]||{}; store[id].d=sel.value; save(); renderStats();
+    document.getElementById('card-'+id).classList.toggle('decided', sel.value!=='pending');
+  });
+  host.querySelectorAll('.dec-note').forEach(t=>t.oninput=()=>{
+    const id=t.dataset.id; store[id]=store[id]||{}; store[id].n=t.value; save();
+  });
+}
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(store)); }
+
+// ---------- export ----------
+function buildMarkdown(){
+  const L=[];
+  L.push('# 规则耦合共识决议（2026-10-03）','');
+  L.push('> 来源：`.scratch/rule-coupling-review/index.html` 逐条拍板导出。引擎基线 ruleset 0.4 @ master ac31bdb。','');
+  const group = {
+    'fix-engine': '## 一、需改引擎对齐规则书',
+    'fix-doc': '## 二、需改文档 / 帮助文案',
+    'keep': '## 三、认可现状（写入规则书为共识）',
+    'other': '## 四、另行裁决（含备注）',
+  };
+  for(const [key,title] of Object.entries(group)){
+    const items = ITEMS.filter(it=>(store[it.id]||{}).d===key);
+    if(!items.length) continue;
+    L.push(title,'');
+    items.forEach(it=>{
+      L.push(`- **${it.id} ${it.chain}**`);
+      const note=(store[it.id]||{}).n;
+      if(note) L.push(`  - 备注：${note.replace(/\n/g,' / ')}`);
+    });
+    L.push('');
+  }
+  const undone = ITEMS.filter(it=>!(store[it.id]||{}).d || store[it.id].d==='pending');
+  if(undone.length){
+    L.push('## 五、尚未拍板','');
+    undone.forEach(it=>L.push(`- **${it.id}** ${it.chain}`));
+    L.push('');
+  }
+  L.push('---');
+  L.push('落盘路径（按 review 页「共识怎么记录」方案）：① 语料追加产品方裁决（2026-10-03）小节；② CONTEXT.md 词条增改；③ 争议项记 ADR；④ 引擎改动须 ruleset bump + rule-branch-coverage 加行 + golden 同步。');
+  return L.join('\n');
+}
+const dlg=document.getElementById('exportDlg');
+document.getElementById('exportBtn').onclick=()=>{ document.getElementById('exportText').value=buildMarkdown(); dlg.showModal(); };
+document.getElementById('closeDlg').onclick=()=>dlg.close();
+document.getElementById('copyBtn').onclick=()=>{
+  const t=document.getElementById('exportText'); t.select();
+  navigator.clipboard?navigator.clipboard.writeText(t.value):document.execCommand('copy');
+  document.getElementById('copyBtn').textContent='已复制'; setTimeout(()=>document.getElementById('copyBtn').textContent='复制到剪贴板',1500);
+};
+document.getElementById('resetBtn').onclick=()=>{ if(confirm('清空全部拍板与备注？')){ store={}; save(); renderStats(); renderItems(); } };
+document.getElementById('search').oninput=e=>{ filterText=e.target.value.trim(); renderItems(); };
+
+renderStats(); renderItems();
+</script>
+</body>
+</html>
