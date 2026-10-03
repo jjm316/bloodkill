@@ -44,7 +44,7 @@ Issue 20 branch additions:
 | Branch | Behavior | Coverage |
 | --- | --- | --- |
 | rank 4 direct attack | no skill window | `SkillBranchTests.test_alchemist_does_not_open_from_direct_attack` |
-| rank 4 intervention harm | protected player takes skill damage without a new skill window | `SkillBranchTests.test_alchemist_harm_targets_protected_player_without_skill_window` |
+| rank 4 intervention harm | protected player takes skill damage via a victim-choice reveal window (ADR 0006), no skill window | `SkillBranchTests.test_alchemist_harm_targets_protected_player_without_skill_window` |
 | rank 4 intervention heal | token-return window heals damage and returns a revealed token | `SkillBranchTests.test_alchemist_heal_opens_token_return_and_returns_marker` |
 | rank 7 reaction | self damage with `source=reaction`, no follow-up skill window | `SkillBranchTests.test_berserker_reaction_takes_one_damage_without_new_window` |
 
@@ -91,7 +91,7 @@ Issue 20 branch additions:
 | `choose-skill` 已使用 | `skill.already-used`（注入） | `SkillBranchTests.test_skill_already_used_is_rejected` |
 | `choose-skill` rank 1 | `SkillUsed` + Quill `ResourceGranted` | `SkillBranchTests.test_elder_skill_grants_quill` |
 | `choose-skill` rank 2 目标自己 | `skill.invalid-target` | `SkillBranchTests.test_assassin_skill_cannot_target_self` |
-| `choose-skill` rank 2 合法 | 2 伤、匕首移交、不开新窗口 | `SkillBranchTests.test_assassin_skill_deals_two_damage_hands_dagger_and_opens_no_new_window` |
+| `choose-skill` rank 2 合法 | 2 伤、每点开受害者自选亮牌窗、窗口答完后匕首移交受害者（ADR 0006；技能窗开窗总则归 issue 02）；hash-seed 回归 `test_assassin_skill_scenario_log_is_identical_across_hash_seeds` | `SkillBranchTests.test_assassin_skill_deals_two_damage_opens_victim_choice_windows_and_hands_dagger`、`test_assassin_skill_scenario_log_is_identical_across_hash_seeds` |
 | `choose-skill` rank 2 捕获 | 终局后相位/匕首清空（issue 15 已修） | `SkillBranchTests.test_assassin_skill_capture_leaves_ended_phase` |
 | 诅咒窗口触发（ADR 0003，规则 0.4） | 亮出 fleur-cross 即开唯一技能窗口：自选亮等级（1/2 点自选）、第 3 点被迫、挡刀承伤被迫，三路一致；技能伤害不触发 | `RulesEngineTests.test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`CurseBranchTests.test_self_chosen_rank_reveal_opens_the_curse_window`、`test_third_damage_forced_rank_reveal_opens_the_curse_window`、`test_intervention_damage_opens_the_curse_window`、`test_skill_damage_does_not_open_the_curse_window` |
 | `choose-skill` 诅咒放弃 | `SkillDeclined`、技能永久失去、诅咒留供应区；后续不再出现第二次窗口；家族胜利照常结算不做诅咒判定 | `RulesEngineTests.test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`CurseBranchTests.test_decline_keeps_curses_in_supply_and_closes_the_window_for_good`、`test_declined_curse_never_judges_a_family_win` |
@@ -99,7 +99,7 @@ Issue 20 branch additions:
 | 诅咒发动校验 | 分配键与待分发集合不符（含空）→ `curse.invalid-count`；重复收件人 → `curse.duplicate-recipient`；未知/已捕获收件人 → `target.not-found` / `target.captured`；非审判者 → `player.not-eligible`；窗口已关 → `skill.not-open`；重复发动 → `skill.already-used`（注入） | `CurseBranchTests.test_distribute_with_no_curses_is_rejected`、`test_distribute_with_wrong_assignment_keys_is_rejected`、`test_distribute_to_unknown_or_captured_recipient_is_rejected`、`test_distribute_duplicate_recipient_is_rejected`、`test_distribute_by_non_inquisitor_is_rejected`、`test_distribute_then_decline_is_rejected_as_window_closed`、`test_repeated_use_in_a_reopened_window_is_rejected` |
 | 旧 `distribute-curse` 命令移除 | 旧命令 → `command.unknown`，分发仅剩技能命令一条路径 | `CurseBranchTests.test_standalone_distribute_curse_command_is_gone` |
 | `_end_game` 真诅咒夺胜 | 正常家族胜方领袖持真诅咒 → 胜方改写为审判者独赢（`inquisitor-true-curse`） | `CurseBranchTests.test_winning_leader_holding_true_curse_gives_the_inquisitor_a_solo_win` |
-| `_apply_damage` 首伤展示 rank / 后续展示 affiliation | `ClueRevealed` 种类 | `ProjectionTests.test_revealed_clues_appear_only_after_damage`；`SkillBranchTests.test_skill_window_only_opens_once_per_rank_reveal` |
+| `_apply_damage` 技能伤害亮牌（ADR 0006，旧口径"首伤展示 rank / 后续展示 affiliation"作废） | 一切伤害源统一走受害者自选亮牌窗（第 3 点被迫 rank、wild 色选窗）；感应者技能伤害带 `forceRank` 直接亮 rank 不开窗；本批新分支行与 golden 同步归 issue 07 | `SkillBranchTests.test_assassin_skill_deals_two_damage_opens_victim_choice_windows_and_hands_dagger`、`test_mentalist_damages_target_forces_rank_and_hands_dagger`、`test_mentalist_wound_on_shown_rank_falls_back_to_victim_choice`、`test_assassin_skill_scenario_log_is_identical_across_hash_seeds`；`SkillBranchTests.test_alchemist_harm_targets_protected_player_without_skill_window` |
 | `_apply_damage` 第 4 伤 | `PlayerCaptured` + `GameEnded`、立即终局 | `EndGameBranchTests` 四项；golden 全部 |
 | `_apply_damage` 攻击伤害开技能窗 | rank 1--9 与审判者 fleur-cross（rank 4 仅 intervention），仅 `source=attack`/`source=intervention` | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window`；`CurseBranchTests` 触发路四项 |
 | `_end_game` 捕获家族领袖 | `captured-leader`，攻击方胜 | `EndGameBranchTests.test_captured_leader_branch` |

@@ -12,6 +12,11 @@ Two tests document known defects found by the property net and are marked
 """
 
 from copy import deepcopy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 from blood_bound import Command, RuleError, RulesEngine, legal_actions, project_state, run_deterministic_game
@@ -90,6 +95,45 @@ def answer_poll(engine, *volunteers):
             command(engine, f"respond-{engine.state.revision}", responder, "respond-intervention", volunteer=responder in volunteers)
         )
     return events
+
+
+def assassin_skill_scenario_log() -> list[list]:
+    """Drive the assassin skill to completion and return its full event log.
+
+    Wounds the assassin to open the rank-2 skill window, uses it on a fresh
+    victim, then answers every victim-choice reveal window deterministically
+    (first eligible token, rose for wild markers). Returns [event_type,
+    payload] pairs for every command; the hash-seed regression test compares
+    this log across PYTHONHASHSEED values — the pre-ADR-0006 engine picked
+    the auto-revealed token with next(iter(available)), which flipped with
+    the hash seed (coupling point A2).
+    """
+    engine, found = started_with_ranks(6, 2)
+    assassin = found[2]
+    attacker = engine.state.dagger_holder_id
+    if attacker == assassin.player_id:
+        give_dagger_to(engine, next(pid for pid in engine.state.players if pid != assassin.player_id))
+        attacker = engine.state.dagger_holder_id
+    victim = next(
+        pid for pid, player in engine.state.players.items()
+        if pid not in (attacker, assassin.player_id) and player.damage == 0
+    )
+    log: list[list] = []
+
+    def record(events) -> None:
+        log.extend([event.event_type, event.payload] for event in events)
+
+    record(engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=assassin.player_id)))
+    record(answer_poll(engine))
+    record(engine.apply(command(engine, "reveal-rank", assassin.player_id, "choose-reveal", token="rank")))
+    record(engine.apply(command(engine, "use", assassin.player_id, "choose-skill", use=True, targetPlayerId=victim)))
+    while engine.state.pending and engine.state.pending.kind == "reveal":
+        token = engine.state.pending.context["eligibleTokens"][0]
+        payload = {"token": token}
+        if token.startswith("marker-") and engine.state.players[victim].identity_markers[int(token[-1])] == "wild":
+            payload["color"] = "rose"
+        record(engine.apply(command(engine, f"reveal-{engine.state.revision}", victim, "choose-reveal", **payload)))
+    return log
 
 
 class SetupBranchTests(unittest.TestCase):
@@ -455,9 +499,17 @@ class SkillBranchTests(unittest.TestCase):
         engine.apply(command(engine, "attack-4", attacker, "attack", targetPlayerId=protected.player_id))
         answer_poll(engine, alchemist.player_id)
         reveal_rank(engine, alchemist.player_id, "reveal-alchemist")
-        events = engine.apply(command(engine, "harm-4", alchemist.player_id, "choose-skill", use=True, mode="harm"))
+        events = list(engine.apply(command(engine, "harm-4", alchemist.player_id, "choose-skill", use=True, mode="harm")))
+        # ADR 0006: the harm wound opens a victim-choice reveal window for
+        # the protected player, exactly like any other damage
         self.assertEqual(engine.state.players[protected.player_id].damage, 1)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        self.assertEqual(engine.state.pending.actor_player_id, protected.player_id)
+        self.assertEqual(engine.state.pending.context["eligibleTokens"], ["marker-1", "rank"])
+        events += engine.apply(command(engine, "answer-harm", protected.player_id, "choose-reveal", token="marker-1"))
+        # the harm never opens a skill window and the alchemist keeps the dagger
         self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.dagger_holder_id, alchemist.player_id)
         self.assertNotIn("SkillWindowOpened", [event.event_type for event in events])
 
     def test_alchemist_heal_opens_token_return_and_returns_marker(self):
@@ -571,13 +623,36 @@ class SkillBranchTests(unittest.TestCase):
         self.assertEqual(set(owner.inspections), {p.player_id for p in targets})
         self.assertEqual(project_state(engine.state, owner.player_id)["viewer"]["inspections"][targets[0].player_id]["rank"], engine.state.players[targets[0].player_id].rank)
 
-    def test_mentalist_damages_target_and_hands_dagger(self):
+    def test_mentalist_damages_target_forces_rank_and_hands_dagger(self):
         engine, found = started_with_ranks(6, 5)
         owner = found[5]
         target = next(player for player in engine.state.players.values() if player.player_id != owner.player_id)
         self.open_skill(engine, owner)
-        engine.apply(command(engine, "mentalist", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
+        events = engine.apply(command(engine, "mentalist", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
+        # the force-reveal comes from the mentalist's skill text (ADR 0006),
+        # not the generic third-point rule: the rank is shown directly with
+        # no victim-choice window
         self.assertEqual(engine.state.players[target.player_id].damage, 1)
+        self.assertIn("rank", engine.state.players[target.player_id].revealed)
+        self.assertNotIn("RevealWindowOpened", [event.event_type for event in events])
+        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.dagger_holder_id, target.player_id)
+
+    def test_mentalist_wound_on_shown_rank_falls_back_to_victim_choice(self):
+        engine, found = started_with_ranks(6, 5)
+        owner = found[5]
+        target = next(player for player in engine.state.players.values() if player.player_id != owner.player_id)
+        target.revealed = {"rank"}
+        target.revealed_values["rank"] = target.rank
+        self.open_skill(engine, owner)
+        engine.apply(command(engine, "mentalist", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
+        # nothing left to force once the rank is already shown: the wound
+        # rides the generic victim-choice pipeline (corpus rank 5 text)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        self.assertEqual(engine.state.pending.context["eligibleTokens"], ["marker-0", "marker-1"])
+        engine.apply(command(engine, "reveal-marker", target.player_id, "choose-reveal", token="marker-0"))
+        self.assertEqual(engine.state.players[target.player_id].damage, 1)
+        self.assertIsNone(engine.state.pending)
         self.assertEqual(engine.state.dagger_holder_id, target.player_id)
 
     def test_guardian_grants_ward_resources_and_returns_them_at_three_damage(self):
@@ -618,7 +693,7 @@ class SkillBranchTests(unittest.TestCase):
         engine.apply(command(engine, "courtesan", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
         self.assertEqual(engine.state.players[target.player_id].resources["fan"], 1)
 
-    def test_assassin_skill_deals_two_damage_hands_dagger_and_opens_no_new_window(self):
+    def test_assassin_skill_deals_two_damage_opens_victim_choice_windows_and_hands_dagger(self):
         engine, found = started_with_ranks(6, 2)
         assassin = found[2]
         attacker = engine.state.dagger_holder_id
@@ -632,16 +707,61 @@ class SkillBranchTests(unittest.TestCase):
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=assassin.player_id))
         answer_poll(engine)
         reveal_rank(engine, assassin.player_id)
-        events = engine.apply(
-            command(engine, "use", assassin.player_id, "choose-skill", use=True, targetPlayerId=victim)
+        events = list(
+            engine.apply(
+                command(engine, "use", assassin.player_id, "choose-skill", use=True, targetPlayerId=victim)
+            )
         )
+        # ADR 0006: each of the two wounds opens a victim-choice reveal
+        # window; the second point only applies after the first is answered.
+        self.assertEqual(engine.state.players[victim].damage, 1)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        self.assertEqual(engine.state.pending.actor_player_id, victim)
+        self.assertEqual(engine.state.pending.context["eligibleTokens"], ["marker-0", "marker-1", "rank"])
+        self.assertFalse(engine.state.pending.context["forceRank"])
+        self.assertEqual(
+            [event.payload.get("eligibleTokens") for event in events if event.event_type == "RevealWindowOpened"],
+            [["marker-0", "marker-1", "rank"]],
+        )
+        events += engine.apply(command(engine, "reveal-1", victim, "choose-reveal", token="marker-0"))
         self.assertEqual(engine.state.players[victim].damage, 2)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        events += engine.apply(command(engine, "reveal-2", victim, "choose-reveal", token="marker-1"))
+        # the victim chose markers, so the rank stays hidden and no skill
+        # window can open (its general trigger rule is re-judged by issue 02);
+        # skill damage never creates an intervention either
+        self.assertIsNone(engine.state.pending)
+        self.assertNotIn("rank", engine.state.players[victim].revealed)
         self.assertEqual(engine.state.dagger_holder_id, victim)
         self.assertEqual(engine.state.phase, {"kind": "action", "activePlayerId": victim})
-        # skill damage creates neither an intervention nor a skill window
-        self.assertIsNone(engine.state.pending)
-        self.assertNotIn("InterventionOpened", [event.event_type for event in events])
-        self.assertNotIn("SkillWindowOpened", [event.event_type for event in events])
+        event_types = [event.event_type for event in events]
+        self.assertNotIn("InterventionPollOpened", event_types)
+        self.assertNotIn("SkillWindowOpened", event_types)
+
+    def test_assassin_skill_scenario_log_is_identical_across_hash_seeds(self):
+        # A2 regression: the assassin scenario must yield one identical log
+        # under PYTHONHASHSEED=0..5 (ADR 0001 replay determinism)
+        script = (
+            "import json\n"
+            "from tests.test_rule_branches import assassin_skill_scenario_log\n"
+            "print(json.dumps(assassin_skill_scenario_log(), sort_keys=True))\n"
+        )
+        cwd = str(Path(__file__).resolve().parents[1])
+        logs = []
+        for hash_seed in range(6):
+            env = dict(os.environ, PYTHONHASHSEED=str(hash_seed))
+            completed = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=cwd,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            logs.append(completed.stdout)
+        self.assertEqual(len(set(logs)), 1)
+        # one window for the assassin's own attack wound plus one per skill point
+        self.assertEqual(logs[0].count("RevealWindowOpened"), 3)
 
     def test_assassin_skill_cannot_target_self(self):
         engine, found = started_with_ranks(6, 2)
@@ -787,11 +907,20 @@ class CurseBranchTests(unittest.TestCase):
         answer_poll(engine)
         reveal_rank(engine, assassin.player_id, "reveal-assassin")
         self.assertEqual(engine.state.pending.rank, 2)
-        engine.apply(command(engine, "use-assassin", assassin.player_id, "choose-skill", use=True, targetPlayerId=inquisitor.player_id))
-        # the inquisitor's rank was auto-revealed by skill damage, but skill
-        # wounds never open a skill window
+        events = list(
+            engine.apply(command(engine, "use-assassin", assassin.player_id, "choose-skill", use=True, targetPlayerId=inquisitor.player_id))
+        )
+        # ADR 0006: skill wounds are the victim's choice now; the inquisitor
+        # self-chooses the rank for the first point and a wild marker for the
+        # second (skill damage never opens a skill window on its own trigger —
+        # the self-chosen rank path is re-judged by issue 02's general rule)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        self.assertEqual(engine.state.pending.actor_player_id, inquisitor.player_id)
+        events += engine.apply(command(engine, "reveal-rank", inquisitor.player_id, "choose-reveal", token="rank"))
         self.assertIn("rank", engine.state.players[inquisitor.player_id].revealed)
+        events += engine.apply(command(engine, "reveal-marker", inquisitor.player_id, "choose-reveal", token="marker-0", color="rose"))
         self.assertIsNone(engine.state.pending)
+        self.assertNotIn("SkillWindowOpened", [event.event_type for event in events])
         self.assertEqual(engine.state.curses, ["true-curse-1", "false-curse-1"])
 
     def test_decline_keeps_curses_in_supply_and_closes_the_window_for_good(self):

@@ -520,10 +520,10 @@ class RulesEngine:
             target = self._live_player(state, command.payload.get("targetPlayerId"))
             if target.player_id == owner.player_id:
                 raise RuleError("skill.invalid-target")
-            events.extend(self._apply_damage(state, command, target.player_id, 2, "skill", trigger=None))
-            if state.status == "active" and state.pending is None:
-                state.dagger_holder_id = target.player_id
-                state.phase = {"kind": "action", "activePlayerId": target.player_id}
+            # the skill text hands the dagger to the victim after the wounds;
+            # with victim-choice reveal windows pending that moment is the end
+            # of the damage chain (_after_damage), not the skill command
+            events.extend(self._apply_damage(state, command, target.player_id, 2, "skill", trigger=None, dagger_to_target=True))
         elif owner.rank == 3:
             target_ids = command.payload.get("targetPlayerIds")
             if not isinstance(target_ids, (list, tuple)) or len(target_ids) != 2 or not all(isinstance(target_id, str) for target_id in target_ids) or len(set(target_ids)) != 2:
@@ -556,10 +556,22 @@ class RulesEngine:
             target = self._live_player(state, command.payload.get("targetPlayerId"))
             if target.player_id == owner.player_id or target.resources.get("shield", 0):
                 raise RuleError("skill.invalid-target")
-            events.extend(self._apply_damage(state, command, target.player_id, 1, "skill", trigger=None, active_player_id=owner.player_id))
-            if state.status == "active" and state.pending is None:
-                state.dagger_holder_id = target.player_id
-                state.phase = {"kind": "action", "activePlayerId": target.player_id}
+            # the mentalist's text force-reveals the victim's rank (ADR 0006);
+            # once the rank is already shown the wound falls back to the
+            # victim-choice reveal pipeline like any other damage
+            events.extend(
+                self._apply_damage(
+                    state,
+                    command,
+                    target.player_id,
+                    1,
+                    "skill",
+                    trigger=None,
+                    active_player_id=owner.player_id,
+                    force_rank=True,
+                    dagger_to_target=True,
+                )
+            )
         elif owner.rank == 6:
             target = self._live_player(state, command.payload.get("targetPlayerId"))
             owner.shield_ward_id = target.player_id
@@ -700,6 +712,8 @@ class RulesEngine:
         trigger: str | None,
         active_player_id: str | None = None,
         protected_player_id: str | None = None,
+        force_rank: bool = False,
+        dagger_to_target: bool = False,
     ) -> list[Event]:
         target = self._live_player(state, target_id)
         if target.resources.get("shield", 0) and source in {"attack", "skill", "reaction"}:
@@ -711,7 +725,8 @@ class RulesEngine:
             "remaining": amount,
             "source": source,
             "trigger": trigger,
-            "forceRank": trigger == "intervention",
+            "forceRank": force_rank or trigger == "intervention",
+            "daggerToTarget": dagger_to_target,
             "followup": None,
             "rankRevealed": False,
         }
@@ -731,9 +746,6 @@ class RulesEngine:
             ]
         available = {"rank", "marker-0", "marker-1"} - target.revealed
         force_rank = bool(context.get("forceRank")) or target.damage >= 3
-        if context.get("source") == "skill":
-            token = "rank" if "rank" in available else next(iter(available))
-            return self._reveal_token(state, command, target, token, context, color="rose")
         if force_rank and "rank" in available:
             return self._reveal_token(state, command, target, "rank", context)
         if len(available) == 1:
@@ -806,9 +818,12 @@ class RulesEngine:
         state.pending = None
         if state.status == "active":
             # Attack and intervention wounds pass the dagger to the wounded
-            # player; skill and reaction sources resolve via issue 20 rules.
+            # player; the assassin and mentalist skills hand it to their
+            # victim once the damage chain settles (corpus ranks 2/5, B12);
+            # other skill and reaction sources resolve via issue 20 rules.
             source = context.get("source")
-            holder = target.player_id if source in {"attack", "intervention"} else (context.get("attackerPlayerId") or target.player_id)
+            to_wounded = source in {"attack", "intervention"} or bool(context.get("daggerToTarget"))
+            holder = target.player_id if to_wounded else (context.get("attackerPlayerId") or target.player_id)
             if holder in state.players and not state.players[holder].captured:
                 state.dagger_holder_id = holder
                 state.phase = {"kind": "action", "activePlayerId": holder}
