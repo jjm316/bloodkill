@@ -58,8 +58,12 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
             if pending.rank == 4 and pending.trigger != "intervention":
                 return actions
             if pending.rank == 4:
-                actions.append({"type": "choose-skill", "use": True, "mode": "harm"})
                 protected = state.players.get(pending.context.get("protectedPlayerId"))
+                # coupling point B1: a shielded player cannot be a skill target,
+                # so the harm affordance is filtered up front like every other
+                # target list (the engine keeps its defensive rejection)
+                if not (protected and protected.resources.get("shield", 0)):
+                    actions.append({"type": "choose-skill", "use": True, "mode": "harm"})
                 if protected and protected.damage >= 1 and protected.revealed:
                     actions.append({"type": "choose-skill", "use": True, "mode": "heal"})
                 return actions

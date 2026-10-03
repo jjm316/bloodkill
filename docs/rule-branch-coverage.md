@@ -61,6 +61,12 @@ Issue 20 branch additions:
 | rank 4 intervention heal | token-return window heals damage and returns a revealed token | `SkillBranchTests.test_alchemist_heal_opens_token_return_and_returns_marker` |
 | rank 7 reaction | self damage with `source=reaction`; a marker reveal opens no window, the forced third-point rank reveal opens the attacker's window with `trigger=None` (ADR 0009 B4)；持盾狂战士照常反伤——盾只挡"被指定为目标"，旧 owner 盾检查已删（ADR 0010）；攻击者持盾时反伤仍被 `target.shielded` 拦截（耦合点 B1，失败命令不烧技能） | `SkillBranchTests.test_berserker_reaction_damages_attacker_without_new_window`、`test_berserker_reaction_third_point_forced_rank_opens_attacker_window`、`test_berserker_window_from_skill_damage_counters_the_skill_user`、`test_shielded_berserker_volunteer_can_react`、`test_shielded_attacker_blocks_berserker_reaction` |
 
+Issue 06 branch additions（炼金 harm 选项过滤盾目标，耦合点 B1 投影口径对齐）:
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| rank 4 harm affordance | 被保护者持盾时投影不给 harm 选项（与刺客/感应者目标列表同口径，纯投影改动）；引擎防御性拒绝保留——强行提交仍报 `target.shielded` 且不烧技能 | `SkillBranchTests.test_alchemist_harm_affordance_filters_shielded_protected_player` |
+
 ## 引擎分支
 
 | 分支 | 行为 | 覆盖测试 |

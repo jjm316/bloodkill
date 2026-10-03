@@ -565,6 +565,36 @@ class SkillBranchTests(unittest.TestCase):
         self.assertEqual(engine.state.dagger_holder_id, alchemist.player_id)
         self.assertNotIn("SkillWindowOpened", [event.event_type for event in events])
 
+    def test_alchemist_harm_affordance_filters_shielded_protected_player(self):
+        # issue 06 (coupling point B1 alignment): the harm affordance filters a
+        # shielded protected player exactly like the assassin/mentalist target
+        # lists, instead of offering a button the engine rejects at submit time
+        engine, found = started_with_ranks(6, 4)
+        alchemist = found[4]
+        attacker = engine.state.dagger_holder_id
+        if attacker == alchemist.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != alchemist.player_id))
+            attacker = engine.state.dagger_holder_id
+        protected = next(player for player in engine.state.players.values() if player.player_id not in {attacker, alchemist.player_id})
+        engine.apply(command(engine, "attack-4-filter", attacker, "attack", targetPlayerId=protected.player_id))
+        answer_poll(engine, alchemist.player_id)
+        reveal_rank(engine, alchemist.player_id, "reveal-alchemist-filter")
+        harm = {"type": "choose-skill", "use": True, "mode": "harm"}
+        self.assertIn(harm, legal_actions(engine.state, alchemist.player_id))
+        # a live attack on a shielded player is rejected up front, so only an
+        # injected shield can put the two facts together today; inject directly
+        engine.state.players[protected.player_id].resources["shield"] = 1
+        actions = legal_actions(engine.state, alchemist.player_id)
+        self.assertNotIn(harm, actions)
+        self.assertIn({"type": "choose-skill", "use": False}, actions)
+        # the engine keeps its defensive rejection and burns nothing on it
+        revision = engine.state.revision
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "harm-shielded", alchemist.player_id, "choose-skill", use=True, mode="harm"))
+        self.assertEqual(error.exception.code, "target.shielded")
+        self.assertEqual(engine.state.revision, revision)
+        self.assertNotIn("4", engine.state.players[alchemist.player_id].skills_used)
+
     def test_alchemist_heal_opens_token_return_and_returns_marker(self):
         engine, found = started_with_ranks(6, 4)
         alchemist = found[4]

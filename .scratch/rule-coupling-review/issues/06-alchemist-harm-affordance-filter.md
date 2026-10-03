@@ -1,6 +1,6 @@
 # 06 炼金 harm 选项过滤盾目标（projection 小修）
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 
@@ -13,3 +13,7 @@ Status: ready-for-agent
 ## 验收
 
 - 持盾者不出现在炼金 harm 的可选列表；引擎行为不变（仍拒绝该命令，防御性保留）。
+
+## Comments
+
+- 2026-10-03（实现销案）：`projection.py` rank 4 分支改为先取 `protected`，被保护者持盾（`resources.shield`）时不追加 `mode:"harm"` 选项，与刺客（rank 2）/感应者（rank 5）目标列表口径对齐；heal 选项逻辑不动，引擎 `_apply_damage` 的 `target.shielded` 防御性拒绝原样保留。说明：正常对局中攻击在声明时即拒绝持盾目标、且干涉链内无法插入发盾命令，"持盾被保护者的炼金窗"当前只能经注入状态到达，故测试按既有防御门惯例直接注入 `resources["shield"]=1`。分支测试 `SkillBranchTests.test_alchemist_harm_affordance_filters_shielded_protected_player`（含引擎仍拒绝且不烧技能的断言）；覆盖行见 `docs/rule-branch-coverage.md` Issue 06 小节。ruleset 不动（bump 归 07），golden 为纯事件回放无 `legalActions`、无需重生成。
