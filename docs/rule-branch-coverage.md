@@ -30,6 +30,19 @@ Issue 23 branch additions (干涉投票模型，ADR 0002):
 | 投影公开性 | pending 携带 stage/responses/volunteerPlayerIds，旁观者同见；context 不暴露 | `ProjectionBranchTests.test_pending_intervention_actions_across_poll_and_choice_stages`、`test_pending_view_hides_private_context_and_publishes_votes` |
 | 默认不挡刀 | 客户端 localStorage 偏好 + 常驻开关 + 自动代发（服务端超时兜底断线） | 手动验收；代发走同一 `respond-intervention` 命令路径 |
 
+Issue 05 branch additions (单人窗口超时，ADR 0011):
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| 亮牌窗超时 | `timeout-reveal` 自动亮排序第一张（marker-0 → marker-1 → rank 确定序），`ClueRevealed.reason=timeout`；连续窗口逐个到期逐个亮 | `SingleWindowTimeoutBranchTests.test_reveal_timeout_reveals_markers_in_order_across_chained_windows` |
+| wild 色选窗超时 | wild 标记到期默认「？」（value=unknown，不暴露阵营倾向；引擎接受 unknown 色即 wild-26 的引擎前置） | `SingleWindowTimeoutBranchTests.test_reveal_timeout_on_a_wild_marker_takes_the_question_mark` |
+| 技能窗超时 | `timeout-skill` 视为放弃（ADR 0008）：`SkillDeclined.reason=timeout` + 写 `skills_used` 永久失去 | `SingleWindowTimeoutBranchTests.test_skill_timeout_declines_and_permanently_spends_the_skill` |
+| 退牌窗超时 | `timeout-return` 自动退排序第一张已亮标记（marker 先于 rank，保住亮槽数 = 伤害数） | `SingleWindowTimeoutBranchTests.test_return_timeout_returns_the_first_marker_before_rank` |
+| 超时守卫 | 无窗口/错演员/过期资格集 → `reveal.not-open` / `skill.not-open` / `token-return.not-open` | `SingleWindowTimeoutBranchTests.test_reveal_timeout_guards`、`test_skill_timeout_guards`、`test_return_timeout_guard` |
+| 超时配置 | start-game 携带 `singleWindowTimeoutSeconds`（30/60/90/120/180，缺省 90，非法值 `game.invalid-timeout`），入 `GameStarted` 事件 | `SingleWindowTimeoutBranchTests.test_single_window_timeout_configuration_is_fixed_at_start`、`test_default_single_window_timeout_is_ninety_seconds`、`test_invalid_single_window_timeout_choice_is_rejected` |
+| 重放确定性 | 超时命令走公共命令管线，存档双向往返（命令重放 = 快照） | `SingleWindowTimeoutBranchTests.test_timeout_commands_replay_deterministically_through_the_save_pipeline` |
+| 服务端倒计时 | 三类单人窗口由 Room 持 deadline、`single_window` provider 代发 timeout 命令；窗口身份（actor+资格）变化即重新起算；投影注入 `pending.deadline` | `SingleWindowDeadlineTests`（test_server_sync.py） |
+
 Issue 21 branch additions:
 
 | Branch | Behavior | Coverage |

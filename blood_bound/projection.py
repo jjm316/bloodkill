@@ -151,6 +151,7 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
         "pending": _pending_view(state.pending),
         "result": dict(state.result) if state.result else None,
         "interventionTimeoutSeconds": state.intervention_timeout_seconds,
+        "singleWindowTimeoutSeconds": state.single_window_timeout_seconds,
     }
     if viewer is None:
         projection["viewer"] = None

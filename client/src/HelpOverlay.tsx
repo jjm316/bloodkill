@@ -7,6 +7,7 @@ import {
   HELP_LEGEND_ITEMS,
   HELP_RANKS,
   HELP_SKILL_NOTE,
+  HELP_WINDOW_TIMEOUT_NOTE,
   type HelpClueNote,
   type HelpLegendItem,
   type HelpRankRow,
@@ -179,6 +180,7 @@ export function RulesOverlay({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
             <p className="rules-note">※ {HELP_SKILL_NOTE}</p>
+            <p className="rules-note">※ {HELP_WINDOW_TIMEOUT_NOTE}</p>
           </section>
           <section className="rules-section" aria-labelledby="rules-legend">
             <h4 id="rules-legend">标记图例</h4>

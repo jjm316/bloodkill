@@ -107,6 +107,10 @@ export const HELP_RANKS: HelpRankRow[] = [
 // 等级表下方的通用规则注释（spec：至少一处提及）。
 export const HELP_SKILL_NOTE = "技能造成的伤害不产生新的干涉投票，也不会开出新的技能窗口。";
 
+// 单人窗口超时（ADR 0011）：告知"超时会替你做什么"，断线也不停局。
+export const HELP_WINDOW_TIMEOUT_NOTE =
+  "单人决策窗口（亮牌、技能、退牌）共享房主设定的超时：亮牌到期自动亮出排序第一张（万能标记记为「？」），技能到期视为放弃（按规则永久失去），退牌到期自动退回排序第一张已亮标记。";
+
 export interface HelpLegendItem {
   icon: IconName;
   name: string;

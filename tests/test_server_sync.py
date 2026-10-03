@@ -204,8 +204,11 @@ class DeadlineWindowTests(unittest.TestCase):
         pending = self.room.engine.state.pending
         for player_id in pending.eligible_player_ids:
             self._respond(player_id, False, f"no-{player_id}")
-        self.assertIsNone(self.room.window_stage)
-        self.assertIsNone(self.room.window_deadline)
+        # The intervention window closed and, since issue 05, the victim's
+        # reveal window takes over the tracked countdown instead of clearing it.
+        self.assertIsNotNone(self.room.engine.state.pending)
+        self.assertTrue(self.room.window_stage.startswith("reveal:"))
+        self.assertIsNotNone(self.room.window_deadline)
         self.assertEqual(self.room.engine.state.players[target].damage, 1)
 
     def test_state_projection_carries_the_deadline(self):
@@ -229,7 +232,9 @@ class DeadlineWindowTests(unittest.TestCase):
 
         asyncio.run(run())
         self.assertEqual(self.room.engine.state.players[target].damage, 1)
-        self.assertIsNone(self.room.window_stage)
+        # The timed-out poll resolved and the victim's reveal window (issue 05)
+        # is now the tracked, armed window.
+        self.assertTrue(self.room.window_stage.startswith("reveal:"))
         self.assertIn("InterventionDeclined", [event.event_type for event in self.room.engine.state.events])
 
     def test_scheduler_expiry_auto_declines_the_choice_stage(self):
@@ -290,6 +295,218 @@ class DeadlineWindowTests(unittest.TestCase):
         asyncio.run(run())
         self.assertEqual(restored.engine.state.players[target].damage, 1)
         self.assertIn("InterventionDeclined", [event.event_type for event in restored.engine.state.events])
+
+
+class SingleWindowDeadlineTests(unittest.TestCase):
+    """Server-owned countdowns for the reveal / skill / token-return windows (issue 05)."""
+
+    def setUp(self):
+        from server import app
+        from server.rooms import RoomManager
+
+        self.app = app
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.original_manager = app.manager
+        self.original_conns = app.conns.copy()
+        self.addCleanup(self._restore_globals)
+        app.manager = RoomManager(Path(self._tmp.name))
+        app.conns.clear()
+        self.room = app.manager.create_room()
+        self.player_ids = [app.manager.join_or_resume(self.room, f"P{index}")[0] for index in range(6)]
+        app.manager.start_game(self.room, single_window_timeout_seconds=60)
+
+    def _restore_globals(self):
+        self.app.manager = self.original_manager
+        self.app.conns.clear()
+        self.app.conns.update(self.original_conns)
+
+    def _wound(self, victim_id, command_id="attack"):
+        """Attack a victim and decline the poll, leaving the reveal window open."""
+        from blood_bound import Command
+
+        holder = self.room.engine.state.dagger_holder_id
+        if holder == victim_id:
+            other = next(pid for pid in self.player_ids if pid != victim_id)
+            self.app.manager.apply_command(
+                self.room,
+                Command(f"pass-{command_id}", self.room.game_id, holder, self.room.engine.state.revision, "pass-dagger", {"targetPlayerId": other}),
+            )
+        attacker = self.room.engine.state.dagger_holder_id
+        self.app.manager.apply_command(
+            self.room,
+            Command(command_id, self.room.game_id, attacker, self.room.engine.state.revision, "attack", {"targetPlayerId": victim_id}),
+        )
+        pending = self.room.engine.state.pending
+        for player_id in list(pending.eligible_player_ids):
+            pending = self.room.engine.state.pending
+            self.app.manager.apply_command(
+                self.room,
+                Command(f"no-{command_id}-{player_id}", self.room.game_id, player_id, self.room.engine.state.revision, "respond-intervention", {"volunteer": False}),
+            )
+
+    def test_reveal_window_is_tracked_and_re_arms_per_window(self):
+        import time as time_module
+
+        victim = next(pid for pid in self.player_ids if pid != self.room.engine.state.dagger_holder_id)
+        self._wound(victim)
+        self.assertEqual(self.room.engine.state.pending.kind, "reveal")
+        self.assertTrue(self.room.window_stage.startswith(f"reveal:{victim}:"))
+        first_deadline = self.room.window_deadline
+        self.assertIsNotNone(first_deadline)
+        self.assertGreater(first_deadline, time_module.time())
+
+        # the victim answers the first window; the next wound re-opens a
+        # different reveal window (fewer eligible tokens) which must re-arm
+        from blood_bound import Command
+
+        self.app.manager.apply_command(
+            self.room,
+            Command("reveal-m0", self.room.game_id, victim, self.room.engine.state.revision, "choose-reveal", {"token": "marker-0"}),
+        )
+        self._wound(victim, "attack-2")
+        self.assertTrue(self.room.window_stage.startswith(f"reveal:{victim}:"))
+        self.assertGreater(self.room.window_deadline, first_deadline)
+
+    def test_state_projection_carries_the_single_window_deadline(self):
+        victim = next(pid for pid in self.player_ids if pid != self.room.engine.state.dagger_holder_id)
+        self._wound(victim)
+        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=victim)
+        state = self.app.build_state(conn)
+        pending = state["game"]["pending"]
+        self.assertEqual(pending["kind"], "reveal")
+        self.assertIsNotNone(pending["deadline"])
+        self.assertEqual(state["game"]["singleWindowTimeoutSeconds"], 60)
+
+    def test_scheduler_expiry_auto_reveals_the_deterministic_first_token(self):
+        import time as time_module
+
+        victim = next(pid for pid in self.player_ids if pid != self.room.engine.state.dagger_holder_id)
+        self._wound(victim)
+        self.room.window_deadline = time_module.time() - 1.0
+
+        async def run():
+            await self.app.deadline_scheduler.sync(self.room)
+            await asyncio.sleep(0.05)
+
+        asyncio.run(run())
+        player = self.room.engine.state.players[victim]
+        self.assertEqual(player.damage, 1)
+        self.assertEqual(sorted(player.revealed), ["marker-0"])
+        revealed = [event for event in self.room.engine.state.events if event.event_type == "ClueRevealed"]
+        self.assertEqual(revealed[-1].payload["reason"], "timeout")
+        self.assertIsNone(self.room.engine.state.pending)
+        self.assertIsNone(self.room.window_stage)
+
+    def test_scheduler_expiry_auto_declines_the_skill_window(self):
+        import time as time_module
+
+        from blood_bound import Command
+
+        # any non-alchemist rank opens its skill window on an attack wound
+        victim = next(
+            player.player_id
+            for player in self.room.engine.state.players.values()
+            if player.player_id != self.room.engine.state.dagger_holder_id and player.rank != 4
+        )
+        self._wound(victim)
+        self.app.manager.apply_command(
+            self.room,
+            Command("reveal-rank", self.room.game_id, victim, self.room.engine.state.revision, "choose-reveal", {"token": "rank"}),
+        )
+        if self.room.engine.state.pending is None or self.room.engine.state.pending.kind != "skill":
+            self.fail("a non-alchemist victim rank always opens its skill window on an attack wound")
+        self.assertTrue(self.room.window_stage.startswith(f"skill:{victim}"))
+        self.room.window_deadline = time_module.time() - 1.0
+
+        async def run():
+            await self.app.deadline_scheduler.sync(self.room)
+            await asyncio.sleep(0.05)
+
+        asyncio.run(run())
+        declined = [event for event in self.room.engine.state.events if event.event_type == "SkillDeclined"]
+        self.assertEqual(declined[-1].payload["reason"], "timeout")
+        self.assertIn(str(self.room.engine.state.players[victim].rank), self.room.engine.state.players[victim].skills_used)
+        self.assertIsNone(self.room.engine.state.pending)
+
+    def test_scheduler_expiry_auto_returns_the_first_token(self):
+        """The token-return window: alchemist heal opens it, expiry returns marker-0."""
+        import time as time_module
+
+        from blood_bound import Command as BCommand, RulesEngine
+        from server.rooms import Room
+
+        # probe seeds until the deal includes an alchemist (rank 4)
+        engine = None
+        for probe in range(200):
+            candidate = RulesEngine.new_game(f"tok-game-{probe}", f"tok-seed-{probe}")
+            for index in range(6):
+                candidate.apply(BCommand(f"join-{index}", candidate.state.game_id, None, candidate.state.revision, "join-game", {"playerId": f"p{index}", "displayName": f"P{index}"}))
+            candidate.apply(BCommand("start", candidate.state.game_id, None, candidate.state.revision, "start-game", {}))
+            if any(player.rank == 4 for player in candidate.state.players.values()):
+                engine = candidate
+                break
+        self.assertIsNotNone(engine)
+        room = Room(code="222222", game_id=engine.state.game_id, host_token="t", locked=False, status="waiting", engine=engine, created_at=0.0)
+        self.app.manager.rooms[room.code] = room
+
+        def send(command_id, actor, command_type, **payload):
+            self.app.manager.apply_command(room, BCommand(command_id, room.game_id, actor, room.engine.state.revision, command_type, payload))
+
+        def decline_poll(prefix):
+            while room.engine.state.pending and room.engine.state.pending.kind == "intervention" and room.engine.state.pending.context.get("stage") == "poll":
+                pending = room.engine.state.pending
+                responder = next(pid for pid in pending.eligible_player_ids if pid not in pending.context["responses"])
+                send(f"{prefix}-{room.engine.state.revision}", responder, "respond-intervention", volunteer=False)
+
+        alchemist = next(player.player_id for player in engine.state.players.values() if player.rank == 4)
+        attacker = room.engine.state.dagger_holder_id
+        if attacker == alchemist:
+            # keep the alchemist poll-eligible: hand the dagger to someone else first
+            attacker = next(pid for pid in engine.state.players if pid != alchemist)
+            send("pass-a", room.engine.state.dagger_holder_id, "pass-dagger", targetPlayerId=attacker)
+        victim = next(pid for pid in engine.state.players if pid not in (attacker, alchemist))
+
+        def attack_victim(prefix):
+            if room.engine.state.dagger_holder_id != attacker:
+                send(f"pass-{prefix}", room.engine.state.dagger_holder_id, "pass-dagger", targetPlayerId=attacker)
+            send(f"attack-{prefix}", attacker, "attack", targetPlayerId=victim)
+            decline_poll(prefix)
+
+        # wound 1: marker-0 revealed; wound 2: rank revealed (decline any skill window)
+        attack_victim("one")
+        send("reveal-m0", victim, "choose-reveal", token="marker-0")
+        attack_victim("two")
+        send("reveal-rank", victim, "choose-reveal", token="rank")
+        if room.engine.state.pending and room.engine.state.pending.kind == "skill":
+            send("no-skill", victim, "choose-skill", use=False)
+        # wound 3: the alchemist alone volunteers, gets wounded, and heals the victim
+        if room.engine.state.dagger_holder_id != attacker:
+            send("pass-three", room.engine.state.dagger_holder_id, "pass-dagger", targetPlayerId=attacker)
+        send("attack-three", attacker, "attack", targetPlayerId=victim)
+        while room.engine.state.pending and room.engine.state.pending.kind == "intervention" and room.engine.state.pending.context.get("stage") == "poll":
+            pending = room.engine.state.pending
+            responder = next(pid for pid in pending.eligible_player_ids if pid not in pending.context["responses"])
+            send(f"yes-{room.engine.state.revision}", responder, "respond-intervention", volunteer=responder == alchemist)
+        self.assertEqual(room.engine.state.pending.kind, "skill")
+        send("heal", alchemist, "choose-skill", use=True, mode="heal")
+        self.assertEqual(room.engine.state.pending.kind, "token-return")
+        self.assertTrue(room.window_stage.startswith(f"token-return:{victim}:"))
+        room.window_deadline = time_module.time() - 1.0
+
+        async def run():
+            await self.app.deadline_scheduler.sync(room)
+            await asyncio.sleep(0.05)
+
+        asyncio.run(run())
+        player = room.engine.state.players[victim]
+        self.assertEqual(player.damage, 1)
+        self.assertEqual(player.revealed, {"rank"})
+        returned = [event for event in room.engine.state.events if event.event_type == "TokenReturned"]
+        self.assertEqual(returned[-1].payload["token"], "marker-0")
+        self.assertEqual(returned[-1].payload["reason"], "timeout")
+        self.assertIsNone(room.engine.state.pending)
+        self.assertIsNone(room.window_stage)
 
 
 class FakeWebSocket:

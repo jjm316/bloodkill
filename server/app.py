@@ -62,9 +62,10 @@ def build_state(conn: Conn) -> dict[str, Any]:
     room = conn.room
     viewer = conn.player_id
     game = project_state(room.engine.state, viewer) if room.engine.state else None
-    if game is not None and game.get("pending", {}) and game["pending"].get("kind") == "intervention":
+    if game is not None and game.get("pending"):
         # The engine stays wall-clock-free; the room owns the countdown and
-        # the server injects the deadline into every projection.
+        # the server injects the deadline into every projection (intervention
+        # and single-player windows alike, issue 05 / ADR 0011).
         game["pending"]["deadline"] = room.window_deadline
     connected = {
         player_id: any(c.room is room and c.player_id == player_id for c in conns.values())
@@ -345,7 +346,14 @@ async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
     raw_command_id = raw.get("commandId")
     command_id = raw_command_id if isinstance(raw_command_id, str) and raw_command_id else uuid.uuid4().hex
     expected_revision = raw.get("expectedRevision", room.engine.state.revision)
-    if command_type in ("start-game", "join-game", "timeout-intervention"):
+    if command_type in (
+        "start-game",
+        "join-game",
+        "timeout-intervention",
+        "timeout-reveal",
+        "timeout-skill",
+        "timeout-return",
+    ):
         error = RuleError("command.server-managed", "This command is managed by the server.")
         await send_safe(conn.ws, rule_error_message(error))
         await send_command_ack(conn, command_id, "rejected", error=error)
@@ -404,8 +412,16 @@ async def _handle_host(conn: Conn, raw: dict[str, Any]) -> None:
         if timeout_seconds is not None and (isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int)):
             await send_safe(conn.ws, error_message("command.invalid-shape", "interventionTimeoutSeconds must be an integer."))
             return
+        single_timeout_seconds = raw.get("singleWindowTimeoutSeconds")
+        if single_timeout_seconds is not None and (isinstance(single_timeout_seconds, bool) or not isinstance(single_timeout_seconds, int)):
+            await send_safe(conn.ws, error_message("command.invalid-shape", "singleWindowTimeoutSeconds must be an integer."))
+            return
         try:
-            events = manager.start_game(room, intervention_timeout_seconds=timeout_seconds)
+            events = manager.start_game(
+                room,
+                intervention_timeout_seconds=timeout_seconds,
+                single_window_timeout_seconds=single_timeout_seconds,
+            )
         except RuleError as error:
             await send_safe(conn.ws, rule_error_message(error))
             return

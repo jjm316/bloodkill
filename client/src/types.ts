@@ -56,7 +56,7 @@ export interface PendingView {
   /** 实时公开表态：playerId -> 是否愿意挡刀 */
   responses?: Record<string, boolean>;
   volunteerPlayerIds?: string[];
-  /** 服务端注入的到期时间（Unix 秒），仅在干涉窗口存在时非空 */
+  /** 服务端注入的到期时间（Unix 秒），干涉与单人窗口存在时非空 */
   deadline?: number | null;
 }
 
@@ -81,6 +81,7 @@ export interface GameState {
   viewer: ViewerView | null;
   legalActions: Action[];
   interventionTimeoutSeconds?: number;
+  singleWindowTimeoutSeconds?: number;
 }
 
 export interface RoomState {

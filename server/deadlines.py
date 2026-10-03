@@ -11,7 +11,8 @@ action, so the resolution lands in the event log and stays replayable.
 New window kinds plug in by appending a provider to :data:`WINDOW_PROVIDERS`;
 each provider maps a room to a ``(command_type, command_payload, deadline)``
 window. Issue 23 wires the two intervention phases (volunteer poll and the
-target's choice); future windows reuse the machinery unchanged.
+target's choice); issue 05 / ADR 0011 adds the three single-player windows
+(reveal / skill / token-return).
 """
 
 from __future__ import annotations
@@ -39,7 +40,41 @@ def intervention_window(room: Any) -> tuple[str, dict[str, Any], float] | None:
     return "timeout-intervention", {"stage": stage}, float(deadline)
 
 
-WINDOW_PROVIDERS: list[WindowProvider] = [intervention_window]
+# Issue 05 / ADR 0011: pending kind -> its timeout command for the three
+# single-player decision windows. Shared with rooms.py so the window tracking
+# and the expiry submission can never drift apart.
+_SINGLE_WINDOW_COMMANDS = {
+    "reveal": "timeout-reveal",
+    "skill": "timeout-skill",
+    "token-return": "timeout-return",
+}
+
+SINGLE_WINDOW_KINDS = frozenset(_SINGLE_WINDOW_COMMANDS)
+
+
+def single_window(room: Any) -> tuple[str, dict[str, Any], float] | None:
+    """The open single-player window (reveal / skill / token-return) and its timeout command.
+
+    The payload carries the window identity the engine re-checks, mirroring the
+    intervention stage guard: a stale timer that fires after the window moved
+    on (e.g. a damage chain re-opening the same actor's reveal) is rejected.
+    """
+    state = room.engine.state
+    pending = getattr(state, "pending", None)
+    if pending is None or pending.kind not in _SINGLE_WINDOW_COMMANDS:
+        return None
+    deadline = room.window_deadline
+    if not isinstance(deadline, (int, float)):
+        return None
+    payload: dict[str, Any] = {"actorPlayerId": pending.actor_player_id}
+    if pending.kind == "reveal":
+        # The engine-frozen eligibility from the window's context, not a
+        # server-side recomputation of game rules.
+        payload["eligibleTokens"] = list(pending.context.get("eligibleTokens", []))
+    return _SINGLE_WINDOW_COMMANDS[pending.kind], payload, float(deadline)
+
+
+WINDOW_PROVIDERS: list[WindowProvider] = [intervention_window, single_window]
 
 
 def active_window(room: Any) -> tuple[str, dict[str, Any], float] | None:

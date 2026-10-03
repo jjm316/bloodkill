@@ -28,6 +28,8 @@ from blood_bound import (
     save_game,
 )
 
+from .deadlines import SINGLE_WINDOW_KINDS
+
 FINISHED_GAMES_TO_KEEP = 20
 
 
@@ -42,9 +44,10 @@ class Room:
     created_at: float
     finished_at: float | None = None
     host_player_id: str | None = None
-    # Wall-clock expiry of the engine's current intervention window. The
-    # engine stays deterministic (no real time in state); the room owns the
-    # countdown and the server injects the deadline into projections.
+    # Wall-clock expiry of the engine's current decision window (intervention
+    # poll/choice or one of the single-player windows). The engine stays
+    # deterministic (no real time in state); the room owns the countdown and
+    # the server injects the deadline into projections.
     window_deadline: float | None = None
     window_stage: str | None = None
 
@@ -55,16 +58,45 @@ class Room:
         return None
 
     def sync_window_deadline(self) -> None:
-        """Track the current intervention window's expiry; re-arms per stage."""
-        pending = self.engine.state.pending
-        stage = pending.context.get("stage") if pending is not None and pending.kind == "intervention" else None
-        if stage not in {"poll", "choice"}:
+        """Track the current decision window's expiry; re-arms per window change."""
+        key, seconds = self._window_identity(self.engine.state.pending)
+        if key is None:
             self.window_deadline = None
             self.window_stage = None
             return
-        if self.window_stage != stage:
-            self.window_stage = stage
-            self.window_deadline = time.time() + self.engine.state.intervention_timeout_seconds
+        if self.window_stage != key:
+            self.window_stage = key
+            self.window_deadline = time.time() + seconds
+
+    def _window_identity(self, pending: Any) -> tuple[str | None, int]:
+        """Stable identity of the pending window: same key = same countdown.
+
+        The intervention stages keep their bare legacy keys ("poll"/"choice")
+        so a stored meta re-arms without resetting the countdown after a
+        restart. The three single-player windows (issue 05 / ADR 0011) key on
+        the actor plus the eligibility frozen at open, so a damage chain that
+        re-opens the same actor's reveal window re-arms a fresh countdown
+        instead of inheriting a possibly-expired deadline.
+        """
+        state = self.engine.state
+        if pending is None:
+            return None, 0
+        if pending.kind == "intervention":
+            stage = pending.context.get("stage")
+            if stage in {"poll", "choice"}:
+                return str(stage), state.intervention_timeout_seconds
+            return None, 0
+        if pending.kind in SINGLE_WINDOW_KINDS:
+            # Read the engine-frozen eligibility (context / eligible ids), the
+            # same source the expiry submission guards on — never a second
+            # recomputation of the rules.
+            suffix = ""
+            if pending.kind == "reveal":
+                suffix = ":" + ",".join(pending.context.get("eligibleTokens", []))
+            elif pending.kind == "token-return":
+                suffix = ":" + ",".join(pending.eligible_player_ids)
+            return f"{pending.kind}:{pending.actor_player_id}{suffix}", state.single_window_timeout_seconds
+        return None, 0
 
 
 class RoomManager:
@@ -140,10 +172,18 @@ class RoomManager:
             self._prune_finished()
         return events
 
-    def start_game(self, room: Room, *, intervention_timeout_seconds: int | None = None) -> tuple[Event, ...]:
+    def start_game(
+        self,
+        room: Room,
+        *,
+        intervention_timeout_seconds: int | None = None,
+        single_window_timeout_seconds: int | None = None,
+    ) -> tuple[Event, ...]:
         payload: dict[str, Any] = {}
         if intervention_timeout_seconds is not None:
             payload["interventionTimeoutSeconds"] = int(intervention_timeout_seconds)
+        if single_window_timeout_seconds is not None:
+            payload["singleWindowTimeoutSeconds"] = int(single_window_timeout_seconds)
         command = Command(
             f"start-{secrets.token_hex(4)}",
             room.game_id,

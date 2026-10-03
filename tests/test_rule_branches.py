@@ -1603,5 +1603,178 @@ class InterventionPollBranchTests(unittest.TestCase):
         self.assertEqual(engine.state.pending.context["responses"], {eligible[0]: True})
 
 
+class SingleWindowTimeoutBranchTests(unittest.TestCase):
+    """Expiry defaults for the three single-player windows (issue 05 / ADR 0011)."""
+
+    def started(self, count=6, seed="window-seed", **start_payload):
+        engine = RulesEngine.new_game("window-game", seed, clock=FixedClock())
+        for index in range(count):
+            engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}"))
+        engine.apply(command(engine, "start", None, "start-game", **start_payload))
+        return engine
+
+    def wound(self, engine, victim_id, command_id="attack"):
+        """Attack a victim and decline the poll, leaving the victim's reveal window open."""
+        holder = engine.state.dagger_holder_id
+        if holder == victim_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != victim_id))
+        attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, command_id, attacker, "attack", targetPlayerId=victim_id))
+        answer_poll(engine)
+        return engine.state.pending
+
+    def test_single_window_timeout_configuration_is_fixed_at_start(self):
+        engine = self.started(singleWindowTimeoutSeconds=30)
+        self.assertEqual(engine.state.single_window_timeout_seconds, 30)
+        started_event = next(event for event in engine.state.events if event.event_type == "GameStarted")
+        self.assertEqual(started_event.payload["singleWindowTimeoutSeconds"], 30)
+        self.assertEqual(started_event.payload["interventionTimeoutSeconds"], 90)
+
+    def test_default_single_window_timeout_is_ninety_seconds(self):
+        engine = started()
+        self.assertEqual(engine.state.single_window_timeout_seconds, 90)
+
+    def test_invalid_single_window_timeout_choice_is_rejected(self):
+        engine = RulesEngine.new_game("window-game", "window-seed", clock=FixedClock())
+        for index in range(6):
+            engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}"))
+        for bad in (0, 45, "90", True):
+            with self.subTest(bad=bad):
+                with self.assertRaises(RuleError) as error:
+                    engine.apply(command(engine, f"start-{bad}", None, "start-game", singleWindowTimeoutSeconds=bad))
+                self.assertEqual(error.exception.code, "game.invalid-timeout")
+        engine.apply(command(engine, "start-ok", None, "start-game"))
+
+    def test_reveal_timeout_reveals_markers_in_order_across_chained_windows(self):
+        engine = self.started()
+        victim = next(pid for pid in engine.state.players if pid != engine.state.dagger_holder_id)
+        self.wound(engine, victim, "attack-1")
+        events = engine.apply(command(engine, "timeout-1", None, "timeout-reveal"))
+        revealed = next(event for event in events if event.event_type == "ClueRevealed")
+        # deterministic default: marker-0 before marker-1 before rank, and the
+        # automatic reveal is marked in the audit trail
+        self.assertEqual(revealed.payload["kind"], "marker-0")
+        self.assertEqual(revealed.payload["reason"], "timeout")
+        self.assertEqual(revealed.payload["value"], engine.state.players[victim].identity_markers[0])
+        self.assertEqual(engine.state.players[victim].revealed, {"marker-0"})
+        self.assertIsNone(engine.state.pending)
+
+        self.wound(engine, victim, "attack-2")
+        events = engine.apply(command(engine, "timeout-2", None, "timeout-reveal"))
+        revealed = next(event for event in events if event.event_type == "ClueRevealed")
+        self.assertEqual(revealed.payload["kind"], "marker-1")
+        self.assertEqual(engine.state.players[victim].revealed, {"marker-0", "marker-1"})
+
+    def test_reveal_timeout_on_a_wild_marker_takes_the_question_mark(self):
+        engine, found = started_with_ranks(7, "fleur-cross")
+        inquisitor = found["fleur-cross"]
+        self.wound(engine, inquisitor.player_id)
+        events = engine.apply(command(engine, "timeout", None, "timeout-reveal"))
+        revealed = next(event for event in events if event.event_type == "ClueRevealed")
+        self.assertEqual(revealed.payload["value"], "unknown")
+        self.assertEqual(engine.state.players[inquisitor.player_id].revealed_values["marker-0"], "unknown")
+
+    def test_reveal_timeout_guards(self):
+        engine = self.started()
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "nothing", None, "timeout-reveal"))
+        self.assertEqual(error.exception.code, "reveal.not-open")
+        victim = next(pid for pid in engine.state.players if pid != engine.state.dagger_holder_id)
+        other = engine.state.dagger_holder_id
+        self.wound(engine, victim)
+        # a timeout armed for another actor's window is rejected
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "wrong-actor", None, "timeout-reveal", actorPlayerId=other))
+        self.assertEqual(error.exception.code, "reveal.not-open")
+        # a stale timer armed for an earlier eligibility set is rejected
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "stale-tokens", None, "timeout-reveal", actorPlayerId=victim, eligibleTokens=["marker-1"]))
+        self.assertEqual(error.exception.code, "reveal.not-open")
+        engine.apply(command(engine, "armed-tokens", None, "timeout-reveal", actorPlayerId=victim, eligibleTokens=["marker-0", "marker-1", "rank"]))
+
+    def test_skill_timeout_declines_and_permanently_spends_the_skill(self):
+        engine, found = started_with_ranks(6, 1)
+        victim = found[1]
+        self.wound(engine, victim.player_id)
+        engine.apply(command(engine, "reveal-rank", victim.player_id, "choose-reveal", token="rank"))
+        self.assertEqual(engine.state.pending.kind, "skill")
+        events = engine.apply(command(engine, "timeout", None, "timeout-skill"))
+        declined = next(event for event in events if event.event_type == "SkillDeclined")
+        self.assertEqual(declined.payload["reason"], "timeout")
+        self.assertIn("1", engine.state.players[victim.player_id].skills_used)
+        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.phase["kind"], "action")
+
+    def test_skill_timeout_guards(self):
+        engine = self.started()
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "nothing", None, "timeout-skill"))
+        self.assertEqual(error.exception.code, "skill.not-open")
+
+    def test_return_timeout_returns_the_first_marker_before_rank(self):
+        engine, found = started_with_ranks(6, 4)
+        alchemist = found[4]
+        victim = next(
+            pid for pid, player in engine.state.players.items()
+            if pid not in (alchemist.player_id, engine.state.dagger_holder_id)
+        )
+        # wound 1: the victim reveals marker-0
+        self.wound(engine, victim, "attack-1")
+        engine.apply(command(engine, "reveal-m0", victim, "choose-reveal", token="marker-0"))
+        # wound 2: the victim reveals rank (a skill window may open; decline it)
+        self.wound(engine, victim, "attack-2")
+        engine.apply(command(engine, "reveal-rank", victim, "choose-reveal", token="rank"))
+        if engine.state.pending and engine.state.pending.kind == "skill":
+            engine.apply(command(engine, "no-skill", victim, "choose-skill", use=False))
+        self.assertEqual(engine.state.players[victim].damage, 2)
+        # the alchemist alone takes the third attack for the victim, which
+        # force-reveals the alchemist's rank and opens the heal window
+        third = next(
+            pid for pid in engine.state.players
+            if pid not in (victim, alchemist.player_id)
+        )
+        give_dagger_to(engine, third)
+        engine.apply(command(engine, "attack-3", third, "attack", targetPlayerId=victim))
+        answer_poll(engine, alchemist.player_id)
+        self.assertEqual(engine.state.pending.kind, "skill")
+        engine.apply(command(engine, "heal", alchemist.player_id, "choose-skill", use=True, mode="heal"))
+        self.assertEqual(engine.state.pending.kind, "token-return")
+        events = engine.apply(command(engine, "timeout", None, "timeout-return"))
+        returned = next(event for event in events if event.event_type == "TokenReturned")
+        self.assertEqual(returned.payload["token"], "marker-0")
+        self.assertEqual(returned.payload["reason"], "timeout")
+        self.assertEqual(engine.state.players[victim].damage, 1)
+        self.assertEqual(engine.state.players[victim].revealed, {"rank"})
+        self.assertIsNone(engine.state.pending)
+
+    def test_return_timeout_guard(self):
+        engine = self.started()
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "nothing", None, "timeout-return"))
+        self.assertEqual(error.exception.code, "token-return.not-open")
+
+    def test_timeout_commands_replay_deterministically_through_the_save_pipeline(self):
+        from blood_bound import create_save_document, load_game_bytes
+
+        engine = self.started()
+        victim = next(pid for pid in engine.state.players if pid != engine.state.dagger_holder_id)
+        self.wound(engine, victim, "attack-1")
+        engine.apply(command(engine, "timeout-1", None, "timeout-reveal"))
+        self.wound(engine, victim, "attack-2")
+        engine.apply(command(engine, "reveal-rank", victim, "choose-reveal", token="rank"))
+        if engine.state.pending and engine.state.pending.kind == "skill":
+            engine.apply(command(engine, "timeout-2", None, "timeout-skill"))
+        document = create_save_document(engine)
+        replayed = load_game_bytes(json.dumps(document, ensure_ascii=True, sort_keys=True).encode("utf-8"))
+        self.assertEqual(replayed.state.revision, engine.state.revision)
+        self.assertEqual(replayed.state.players[victim].revealed, engine.state.players[victim].revealed)
+        self.assertEqual(replayed.state.players[victim].skills_used, engine.state.players[victim].skills_used)
+        # same seed + same command order = same log, literally
+        self.assertEqual(
+            [(event.revision, event.event_type, event.payload) for event in replayed.state.events],
+            [(event.revision, event.event_type, event.payload) for event in engine.state.events],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,7 +51,7 @@
 ```
 
 - 仅 `isHost` 连接可用；否则 → `room.not-host`。
-- `start` 需要 6–12 名玩家，不足 → 引擎 `game.player-count`；`start` 可在消息上附带 `interventionTimeoutSeconds` 字段（干涉投票时限，开局接受一次，可选 30/60/90/120/180，缺省 90）。整数但不在可选集 → `game.invalid-timeout`；非整数类型 → `command.invalid-shape`。开始后固定，覆盖投票与三选一两阶段。
+- `start` 需要 6–12 名玩家，不足 → 引擎 `game.player-count`；`start` 可在消息上附带 `interventionTimeoutSeconds`（干涉投票时限）与 `singleWindowTimeoutSeconds`（单人窗口超时，ADR 0011）两个字段（各自在开局接受一次，可选 30/60/90/120/180，缺省 90）。整数但不在可选集 → `game.invalid-timeout`；非整数类型 → `command.invalid-shape`。开始后固定。
 
 **命令清单**（其余全部由引擎拒绝）：
 
@@ -68,10 +68,23 @@
 规则版本 0.4 起（ADR 0003），旧的全时段常驻 `distribute-curse` 命令已移除：
 诅咒分发只由审判者技能窗口内的 `choose-skill` 承载，旧命令将得到 `command.unknown`。
 
-`start-game`、`join-game`、`timeout-intervention` 由服务器托管：直接发送会得到
-`command.server-managed`。`timeout-intervention` 是干涉窗口到期时由服务端定时器
-（`server/deadlines.py`，可复用抽象）代为提交的系统命令，payload 为
-`{"stage": "poll"|"choice"}`；投票阶段到期未表态视为不干涉，三选一阶段到期视为全部拒绝。
+`start-game`、`join-game`、`timeout-intervention`、`timeout-reveal`、`timeout-skill`、
+`timeout-return` 由服务器托管：直接发送会得到 `command.server-managed`。
+`timeout-intervention` 是干涉窗口到期时由服务端定时器（`server/deadlines.py`，可复用抽象）
+代为提交的系统命令，payload 为 `{"stage": "poll"|"choice"}`；投票阶段到期未表态视为不干涉，
+三选一阶段到期视为全部拒绝。
+
+三条单人窗口超时命令（issue 05 / ADR 0011）走同一套定时器抽象，payload 携带窗口身份
+（`{"actorPlayerId", "eligibleTokens"?}`，引擎与权威状态复核，过期/错窗提交被拒）：
+
+| 命令 | 到期默认 |
+| --- | --- |
+| `timeout-reveal` | 自动亮排序第一张（marker-0 → marker-1 → rank 确定序；wild 标记取「？」） |
+| `timeout-skill` | 视为放弃：按 ADR 0008 写入 `skills_used`，技能永久失去 |
+| `timeout-return` | 自动退排序第一张已亮标记（marker 先于 rank，保持亮槽数 = 伤害数） |
+
+超时自动结算的 `ClueRevealed` / `SkillDeclined` / `TokenReturned` 事件携带
+`"reason": "timeout"`，事件日志据此后缀显示「（超时自动）」。
 
 ### 干涉投票（协议 v2，ADR 0002）
 
@@ -82,6 +95,8 @@
 `InterventionChoiceOpened` 进入被攻击者三选一阶段（`choose-intervention` /
 `decline-intervention`）。倒计时 deadline 由服务端注入每个投影的
 `pending.deadline`（Unix 秒），配合 `serverTime` 对齐本地时钟；引擎状态本身不含墙钟。
+单人窗口（亮牌/技能/退牌，ADR 0011）同样携带 `pending.deadline`，到期由服务端代发
+上表的 timeout 命令自动结算，对局不停摆。
 
 ### 服务器 → 客户端
 
@@ -143,11 +158,13 @@
   "phase": {"kind": "action", "…"} | {"kind": "intervention", "stage": "poll|choice", "activePlayerId": "p-…"} | {"kind": "skill", "…"},
   "pending": {
     /* 干涉窗口额外携带：stage（poll|choice）、responses（{playerId: volunteer}，实时公开）、
-       volunteerPlayerIds（自愿者名单）、deadline（服务端注入的到期 Unix 秒） */
+       volunteerPlayerIds（自愿者名单）、deadline（服务端注入的到期 Unix 秒）；
+       单人窗口（reveal|skill|token-return）同样携带 deadline */
     "kind": "intervention", "stage": "poll", "responses": {"p-…": true}, "deadline": 1788537090.0
   },
   "result": null | {"winner": "rose|beast|inquisitor", "explanationKey": "capture|…", "ranking": [{"playerId","seat"}]},
   "interventionTimeoutSeconds": 90,
+  "singleWindowTimeoutSeconds": 90,
   "viewer": null | {
     "playerId": "p-…",
     "identity": {"faction": "rose", "rank": 5},
@@ -188,6 +205,8 @@
 `game.player-count`、`game.seat-occupied`、`game.invalid-timeout`、`target.not-eligible`、
 `target.shielded`、`target.already-three-damage`、`player.not-actor`、
 `intervention.not-open`、`intervention.not-poll`、`intervention.not-choice`、
-`intervention.not-eligible`、`intervention.already-responded`、`skill.already-used`、
+`intervention.not-eligible`、`intervention.already-responded`、`reveal.not-open`、
+`skill.not-open`、`token-return.not-open`（三条单人窗口超时命令的身份守卫）、
+`skill.already-used`、
 `skill.invalid-target`、`curse.invalid-count`、`curse.duplicate-recipient`、
 `game.not-active`、`player.not-dagger-holder`、`target.not-found`、`target.captured`。

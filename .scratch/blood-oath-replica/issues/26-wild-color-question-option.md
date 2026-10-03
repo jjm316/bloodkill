@@ -47,3 +47,4 @@ Status: ready-for-agent
 
 - 2026-10-03：规则共识访谈侧聊中用户提出并拍板开票。现状核查由主线程完成（引擎/投影/客户端三层行号见上），实现留待后续批次。
 - 2026-10-03（主线程共识落盘）：第 4 节文档同步中的语料与 CONTEXT.md 两项已随规则共识批次完成——语料「产品方裁决（2026-10-03）」小节已记「wild 身份标记含问号」条目并改写 `damage.reveal` 待验收与 fleur cross 行；CONTEXT.md「线索 token」词条已改"自选玫、兽或问号"。剩余：引擎/投影/客户端三处代码、helpContent 审判者条目、测试与版本（随 ruleset 0.4→0.5 批次，见 `.scratch/rule-coupling-review/spec.md`）。
+- 2026-10-03（issue 05 落地）：改动面第 1 条的引擎前置已随 `.scratch/rule-coupling-review/issues/05-single-window-timeouts.md` 先行落地——`_reveal_token` 的 wild 颜色校验集已扩为 `{"rose", "beast", "unknown"}`（超时默认问号需要它），引擎侧此票仅剩零工作。剩余：投影三选项展开（projection.py wild 仍只给玫/兽）、客户端 COLOR_LABELS 与浮层第三钮、helpContent 审判者条目、本票自己的分支测试与 ruleset bump。

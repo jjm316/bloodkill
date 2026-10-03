@@ -19,6 +19,19 @@ Clock = Callable[[], float]
 INTERVENTION_TIMEOUT_CHOICES = (30, 60, 90, 120, 180)
 DEFAULT_INTERVENTION_TIMEOUT_SECONDS = 90
 
+# Host-configurable single-player window timeout (issue 05 / ADR 0011). One
+# value covers the three solo decision windows (reveal / skill / token-return);
+# expiry auto-resolves a deterministic default so a disconnected player can no
+# longer stall the table. The wild color sub-window defaults to "unknown"
+# (question mark), which is why the engine accepts it as a wild reveal color
+# (the player-facing option itself is blood-oath-replica issue 26).
+SINGLE_WINDOW_TIMEOUT_CHOICES = (30, 60, 90, 120, 180)
+DEFAULT_SINGLE_WINDOW_TIMEOUT_SECONDS = 90
+
+# ADR 0011 deterministic default order for timed-out reveals and returns:
+# marker-0 → marker-1 → rank, so auto-resolution never depends on set order.
+_TOKEN_TIMEOUT_ORDER = ("marker-0", "marker-1", "rank")
+
 
 class RuleError(Exception):
     """Stable, client-safe rule rejection."""
@@ -100,6 +113,7 @@ class EngineState:
     curse_assignments: dict[str, str] = field(default_factory=dict)
     max_leader_factions: set[str] = field(default_factory=set)
     intervention_timeout_seconds: int = DEFAULT_INTERVENTION_TIMEOUT_SECONDS
+    single_window_timeout_seconds: int = DEFAULT_SINGLE_WINDOW_TIMEOUT_SECONDS
     events: list[Event] = field(default_factory=list)
     commands: list[Command] = field(default_factory=list)
     command_results: dict[str, tuple[tuple[Event, ...], str]] = field(default_factory=dict)
@@ -212,6 +226,9 @@ class RulesEngine:
             "choose-intervention": self._choose_intervention,
             "decline-intervention": self._decline_intervention,
             "timeout-intervention": self._timeout_intervention,
+            "timeout-reveal": self._timeout_reveal,
+            "timeout-skill": self._timeout_skill,
+            "timeout-return": self._timeout_return,
             "choose-skill": self._choose_skill,
             "choose-return": self._choose_return,
             "choose-reveal": self._choose_reveal,
@@ -253,6 +270,12 @@ class RulesEngine:
         if isinstance(timeout_seconds, bool) or timeout_seconds not in INTERVENTION_TIMEOUT_CHOICES:
             raise RuleError("game.invalid-timeout", value=timeout_seconds, choices=list(INTERVENTION_TIMEOUT_CHOICES))
         state.intervention_timeout_seconds = int(timeout_seconds)
+        # Issue 05 / ADR 0011: one shared timeout for the three single-player
+        # windows (reveal / skill / token-return), configured the same way.
+        single_timeout_seconds = command.payload.get("singleWindowTimeoutSeconds", DEFAULT_SINGLE_WINDOW_TIMEOUT_SECONDS)
+        if isinstance(single_timeout_seconds, bool) or single_timeout_seconds not in SINGLE_WINDOW_TIMEOUT_CHOICES:
+            raise RuleError("game.invalid-timeout", value=single_timeout_seconds, choices=list(SINGLE_WINDOW_TIMEOUT_CHOICES))
+        state.single_window_timeout_seconds = int(single_timeout_seconds)
         rng = random.Random(state.seed)
         ordered = sorted(state.players.values(), key=lambda player: player.seat)
         rose_count = count // 2
@@ -303,6 +326,7 @@ class RulesEngine:
                     "daggerHolderId": holder.player_id,
                     "curseCount": len(state.curses),
                     "interventionTimeoutSeconds": state.intervention_timeout_seconds,
+                    "singleWindowTimeoutSeconds": state.single_window_timeout_seconds,
                 },
             ),
             self._event(state, command, "ClueIconsShown", {"pairs": pairs}),
@@ -480,20 +504,79 @@ class RulesEngine:
             return self._close_poll(state, command, pending)
         return self._decline_all(state, command, pending, reason="timeout-declined")
 
+    # The three single-window timeout handlers (issue 05 / ADR 0011): the
+    # server's DeadlineScheduler submits them on expiry, so like
+    # timeout-intervention they carry no actor and re-check the window's
+    # identity from the payload against authority — a raced or stale timer
+    # that fires after the window moved on is rejected, not misapplied.
+
+    def _require_timeout_actor(self, pending: Pending, command: Command, code: str) -> None:
+        """Guard shared by the single-window timeouts: reject raced/stale submissions."""
+        if command.payload.get("actorPlayerId", pending.actor_player_id) != pending.actor_player_id:
+            raise RuleError(code)
+
+    def _timeout_reveal(self, state: EngineState, command: Command) -> list[Event]:
+        pending = self._require_pending(state, command, "reveal")
+        self._require_timeout_actor(pending, command, "reveal.not-open")
+        target = state.players[pending.actor_player_id]
+        allowed = {"rank", "marker-0", "marker-1"} - target.revealed
+        if pending.context.get("forceRank") and "rank" in allowed:
+            allowed = {"rank"}
+        guard = command.payload.get("eligibleTokens")
+        if guard is not None and list(guard) != sorted(allowed):
+            raise RuleError("reveal.not-open")
+        token = next((token for token in _TOKEN_TIMEOUT_ORDER if token in allowed), None)
+        if token is None:
+            raise RuleError("reveal.not-open")
+        # The wild color sub-window defaults to the question mark: no faction
+        # lean is implied by an automatic reveal (ADR 0011 / issue 26).
+        color = "unknown" if token.startswith("marker-") and target.identity_markers[int(token[-1])] == "wild" else None
+        return self._reveal_token(state, command, target, token, dict(pending.context), color=color, auto_reason="timeout")
+
+    def _timeout_skill(self, state: EngineState, command: Command) -> list[Event]:
+        pending = self._require_pending(state, command, "skill")
+        self._require_timeout_actor(pending, command, "skill.not-open")
+        # Timeout is an automatic decline, and per ADR 0008 a declined skill
+        # is permanently spent — no "stall the clock to stay uncommitted".
+        owner = self._close_skill_window(state, pending)
+        owner.skills_used.add(str(owner.rank))
+        return [self._event(state, command, "SkillDeclined", {"playerId": owner.player_id, "rank": owner.rank, "reason": "timeout"})]
+
+    def _timeout_return(self, state: EngineState, command: Command) -> list[Event]:
+        pending = self._require_pending(state, command, "token-return")
+        self._require_timeout_actor(pending, command, "token-return.not-open")
+        target = self._live_player(state, pending.target_player_id)
+        if target.damage < 1:
+            raise RuleError("skill.invalid-target")
+        token = next(
+            (token for token in _TOKEN_TIMEOUT_ORDER if token in pending.eligible_player_ids and token in target.revealed),
+            None,
+        )
+        if token is None:
+            raise RuleError("token-return.not-open")
+        return self._return_token(state, command, target, token, reason="timeout")
+
+    def _close_skill_window(self, state: EngineState, pending: Pending) -> Player:
+        """Close the skill window: settle the dagger hand-off and re-arm the action phase.
+
+        A damage chain that hands its dagger to the wounded victim (assassin
+        and mentalist, corpus B12) settles only after every window it opened
+        has closed: under ADR 0009 the victim's own rank reveal may open this
+        skill window before that settlement could run in _after_damage.
+        """
+        owner = state.players[pending.actor_player_id]
+        state.pending = None
+        if pending.context.get("daggerToTarget"):
+            state.dagger_holder_id = owner.player_id
+        state.phase = {"kind": "action", "activePlayerId": state.dagger_holder_id}
+        return owner
+
     def _choose_skill(self, state: EngineState, command: Command) -> list[Event]:
         pending = self._require_pending(state, command, "skill")
         if pending.actor_player_id != command.actor_player_id:
             raise RuleError("player.not-actor")
-        owner = state.players[pending.actor_player_id]
+        owner = self._close_skill_window(state, pending)
         use = bool(command.payload.get("use", False))
-        state.pending = None
-        # A damage chain that hands its dagger to the wounded victim (assassin
-        # and mentalist, corpus B12) settles only after every window it opened
-        # has closed: under ADR 0009 the victim's own rank reveal may open this
-        # skill window before that settlement could run in _after_damage.
-        if pending.context.get("daggerToTarget"):
-            state.dagger_holder_id = owner.player_id
-        state.phase = {"kind": "action", "activePlayerId": state.dagger_holder_id}
         if not use:
             owner.skills_used.add(str(owner.rank))
             return [self._event(state, command, "SkillDeclined", {"playerId": owner.player_id, "rank": owner.rank})]
@@ -617,14 +700,21 @@ class RulesEngine:
         target = self._live_player(state, pending.target_player_id)
         if target.damage < 1 or token not in target.revealed:
             raise RuleError("skill.invalid-target")
+        return self._return_token(state, command, target, token)
+
+    def _return_token(self, state: EngineState, command: Command, target: Player, token: str, *, reason: str | None = None) -> list[Event]:
+        """Return one revealed token: heal a damage, clear the slot, close the window."""
         target.damage -= 1
         target.revealed.remove(token)
         target.revealed_values.pop(token, None)
         state.pending = None
         state.phase = {"kind": "action", "activePlayerId": state.dagger_holder_id}
+        payload: dict[str, Any] = {"playerId": target.player_id, "token": token}
+        if reason:
+            payload["reason"] = reason
         return [
             self._event(state, command, "DamageHealed", {"playerId": target.player_id, "amount": 1, "source": "skill"}),
-            self._event(state, command, "TokenReturned", {"playerId": target.player_id, "token": token}),
+            self._event(state, command, "TokenReturned", payload),
         ]
 
     def _grant_resource(self, state: EngineState, command: Command, player: Player, resource: str, amount: int = 1) -> list[Event]:
@@ -773,14 +863,26 @@ class RulesEngine:
         state.phase = {"kind": "reveal", "activePlayerId": target.player_id}
         return [self._event(state, command, "RevealWindowOpened", {"playerId": target.player_id, "eligibleTokens": sorted(available), "forceRank": force_rank})]
 
-    def _reveal_token(self, state: EngineState, command: Command, target: Player, token: str, context: dict[str, Any], *, color: str | None = None) -> list[Event]:
+    def _reveal_token(
+        self,
+        state: EngineState,
+        command: Command,
+        target: Player,
+        token: str,
+        context: dict[str, Any],
+        *,
+        color: str | None = None,
+        auto_reason: str | None = None,
+    ) -> list[Event]:
         if token not in {"rank", "marker-0", "marker-1"} - target.revealed:
             raise RuleError("reveal.not-eligible", token=token)
         if token.startswith("marker-"):
             index = int(token[-1])
             marker = target.identity_markers[index]
             if marker == "wild":
-                if color not in {"rose", "beast"}:
+                # "unknown" is the question-mark reveal: player-selectable per
+                # issue 26 and the automatic timeout default per ADR 0011.
+                if color not in {"rose", "beast", "unknown"}:
                     state.pending = Pending("reveal", target.player_id, target.player_id, context=context)
                     state.phase = {"kind": "reveal", "activePlayerId": target.player_id}
                     raise RuleError("reveal.color-required")
@@ -793,7 +895,11 @@ class RulesEngine:
         target.revealed_values[token] = value
         if token == "rank":
             context["rankRevealed"] = True
-        events = [self._event(state, command, "ClueRevealed", {"playerId": target.player_id, "kind": token, "value": value})]
+        payload: dict[str, Any] = {"playerId": target.player_id, "kind": token, "value": value}
+        if auto_reason:
+            # Marks an automatic (timeout) resolution in the audit trail.
+            payload["reason"] = auto_reason
+        events = [self._event(state, command, "ClueRevealed", payload)]
         if target.damage >= 4:
             target.captured = True
             events.append(self._event(state, command, "PlayerCaptured", {"playerId": target.player_id}))

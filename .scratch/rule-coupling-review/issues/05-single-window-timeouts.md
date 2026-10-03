@@ -1,6 +1,6 @@
 # 05 单人窗口超时兜底（reveal / skill / token-return）
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 
@@ -26,3 +26,7 @@ ADR 0011（2026-10-03 裁决 P6+L4）：干涉投票已有超时，但三类单�
 - 三类窗口各一条"到期自动默认"分支测试；超时事件进事件日志（可解释）。
 - 断线玩家在窗口期掉线 → 到期自动结算，对局继续。
 - 超时命令走重放确定路径（同 seed 同命令序同日志）。
+
+## Comments
+
+- 2026-10-03（实现销案）：引擎新增 `timeout-reveal` / `timeout-skill` / `timeout-return` 三条服务端托管命令（payload 携带 `actorPlayerId`(+`eligibleTokens`) 身份守卫，过期/错窗提交被拒）；`start-game` 新增 `singleWindowTimeoutSeconds`（缺省 90，随 `GameStarted` 事件公布）。服务端 `deadlines.single_window` provider 接入既有 WINDOW_PROVIDERS，`Room.sync_window_deadline` 泛化为按"窗口身份"（intervention 沿用裸 stage 旧键；单人窗口 = kind:actor:资格快照）起算/重起算。超时自动结算事件（ClueRevealed / SkillDeclined / TokenReturned）带 `reason=timeout`，客户端事件日志显示"（超时自动）"；等待横幅带倒计时并告知到期默认。wild 色选窗默认问号所需的引擎接受 `unknown` 色已随本票落地（wild-26 引擎前置，其投影/客户端三选项仍归该票）。ruleset 0.4 不变（bump 归 07），golden 已重生成。分支测试 `SingleWindowTimeoutBranchTests` + 服务端 `SingleWindowDeadlineTests`；覆盖行见 `docs/rule-branch-coverage.md` Issue 05 小节。
