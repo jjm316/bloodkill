@@ -14,7 +14,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: 跳过 Claude Code 首次引导
-        run: mkdir -p ~/.claude && echo '{"hasCompletedOnboarding": true}' > ~/.claude.json
+        run: |
+          mkdir -p ~/.claude
+          echo '{"hasCompletedOnboarding": true}' > ~/.claude.json
 
       - name: 安装 Node 和 Claude Code
         uses: actions/setup-node@v4
