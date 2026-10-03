@@ -1,6 +1,6 @@
 # 02 技能窗开窗总则重写 + 感应者封印（方案 A）
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 
@@ -27,3 +27,11 @@ ADR 0009（2026-10-03 裁决 P4，本批最大引擎改动）：开窗总则改�
 | 技能伤害 → 干涉投票 | 不触发 |
 | 非感应者伤害亮 fleur-cross → 诅咒窗 | 开 |
 | 被感应者封印后炼金退 rank 重亮 | 仍不开（封印不可解） |
+
+## Comments
+
+**2026-10-03 实施（issue 02 → resolved）**：`_after_damage` 开窗条件重写为「本次伤害新亮出 rank 且非感应者强制亮出路径」（`sealSkill` 上下文标记），`trigger ∈ {attack, intervention}` 限制删除（`SkillWindowOpened` 的 `trigger` 载荷与 `Pending.trigger` 自此可为 `None`，客户端 `types.ts` 本就按可空声明、事件日志不展示该事件）。方案 A 封印：感应者分支传 `seal_skill=True`，强制亮出后直接 `skills_used.add(str(rank))`，与已用/已弃用共用同一把锁。B12：`_choose_skill` 关闭技能窗时按窗口上下文的 `daggerToTarget` 补做匕首移交（位于 fleur-cross 提前 return 之前，刺客链中审判者自亮 rank 开诅咒窗的场景同样覆盖）；连带修复 rank 2 伤害链缺 `attackerPlayerId`（狂战从技能窗反伤技能使用者时 `_live_player(None)` 会炸，终局归因原靠 command.actor 兜底）。
+
+**保留 rank 4 开窗门槛（`rank != 4 or trigger == "intervention"`）**：语料 rank 4 行"仅在自己干涉后"未被本批裁决改写、验收表攻击/挡刀行标注"既有"（现状即攻击触发不开），且投影层已有「rank 4 非 intervention 窗只给放弃」的防御分支——开门会造成"用不了只能弃"的陷阱窗。判定此门槛是能力自身前置条件而非伤害源限制，不属 P4"唯一例外"的推翻范围。
+
+验收路径表逐条有测：刺客/炼金/狂战/技能伤害开窗（`test_assassin_victim_self_chosen_rank_reveal_opens_skill_window_and_defers_dagger`、`test_alchemist_harm_third_point_forced_rank_opens_victim_window`、`test_berserker_reaction_third_point_forced_rank_opens_attacker_window`、`test_berserker_window_from_skill_damage_counters_the_skill_user`）、感应者封印+不开窗（扩展 `test_mentalist_damages_target_forces_rank_and_hands_dagger`）、D1 诅咒窗（`test_skill_damage_self_chosen_rank_reveal_opens_the_curse_window` 改写自旧"技能伤害不开窗"测试）、封印不可解全链（`test_mentalist_seal_kills_the_curse_path_and_heal_cannot_unseal`：封印→炼金退 rank→三伤被迫重亮→永无窗口）。coverage 过期行已同步；ruleset 0.5 bump、golden 新分支、helpContent 归 issue 07。全量 162 测试绿，golden 字节级不变（golden runner 只走攻击伤害且先亮 marker，不经新分支）。

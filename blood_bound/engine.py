@@ -487,6 +487,12 @@ class RulesEngine:
         owner = state.players[pending.actor_player_id]
         use = bool(command.payload.get("use", False))
         state.pending = None
+        # A damage chain that hands its dagger to the wounded victim (assassin
+        # and mentalist, corpus B12) settles only after every window it opened
+        # has closed: under ADR 0009 the victim's own rank reveal may open this
+        # skill window before that settlement could run in _after_damage.
+        if pending.context.get("daggerToTarget"):
+            state.dagger_holder_id = owner.player_id
         state.phase = {"kind": "action", "activePlayerId": state.dagger_holder_id}
         if not use:
             owner.skills_used.add(str(owner.rank))
@@ -523,7 +529,9 @@ class RulesEngine:
             # the skill text hands the dagger to the victim after the wounds;
             # with victim-choice reveal windows pending that moment is the end
             # of the damage chain (_after_damage), not the skill command
-            events.extend(self._apply_damage(state, command, target.player_id, 2, "skill", trigger=None, dagger_to_target=True))
+            events.extend(
+                self._apply_damage(state, command, target.player_id, 2, "skill", trigger=None, active_player_id=owner.player_id, dagger_to_target=True)
+            )
         elif owner.rank == 3:
             target_ids = command.payload.get("targetPlayerIds")
             if not isinstance(target_ids, (list, tuple)) or len(target_ids) != 2 or not all(isinstance(target_id, str) for target_id in target_ids) or len(set(target_ids)) != 2:
@@ -558,7 +566,8 @@ class RulesEngine:
                 raise RuleError("skill.invalid-target")
             # the mentalist's text force-reveals the victim's rank (ADR 0006);
             # once the rank is already shown the wound falls back to the
-            # victim-choice reveal pipeline like any other damage
+            # victim-choice reveal pipeline like any other damage. The forced
+            # reveal also seals the victim's skill (ADR 0009, plan A).
             events.extend(
                 self._apply_damage(
                     state,
@@ -569,6 +578,7 @@ class RulesEngine:
                     trigger=None,
                     active_player_id=owner.player_id,
                     force_rank=True,
+                    seal_skill=True,
                     dagger_to_target=True,
                 )
             )
@@ -713,6 +723,7 @@ class RulesEngine:
         active_player_id: str | None = None,
         protected_player_id: str | None = None,
         force_rank: bool = False,
+        seal_skill: bool = False,
         dagger_to_target: bool = False,
     ) -> list[Event]:
         target = self._live_player(state, target_id)
@@ -726,6 +737,7 @@ class RulesEngine:
             "source": source,
             "trigger": trigger,
             "forceRank": force_rank or trigger == "intervention",
+            "sealSkill": seal_skill,
             "daggerToTarget": dagger_to_target,
             "followup": None,
             "rankRevealed": False,
@@ -804,11 +816,21 @@ class RulesEngine:
             if ward:
                 events.extend(self._return_resource(state, command, target, "sword", 1, "guardian-ward-complete"))
                 events.extend(self._return_resource(state, command, ward, "shield", 1, "guardian-ward-complete"))
+        # ADR 0009 (plan A): the mentalist's forced rank reveal writes the rank
+        # straight into the same never-cleared lock as used/declined skills,
+        # sealing it; no separate state or event exists for the seal.
+        if context.get("rankRevealed") and context.get("sealSkill"):
+            target.skills_used.add(str(target.rank))
         if (
             state.status == "active"
-            and trigger in {"attack", "intervention"}
+            # ADR 0009: any damage that newly reveals the rank opens the
+            # window (attack/intervention/skill/reaction, forced or chosen);
+            # the mentalist's forced reveal above is the sole exception.
             and context.get("rankRevealed")
+            and not context.get("sealSkill")
             and target.rank in _REVEAL_SKILL_RANKS
+            # the alchemist's own window still follows only its intervention
+            # (corpus rank 4: "仅在自己干涉后"); other sources never open it
             and (target.rank != 4 or trigger == "intervention")
             and str(target.rank) not in target.skills_used
         ):
