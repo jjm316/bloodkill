@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE — 用完即弃。问题：图例"只有匕首+五资源"与"全量（+线索标记+徽记）"长什么样、差多少。
+     两个变体走同一份"规则与图例"浮层框架，?variant=min|full 切换（底部浮动条 / ← → 键）。
+     图标造型复刻 client/src/icons.tsx，配色复刻 client/src/styles.css 主题变量。 -->
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图例范围原型（PROTOTYPE）</title>
+<style>
+  :root {
+    --bg: #0e0709; --card: #1f1219; --card-hover: #2a1a23; --border: #4b2e3a;
+    --text: #f2e7ea; --muted: #b9a3ac;
+    --accent-gold: #f5c518; --gold-text: #f0c060; --gold-dim-bg: #2a1c0d;
+    --accent-crimson: #8e1f2f;
+    --rose-bg: #8e2723; --rose-border: #c0453c;
+    --beast-bg: #33608f; --beast-border: #4f83b5;
+    --mark-gray-bg: #46303a; --mark-gray-border: #5f4652;
+    --slot-dim: #937f88; --slot-dashed: #5d414d;
+    --font-display: "Noto Serif SC", "Source Han Serif SC", STZhongsong, KaiTi, serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, "Microsoft YaHei", sans-serif;
+    min-height: 100vh; display: flex; align-items: flex-start; justify-content: center;
+    padding: 24px 12px 96px;
+  }
+  /* ── 浮层框架（复刻游戏内模态的观感） ── */
+  .overlay-card {
+    width: min(560px, 100%);
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 12px 48px rgba(0,0,0,.55), 0 0 0 1px rgba(245,197,24,.06);
+    overflow: hidden;
+  }
+  .overlay-head {
+    padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .overlay-head h1 { font-family: var(--font-display); font-size: 20px; color: var(--gold-text); }
+  .overlay-head .q {
+    width: 26px; height: 26px; border-radius: 50%; flex: none; align-self: center;
+    border: 1.5px solid var(--gold-text); color: var(--gold-text);
+    font-family: var(--font-display); font-size: 16px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .overlay-head .esc { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .overlay-body { padding: 16px 20px 20px; display: grid; gap: 18px; }
+  .section h2 {
+    font-family: var(--font-display); font-size: 15px; color: var(--gold-text);
+    margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .section h2::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .subhead { color: var(--muted); font-size: 13px; margin: 10px 0 8px; }
+  /* ── 图例行 ── */
+  .legend { display: grid; gap: 8px; }
+  .legend-row {
+    display: grid; grid-template-columns: 34px 76px 1fr; gap: 10px; align-items: center;
+    padding: 8px 10px; background: rgba(0,0,0,.18); border: 1px solid rgba(75,46,58,.6);
+    border-radius: 9px;
+  }
+  .legend-row .ico {
+    width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    color: var(--gold-text); background: var(--gold-dim-bg); border-radius: 8px;
+  }
+  .legend-row .ico svg { width: 20px; height: 20px; }
+  .legend-row .name { font-size: 14px; font-weight: 600; }
+  .legend-row .desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+  /* ── 线索标记（字+色块，与游戏内一致，无 SVG） ── */
+  .marker {
+    width: 30px; height: 30px; border-radius: 7px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 14px; font-weight: 700;
+  }
+  .marker.rose { background: var(--rose-bg); border: 1.5px solid var(--rose-border); color: #ffd9d5; }
+  .marker.beast { background: var(--beast-bg); border: 1.5px solid var(--beast-border); color: #d9ecff; }
+  .marker.unknown { background: var(--mark-gray-bg); border: 1.5px solid var(--mark-gray-border); color: var(--slot-dim); }
+  .legend-row .markers { display: flex; gap: 6px; }
+  /* 线索槽示意 */
+  .slot-demo { display: flex; gap: 8px; align-items: center; margin: 2px 0 4px; }
+  .slot {
+    width: 42px; height: 42px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 18px; font-weight: 700;
+  }
+  .slot.lit { background: var(--gold-dim-bg); border: 1.5px solid var(--gold-text); color: var(--gold-text); }
+  .slot.dim { border: 1.5px dashed var(--slot-dashed); color: var(--slot-dim); }
+  .slot .marker { width: 28px; height: 28px; font-size: 13px; border-radius: 6px; }
+  .slot-note { font-size: 12px; color: var(--muted); }
+  /* 徽记 chips */
+  .emblem-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .emblem {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  }
+  .emblem.rose { background: var(--rose-bg); border: 1.5px solid var(--rose-border); color: #ffd9d5; }
+  .emblem.beast { background: var(--beast-bg); border: 1.5px solid var(--beast-border); color: #d9ecff; }
+  /* ── 底部浮动切换条（原型工具，非设计的一部分） ── */
+  .switcher {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px;
+    background: #24141c; border: 1px solid #6b4451; border-radius: 999px;
+    padding: 8px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.6); z-index: 99;
+  }
+  .switcher button {
+    background: var(--accent-crimson); color: #fff; border: 0; border-radius: 50%;
+    width: 30px; height: 30px; font-size: 15px; cursor: pointer;
+  }
+  .switcher .label { font-size: 13px; min-width: 220px; text-align: center; color: var(--text); }
+  .switcher .label b { color: var(--gold-text); }
+</style>
+</head>
+<body>
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <div class="q">？</div>
+      <h1>规则与图例</h1>
+      <span class="esc">Esc / 点击遮罩关闭</span>
+    </div>
+    <div class="overlay-body" id="body"></div>
+  </div>
+
+  <div class="switcher">
+    <button id="prev" title="上一个">←</button>
+    <div class="label" id="label"></div>
+    <button id="next" title="下一个">→</button>
+  </div>
+
+<script>
+// ── SVG 图标：逐字复刻 client/src/icons.tsx ──
+const SHAPES = {
+  dagger: '<path d="M12 2 L14.5 8 L12 15 L9.5 8 Z"/><line x1="8.5" y1="15.5" x2="15.5" y2="15.5"/><line x1="12" y1="15.5" x2="12" y2="19"/><circle cx="12" cy="20.6" r="1.1"/>',
+  shield: '<path d="M12 3 L19 6 V11 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11 V6 Z"/>',
+  sword: '<polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/>',
+  staff: '<line x1="6" y1="21" x2="15.5" y2="9.5"/><circle cx="17.5" cy="6.5" r="2.6"/>',
+  fan: '<path d="M4.6 10.2 A 8.6 8.6 0 0 1 19.4 10.2"/><line x1="12" y1="18" x2="12" y2="4.6"/><line x1="12" y1="18" x2="5.6" y2="7.4"/><line x1="12" y1="18" x2="18.4" y2="7.4"/><path d="M8.6 13.6 A 5 5 0 0 1 15.4 13.6"/>',
+  quill: '<path d="M20 4 C13 4.5 7.5 9 5.8 15.5 L4 20 L8.5 18.2 C15 16.5 19.5 11 20 4 Z"/><path d="M5.8 15.5 C9.5 12.5 13.5 9.5 17.5 6.5"/>',
+};
+const icon = (n) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHAPES[n]}</svg>`;
+const marker = (kind, ch) => `<span class="marker ${kind}">${ch}</span>`;
+
+// ── 公共：匕首 + 五资源（两个变体都有）──
+const items = [
+  ["dagger", "匕首", "行动权的标志。轮到你持匕首时，选择传递给邻居，或声明攻击一名玩家。"],
+  ["quill", "羽笔", "等级 1 技能授予并立刻消耗：消耗后，本家族领袖改由存活者中等级数字最大者担任。"],
+  ["shield", "护盾", "持有护盾的玩家不可被攻击或被技能指定伤害。想动他，先想办法处理盾。"],
+  ["sword", "剑", "等级 6 守护技能的守护标记：施放时目标获得护盾，剑由施放者自己持有；目标累计 3 点伤害时剑与盾一同归还。"],
+  ["staff", "法杖", "等级 8 技能授予目标：其身份标记全部被遮蔽为「？」，阵营线索被抹掉。"],
+  ["fan", "扇子", "持有扇子的玩家被攻击时，无人可为其挡刀——干涉表决直接跳过。"],
+];
+const itemsHtml = items.map(([ic, name, desc]) =>
+  `<div class="legend-row"><div class="ico">${icon(ic)}</div><div class="name">${name}</div><div class="desc">${desc}</div></div>`
+).join("");
+
+// ── full 变体追加：线索标记 + 阵营徽记 ──
+const clueHtml = `
+  <div class="subhead">线索标记 — 座位前三格槽里的红蓝字块</div>
+  <div class="slot-demo">
+    <div class="slot lit">3</div>
+    ${'<div class="slot lit">' + marker("rose", "玫") + "</div>"}
+    ${'<div class="slot dim">' + marker("unknown", "？") + "</div>"}
+    <span class="slot-note">受伤后逐格填亮；填亮几格 = 受了几点伤</span>
+  </div>
+  <div class="legend">
+    <div class="legend-row"><div class="markers">${marker("rose", "玫")}</div><div class="name">玫（红）</div><div class="desc">「玫瑰阵营」身份标记。被亮出或被技能翻开后才对所有人可见。</div></div>
+    <div class="legend-row"><div class="markers">${marker("beast", "兽")}</div><div class="name">兽（蓝）</div><div class="desc">「野兽阵营」身份标记，规则同上。</div></div>
+    <div class="legend-row"><div class="markers">${marker("unknown", "？")}</div><div class="name">？（灰）</div><div class="desc">看不出阵营的标记：部分等级自带，或被法杖遮蔽后变成。</div></div>
+  </div>
+  <div class="subhead">阵营徽记 — 开局只给右邻看的那个</div>
+  <div class="emblem-row">
+    ${'<span class="emblem rose">' + marker("rose", "玫") + " 玫瑰徽记</span>"}
+    ${'<span class="emblem beast">' + marker("beast", "兽") + " 野兽徽记</span>"}
+  </div>
+  <div class="desc" style="font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.55;">
+    开局时每名玩家把自己的徽记展示给左邻（因此你看到的是右邻的徽记）。徽记通常与真实阵营一致，但小丑的徽记恒为敌对家族、审判者的徽记必然与其真实所属不符——它只是线索，不是事实。
+  </div>`;
+
+// ── compact 变体追加：线索标记 + 徽记，各压成一行 ──
+const compactExtra = `
+  <div class="subhead">线索与徽记 — 读牌符号</div>
+  <div class="legend">
+    <div class="legend-row" style="grid-template-columns:auto 1fr;">
+      <div class="slot-demo" style="margin:0;">
+        <div class="slot lit" style="width:34px;height:34px;font-size:15px;">3</div>
+        ${'<div class="slot lit" style="width:34px;height:34px;">' + marker("rose", "玫") + "</div>"}
+        ${'<div class="slot dim" style="width:34px;height:34px;">' + marker("unknown", "？") + "</div>"}
+      </div>
+      <div class="desc"><b>线索标记</b>（座位前三格槽）— 受伤后逐格填亮，填亮几格 = 受了几点伤。玫（红）/ 兽（蓝）= 阵营身份标记，亮出后才对所有人可见；？（灰）= 看不出阵营：部分等级自带，或被法杖遮蔽后变成。</div>
+    </div>
+    <div class="legend-row" style="grid-template-columns:auto 1fr;">
+      <div class="markers">${marker("rose", "玫")}${marker("beast", "兽")}</div>
+      <div class="desc"><b>阵营徽记</b>（开局只给右邻看）— 徽记通常与真实阵营一致，但只是线索不是事实：小丑的徽记恒为敌对家族，审判者的徽记必然与其真实所属不符。</div>
+    </div>
+  </div>`;
+
+const VARIANTS = {
+  min: {
+    label: '<b>最小</b> — 仅匕首 + 五资源（6 条）',
+    html: `<div class="section"><h2>标记图例</h2><div class="legend">${itemsHtml}</div></div>`,
+  },
+  compact: {
+    label: '<b>折中</b> — 道具全量 + 线索/徽记压缩（6 条 + 2 行短注）',
+    html: `<div class="section"><h2>标记图例</h2><div class="legend">${itemsHtml}</div>${compactExtra}</div>`,
+  },
+  full: {
+    label: '<b>全量</b> — 匕首 + 五资源 + 线索标记 + 徽记（6 条 + 2 组）',
+    html: `<div class="section"><h2>标记图例</h2>
+      <div class="subhead" style="margin-top:0;">道具 — 谁手里拿了什么</div>
+      <div class="legend">${itemsHtml}</div>${clueHtml}</div>`,
+  },
+};
+
+// ── 切换逻辑（?variant=min|full，← → 键可用） ──
+const keys = Object.keys(VARIANTS);
+const current = () => {
+  const v = new URLSearchParams(location.search).get("variant");
+  return keys.includes(v) ? v : keys[0];
+};
+function render() {
+  const v = current();
+  document.getElementById("body").innerHTML = VARIANTS[v].html;
+  document.getElementById("label").innerHTML = VARIANTS[v].label;
+  document.title = VARIANTS[v].label.replace(/<[^>]+>/g, "") + " — 图例范围原型";
+}
+function go(dir) {
+  const next = keys[(keys.indexOf(current()) + dir + keys.length) % keys.length];
+  const url = new URL(location); url.searchParams.set("variant", next);
+  history.replaceState(null, "", url); render();
+}
+document.getElementById("prev").onclick = () => go(-1);
+document.getElementById("next").onclick = () => go(1);
+document.addEventListener("keydown", (e) => {
+  if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if (e.key === "ArrowLeft") go(-1);
+  if (e.key === "ArrowRight") go(1);
+});
+render();
+</script>
+</body>
+</html>

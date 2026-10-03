@@ -58,7 +58,8 @@ function Resources({ resources }: { resources: Record<string, number> }) {
 // 每名玩家恰好三张线索 token：1 等级 + 2 身份标记（组合由等级决定）。
 // 槽位填亮数与伤害严格同步（唯一 +1 在 _continue_damage、唯一 -1 是炼金归还，二者同动），
 // 因此填亮的槽位本身就是伤害计数（issue 23 裁决）。
-const MARKER_DOTS: Record<string, { label: string; tone: string; name: string }> = {
+// 帮助浮层（HelpOverlay）复用此表渲染"字+色块"，万能标记（wild）由其自带"任"字。
+export const MARKER_DOTS: Record<string, { label: string; tone: string; name: string }> = {
   rose: { label: "玫", tone: "rose", name: "玫瑰家族标记" },
   beast: { label: "兽", tone: "beast", name: "野兽家族标记" },
   unknown: { label: "？", tone: "unknown", name: "未知标记" },

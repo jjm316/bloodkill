@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Board } from "./Board";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { RulesOverlay } from "./HelpOverlay";
 import { EVENT_CATEGORIES, categoryOf, isLogVisible, loadMutedCategories, saveMutedCategories } from "./eventLog";
 import type { EventCategoryId } from "./eventLog";
 import { Icon } from "./icons";
@@ -133,6 +134,9 @@ function InterventionPollLayer({ game, serverTime, noBlock, send }: { game: Game
 export function GameScreen({ credentials, onLeave }: { credentials: RoomCredentials; onLeave: () => void }) {
   const { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost } = useGameSocket(credentials.code, credentials.name, credentials.token);
   const [noBlock, setNoBlock] = useState(() => localStorage.getItem(NO_BLOCK_KEY) === "1");
+  // 规则与图例浮层（ui-help-legend）：等待房 / 对局中 / 旁观共用页头"？"入口；
+  // 状态声明必须位于条件 return 之前。
+  const [rulesOpen, setRulesOpen] = useState(false);
   const lastAutoPollKey = useRef<string | null>(null);
   const pending = state?.game?.pending ?? null;
   const respondAction = state?.game?.legalActions.find((a) => a.type === "respond-intervention");
@@ -183,5 +187,5 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
     send(c.command, c.payload);
   };
 
-  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && <label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => toggleNoBlock(e.target.checked)} />默认不挡刀</label>}<button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{pending?.kind === "intervention" && <InterventionPollLayer game={game} serverTime={state.serverTime} noBlock={noBlock} send={send} />}<ActionsPanel game={game} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}<EventLog events={events} players={game?.players} /></div>;
+  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && <label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => toggleNoBlock(e.target.checked)} />默认不挡刀</label>}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例">？</button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{pending?.kind === "intervention" && <InterventionPollLayer game={game} serverTime={state.serverTime} noBlock={noBlock} send={send} />}<ActionsPanel game={game} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
 }

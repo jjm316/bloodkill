@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { HowToPlayBlock } from "./HelpOverlay";
 
 export interface RoomCredentials { code: string; name: string; token: string | null; }
 const NAME_KEY = "bloodbound:name";
@@ -37,6 +38,7 @@ export function Lobby({ onJoin, onReplay }: { onJoin: (c: RoomCredentials) => vo
       <button onClick={onReplay}>观看回放</button>
     </div>
     {error && <div className="error" role="alert" aria-live="assertive">{error}</div>}
+    <HowToPlayBlock />
     <p className="hint">房间由创建者在本地托管。玩家只需房间号和姓名，无需注册账号；创建房间后，本浏览器会记住房主凭据。</p>
   </div>;
 }

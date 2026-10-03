@@ -142,7 +142,8 @@ export function displayClueIcon(icon: string | null | undefined): string {
   return "未知";
 }
 
-// 亮出的等级只暴露数字本身（issue 23）：角色名不进任何等级文案。
+// 亮出的等级只暴露数字本身（issue 23）：对局实时显示（亮牌槽、技能横幅、
+// 事件日志）不出现角色名；官方角色名仅存在于帮助浮层的静态文案（ADR 0005）。
 export function displayRank(rank: number | string): string {
   if (rank === "fleur-cross") return "审判者";
   return typeof rank === "number" ? `等级${rank}` : String(rank);

@@ -790,6 +790,237 @@ h2 {
 
 .modal-confirm { border-color: var(--accent-gold); }
 
+/* ===== 教学/图例（ui-help-legend）：页头"？"按钮、规则浮层、大厅"怎么玩" ===== */
+
+/* 页头圆形"？"按钮：等待房 / 对局中 / 旁观共用同一入口；
+   margin-left:auto 抵消 space-between 的摊开，与"离开"在右缘成组 */
+.help-button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  flex: none;
+  margin-left: auto;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold-text);
+  color: var(--gold-text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* 规则浮层：比一般面板宽（容纳等级表与图例的信息密度）；内容超高在浮层内竖滚 */
+.rules-modal {
+  max-width: min(680px, 100%);
+  max-height: calc(100vh - 32px);
+  padding: 0;
+}
+
+@supports (height: 100dvh) {
+  .rules-modal { max-height: calc(100dvh - 32px); }
+}
+
+.rules-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rules-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--gold-text);
+  font-size: 19px;
+}
+
+.rules-q {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--gold-text);
+  border-radius: 50%;
+  color: var(--gold-text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.rules-esc { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+.rules-body {
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+  display: grid;
+  gap: 18px;
+}
+
+.rules-section h4 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--gold-text);
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rules-section h4::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.rules-intro p { margin: 0 0 6px; font-size: 14px; line-height: 1.6; }
+
+.rules-intro p:last-child { margin-bottom: 0; }
+
+/* 等级技能表 / 图例 / 短注的行容器：窄屏由 flex-wrap / grid 自行收缩，不横向溢出 */
+.rank-list,
+.legend-list,
+.clue-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.rank-row,
+.legend-row,
+.clue-note {
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(75, 46, 58, 0.6);
+  border-radius: 9px;
+}
+
+/* 等级行：徽章 + 角色名 + 标记组成一行，效果文案整行折到下一行 */
+.rank-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.rank-badge {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gold-dim-bg);
+  border: 1.5px solid var(--gold-text);
+  border-radius: 6px;
+  color: var(--gold-text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.rank-name { font-size: 14px; font-weight: 600; }
+
+.odd-tag {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--gold-text);
+  vertical-align: 1px;
+}
+
+.rank-markers { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+
+.marker-pair { display: inline-flex; align-items: center; gap: 4px; }
+
+.rank-markers .or { color: var(--muted); font-size: 12px; }
+
+.rank-markers .slot { width: 22px; height: 22px; font-size: 11px; }
+
+/* 万能标记（审判者行）：金底示意"亮出时自选玫/兽"，与灰"？"区分 */
+.slot.dot.filled.wild {
+  background: var(--gold-dim-bg);
+  border-color: var(--gold-text);
+  color: var(--gold-text);
+}
+
+.rank-effect {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.rules-note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* 道具图例行：图标 + 名称 + 效果（复刻 legend-scope-prototype compact 版） */
+.legend-row {
+  display: grid;
+  grid-template-columns: 34px minmax(3.5em, auto) 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.legend-ico {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--gold-dim-bg);
+  color: var(--gold-text);
+}
+
+.legend-ico svg { width: 20px; height: 20px; }
+
+.legend-name { font-size: 14px; font-weight: 600; }
+
+.legend-desc,
+.note-text { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+
+/* 线索/徽记短注：可视半边（三格槽示意 / 玫兽色块对）+ 一段话 */
+.clue-note {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.slot-demo { display: inline-flex; gap: 6px; align-items: center; }
+
+.slot-demo .slot { width: 28px; height: 28px; font-size: 12px; }
+
+.emblem-pair { display: inline-flex; gap: 6px; }
+
+.clue-notes .slot { width: 26px; height: 26px; font-size: 12px; }
+
+.note-text strong { color: var(--text); }
+
+/* 大厅"怎么玩"折叠块：默认收起，展开只有简介五句话 */
+.how-to {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 8px 12px;
+}
+
+.how-to summary { cursor: pointer; font-weight: 600; }
+
+.how-to-body { padding-top: 8px; display: grid; gap: 6px; }
+
+.how-to-body p { margin: 0; font-size: 14px; line-height: 1.6; }
+
 .pref-toggle {
   display: inline-flex;
   align-items: center;
@@ -926,6 +1157,11 @@ h2 {
   .log-filters button { width: auto; min-height: 38px; padding: 6px 14px; }
   .action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .action-buttons button { min-width: 0; }
+  /* 规则浮层手机档：遮罩与浮层内边距收紧，给内容留出最大宽度 */
+  .modal-overlay { padding: 8px; }
+  .rules-modal { max-height: calc(100vh - 16px); }
+  .rules-head { padding: 12px 14px 10px; }
+  .rules-body { padding: 12px 14px 14px; gap: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
