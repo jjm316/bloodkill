@@ -599,8 +599,6 @@ class RulesEngine:
             target = self._live_player(state, command.payload.get("targetPlayerId"))
             events.extend(self._grant_resource(state, command, target, "fan"))
         elif owner.rank == 7:
-            if owner.resources.get("shield", 0):
-                raise RuleError("target.shielded", player_id=owner.player_id)
             attacker_id = pending.context.get("attackerPlayerId")
             attacker = self._live_player(state, attacker_id)
             events.extend(self._apply_damage(

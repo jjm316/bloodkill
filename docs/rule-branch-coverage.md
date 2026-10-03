@@ -46,7 +46,7 @@ Issue 20 branch additions:
 | rank 4 direct attack | no skill window | `SkillBranchTests.test_alchemist_does_not_open_from_direct_attack` |
 | rank 4 intervention harm | protected player takes skill damage via a victim-choice reveal window (ADR 0006); a newly revealed rank opens the victim's window (ADR 0009), a marker reveal does not | `SkillBranchTests.test_alchemist_harm_targets_protected_player_without_skill_window`、`test_alchemist_harm_third_point_forced_rank_opens_victim_window` |
 | rank 4 intervention heal | token-return window heals damage and returns a revealed token | `SkillBranchTests.test_alchemist_heal_opens_token_return_and_returns_marker` |
-| rank 7 reaction | self damage with `source=reaction`; a marker reveal opens no window, the forced third-point rank reveal opens the attacker's window with `trigger=None` (ADR 0009 B4) | `SkillBranchTests.test_berserker_reaction_damages_attacker_without_new_window`、`test_berserker_reaction_third_point_forced_rank_opens_attacker_window`、`test_berserker_window_from_skill_damage_counters_the_skill_user` |
+| rank 7 reaction | self damage with `source=reaction`; a marker reveal opens no window, the forced third-point rank reveal opens the attacker's window with `trigger=None` (ADR 0009 B4)；持盾狂战士照常反伤——盾只挡"被指定为目标"，旧 owner 盾检查已删（ADR 0010）；攻击者持盾时反伤仍被 `target.shielded` 拦截（耦合点 B1，失败命令不烧技能） | `SkillBranchTests.test_berserker_reaction_damages_attacker_without_new_window`、`test_berserker_reaction_third_point_forced_rank_opens_attacker_window`、`test_berserker_window_from_skill_damage_counters_the_skill_user`、`test_shielded_berserker_volunteer_can_react`、`test_shielded_attacker_blocks_berserker_reaction` |
 
 ## 引擎分支
 
@@ -119,7 +119,7 @@ Issue 20 branch additions:
 | 诅咒视图 | 仅审判者见 `cursesToDistribute`（待分发卡 ID，分发后清空） | `ProjectionTests.test_curse_supply_is_visible_to_the_inquisitor_alone` |
 | `legal_actions` 行动阶段 | 仅匕首持有者有 pass/attack；盾目标不可攻击；审判者的攻击列表过滤已受 3 伤目标（他人不受限） | `ProjectionTests.test_dagger_holder_actions_are_derived_from_authority`；`ProjectionTests.test_inquisitor_attack_actions_filter_three_damage_targets` |
 | `legal_actions` 诅咒技能窗 | 审判者=放弃+发动两项，他人与观众无动作；分发完成后任何 viewer 不再有分发/技能动作 | `ProjectionTests.test_curse_window_offers_decline_and_use_to_the_inquisitor_only`、`test_after_distribution_no_viewer_has_a_curse_entry_point` |
-| `legal_actions` 技能窗 | rank 2 列出目标；rank 1 无目标 | `ProjectionTests.test_rank_two_skill_window_offers_valid_targets`；`ProjectionBranchTests.test_elder_skill_window_offers_use_without_a_target` |
+| `legal_actions` 技能窗 | rank 2 列出目标；rank 1 无目标；rank 7 持盾 owner 也给发动选项（ADR 0010，旧"只给放弃"特判已删） | `ProjectionTests.test_rank_two_skill_window_offers_valid_targets`；`ProjectionBranchTests.test_elder_skill_window_offers_use_without_a_target`；`SkillBranchTests.test_shielded_berserker_volunteer_can_react` |
 | `legal_actions` 干涉窗 | 投票阶段逐人 respond、三选一阶段目标专属选项 | `ProjectionBranchTests.test_pending_intervention_actions_across_poll_and_choice_stages` |
 | `legal_actions` 终局/未知玩家 | 空列表 | `ProjectionBranchTests.test_legal_actions_empty_for_unknown_player_and_ended_game` |
 | `_pending_view` | 不暴露私有 context；stage/responses/volunteerPlayerIds 公开 | `ProjectionBranchTests.test_pending_view_hides_private_context_and_publishes_votes` |

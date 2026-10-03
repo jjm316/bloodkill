@@ -54,10 +54,7 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
         if pending.actor_player_id != player_id:
             return []
         if pending.kind == "skill":
-            owner = state.players[player_id]
             actions = [{"type": "choose-skill", "use": False}]
-            if pending.rank == 7 and owner.resources.get("shield", 0):
-                return actions
             if pending.rank == 4 and pending.trigger != "intervention":
                 return actions
             if pending.rank == 4:

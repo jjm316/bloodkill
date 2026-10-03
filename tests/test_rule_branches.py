@@ -486,6 +486,59 @@ class SkillBranchTests(unittest.TestCase):
         self.assertEqual(ended.payload["activePlayerId"], berserker.player_id)
         self.assertEqual(engine.state.result["capturedPlayerId"], attacker)
 
+    def test_shielded_berserker_volunteer_can_react(self):
+        # ADR 0010: the shield only blocks being targeted, so a shielded
+        # berserker who volunteers as responder keeps the reaction — the old
+        # owner check left "decline" as the only choice, permanently sealing
+        # the skill under ADR 0008 after a window the shield itself opened
+        engine, found = started_with_ranks(6, 7)
+        berserker = found[7]
+        attacker = engine.state.dagger_holder_id
+        if attacker == berserker.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != berserker.player_id))
+            attacker = engine.state.dagger_holder_id
+        victim = next(pid for pid in engine.state.players if pid not in (attacker, berserker.player_id))
+        # shields are granted by rank 6 in issue 14; inject the resource directly
+        engine.state.players[berserker.player_id].resources["shield"] = 1
+        engine.apply(command(engine, "attack-7-shielded", attacker, "attack", targetPlayerId=victim))
+        answer_poll(engine, berserker.player_id)
+        # intervention wounds force the rank outright: no reveal window is
+        # offered, the rank lands revealed and the window opens in-command
+        self.assertEqual(engine.state.players[berserker.player_id].revealed, {"rank"})
+        self.assertEqual(engine.state.pending.rank, 7)
+        self.assertIn({"type": "choose-skill", "use": True}, legal_actions(engine.state, berserker.player_id))
+        engine.apply(command(engine, "use-7-shielded", berserker.player_id, "choose-skill", use=True))
+        self.assertEqual(engine.state.players[berserker.player_id].damage, 1)
+        self.assertEqual(engine.state.players[attacker].damage, 1)
+        self.assertIn("7", engine.state.players[berserker.player_id].skills_used)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        engine.apply(command(engine, "reveal-reaction", attacker, "choose-reveal", token="marker-0"))
+        self.assertIsNone(engine.state.pending)
+        self.assertEqual(engine.state.dagger_holder_id, berserker.player_id)
+
+    def test_shielded_attacker_blocks_berserker_reaction(self):
+        # coupling point B1 (kept by ADR 0010): the reaction targets the
+        # attacker, so a shielded attacker intercepts it; the failed command
+        # burns nothing
+        engine, found = started_with_ranks(6, 7)
+        berserker = found[7]
+        attacker = engine.state.dagger_holder_id
+        if attacker == berserker.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != berserker.player_id))
+            attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "attack-7-b1", attacker, "attack", targetPlayerId=berserker.player_id))
+        answer_poll(engine)
+        reveal_rank(engine, berserker.player_id)
+        self.assertEqual(engine.state.pending.rank, 7)
+        # shields are granted by rank 6 in issue 14; inject the resource directly
+        engine.state.players[attacker].resources["shield"] = 1
+        revision = engine.state.revision
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "use-7-b1", berserker.player_id, "choose-skill", use=True))
+        self.assertEqual(error.exception.code, "target.shielded")
+        self.assertEqual(engine.state.revision, revision)
+        self.assertNotIn("7", engine.state.players[berserker.player_id].skills_used)
+
     def test_alchemist_harm_targets_protected_player_without_skill_window(self):
         engine, found = started_with_ranks(6, 4)
         alchemist = found[4]
