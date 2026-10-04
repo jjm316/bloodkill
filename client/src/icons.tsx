@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // 不引第三方图标库、无位图。造型源：mockups/icon-strip.html（2026-09-13 拍板）。
 // 玫瑰/野兽/未知标记维持"字 + 色块"现状，不走此组件（兼顾色弱辨识）。
 
-export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill";
+export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill" | "help";
 
 const ICON_SHAPES: Record<IconName, ReactNode> = {
   dagger: (
@@ -51,6 +51,23 @@ const ICON_SHAPES: Record<IconName, ReactNode> = {
     <>
       <path d="M20 4 C13 4.5 7.5 9 5.8 15.5 L4 20 L8.5 18.2 C15 16.5 19.5 11 20 4 Z" />
       <path d="M5.8 15.5 C9.5 12.5 13.5 9.5 17.5 6.5" />
+    </>
+  ),
+  // help 徽记：页头"？"按钮的"一张图"本体（.scratch/ui-help-legend/issues/01）——
+  // 圆环、问号、点锁在同一 viewBox 里等比缩放，任何尺寸下都是正圆 + 问号居中。
+  // 问号不走 <text>：实测衬线栈各中文字体的全角"？"墨迹在字身框内系统性偏左
+  // （Noto Serif SC 达 0.26em，探针 10 种字体无一居中），text-anchor 只能居中字身框，
+  // 跨机型无法保证墨迹居中——改为对称构造的几何路径（墨迹水平范围 8.9..15.1 关于 cx=12 对称）。
+  // 描边均用 viewBox 单位随徽记等比伸缩（不用 non-scaling-stroke）；问号 1.5、环 1：
+  // 36px 渲染时 ≈ 2.25px/1.5px，对应旧版字形笔画与 1.5px 边框的粗细配比。
+  help: (
+    <>
+      <circle cx="12" cy="12" r="11" strokeWidth={1} />
+      <path
+        d="M 8.9 8.9 C 8.9 7.0 10.2 5.7 12 5.7 C 13.8 5.7 15.1 6.9 15.1 8.6 C 15.1 10.0 14.2 10.7 13.2 11.4 C 12.4 11.9 12 12.5 12 13.6 L 12 14.2"
+        strokeWidth={1.5}
+      />
+      <circle cx="12" cy="17.2" r="0.9" strokeWidth={1.5} fill="currentColor" />
     </>
   ),
 };

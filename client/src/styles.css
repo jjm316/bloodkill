@@ -30,6 +30,9 @@
   --mark-gray-border: #5f4652;
   --slot-dim: #937f88; /* 未亮出标记的暗记字 */
   --slot-dashed: #5d414d; /* 空槽虚线 */
+  /* 页头"？"徽记的边长（ui-help-legend issues/01）：宽高同源一处定义，
+     任何改动都不可能只改一边把正圆拉成椭圆 */
+  --help-badge-size: clamp(28px, 5vw, 36px);
   /* 标题/横幅用本地中文衬线字体栈：零下载、零外部请求（正文维持系统字） */
   --font-display: "Noto Serif SC", "Source Han Serif SC", STZhongsong, KaiTi, serif;
 }
@@ -792,22 +795,28 @@ h2 {
 
 /* ===== 教学/图例（ui-help-legend）：页头"？"按钮、规则浮层、大厅"怎么玩" ===== */
 
-/* 页头圆形"？"按钮：等待房 / 对局中 / 旁观共用同一入口；
+/* 页头圆形"？"徽记（icons.tsx 的 help 图标：圆环+问号锁在同一 viewBox，"一张图"）：
+   宽高同引用 --help-badge-size（:root 定义）——任何视口/缩放下都是正圆（issues/01 不变量），
+   ≥720px 桌面档为 36px 与旧观感一致，560–720px 线性缩放，手机 28px；
+   描边从 CSS border 挪进 svg（currentColor 同染环与问号），随徽记等比伸缩；
    margin-left:auto 抵消 space-between 的摊开，与"离开"在右缘成组 */
 .help-button {
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
+  width: var(--help-badge-size);
+  height: var(--help-badge-size);
+  min-height: 0; /* 覆盖全局 button 的 40px；尺寸全权交给 width/height，防 min-height 反超破坏正圆 */
   padding: 0;
   flex: none;
   margin-left: auto;
+  border: none;
   border-radius: 50%;
-  border: 1.5px solid var(--gold-text);
   color: var(--gold-text);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
-  line-height: 1;
+}
+
+.help-button svg,
+.rules-q svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 /* 规则浮层：比一般面板宽（容纳等级表与图例的信息密度）；内容超高在浮层内竖滚 */
@@ -836,6 +845,8 @@ h2 {
   font-size: 19px;
 }
 
+/* 与页头徽记同源的 help svg（环+问号一体，icons.tsx）：CSS border 移除避免双圈，
+   svg 撑满规则已并入上方 .help-button svg 共享选择器 */
 .rules-q {
   width: 26px;
   height: 26px;
@@ -843,12 +854,9 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid var(--gold-text);
+  border: none;
   border-radius: 50%;
   color: var(--gold-text);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 15px;
 }
 
 .rules-esc { margin-left: auto; color: var(--muted); font-size: 12px; }
@@ -1153,6 +1161,10 @@ h2 {
   #root { padding: 8px; }
   button, input, select { width: 100%; }
   .room-header button { width: auto; }
+  /* help 徽记不吃上一行豁免（特异性 0,2,0 压过 0,1,1）：重新钉住 var 尺寸，
+     否则宽度塌到字宽变竖椭圆（.scratch/ui-help-legend/issues/01 的原始病灶）。
+     此档 5vw≤24px，clamp 恒为下限 28px，var 取值与窄屏预期一致 */
+  .room-header .help-button { width: var(--help-badge-size); height: var(--help-badge-size); }
   /* 类别选项卡保持自适应宽度换行，不吃全局按钮 100% 宽；加大触达面防误触 */
   .log-filters button { width: auto; min-height: 38px; padding: 6px 14px; }
   .action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -162,7 +162,8 @@ export function RulesOverlay({ onClose }: { onClose: () => void }) {
     >
       <div className="modal rules-modal" role="dialog" aria-modal="true" aria-labelledby="rules-title">
         <div className="rules-head">
-          <span className="rules-q" aria-hidden="true">？</span>
+          {/* 与页头徽记同源的 help 图标（svg 自带圆环）：全角"？"字体墨迹偏左无法居中，见 icons.tsx */}
+          <span className="rules-q" aria-hidden="true"><Icon name="help" /></span>
           <h3 id="rules-title">规则与图例</h3>
           <span className="rules-esc">Esc / 点击遮罩关闭</span>
         </div>
