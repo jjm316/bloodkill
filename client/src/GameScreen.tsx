@@ -105,10 +105,11 @@ function useDeadlineSeconds(deadline: number | null | undefined, serverTime: num
 // 挡刀请求门控层（ADR 0012）：门控窗只属于被攻击者本人——他持有
 // answer-intervention-request 动作时弹确认窗（「默认不让他人挡刀」开启时由
 // 上层自动代发、不弹窗），攻击者、有资格玩家与旁观者只看等待横幅。
-// 攻击者名取 daggerHolderId：门控 pending 冻结一切命令，攻击结算才移交
-// 匕首，窗口期内匕首必在攻击者手中；协议 v3 的 pending 不带
-// attackerPlayerId，服务端重连也不回放历史事件，只能依赖这一不变量。
-export function InterventionGateLayer({ game, serverTime, noAssist, send }: { game: GameState; serverTime: number | undefined; noAssist: boolean; send: (c: string, p?: Record<string, unknown>) => void }) {
+// 攻击者名取最近一条指向该目标的 AttackDeclared 公开事件：攻击是公开声明，
+// 事件一到全员都收到。不能取 daggerHolderId——引擎在攻击瞬间就把匕首抵押给
+// 目标，门控期内匕首在目标手里。协议 v3 的 pending 不带 attackerPlayerId，
+// 且服务端重连不回放历史事件，重连等极端情况下退化为不点名的正文。
+export function InterventionGateLayer({ game, events, serverTime, noAssist, send }: { game: GameState; events?: GameEvent[]; serverTime: number | undefined; noAssist: boolean; send: (c: string, p?: Record<string, unknown>) => void }) {
   const pending = game.pending;
   const isGate = pending?.kind === "intervention" && pending.stage === "gate";
   const answerAction = game.legalActions.find((a) => a.type === "answer-intervention-request");
@@ -117,9 +118,11 @@ export function InterventionGateLayer({ game, serverTime, noAssist, send }: { ga
   if (pending?.kind !== "intervention" || pending.stage !== "gate") return null;
   if (answerAction && !noAssist) {
     const roster = pending.eligiblePlayerIds.map((id) => nameOf(game.players, id)).join("、");
+    const attack = [...(events ?? [])].reverse().find((e) => e.eventType === "AttackDeclared" && (e.payload as { targetPlayerId?: string } | undefined)?.targetPlayerId === pending.targetPlayerId);
+    const attackerName = attack ? nameOf(game.players, (attack.payload as { attackerPlayerId?: string }).attackerPlayerId) : null;
     return <ConfirmDialog
       title="是否需要他人为你挡刀？"
-      body={<>{nameOf(game.players, game.daggerHolderId)} 对你发起攻击。请求挡刀将向所有有资格的玩家发起询问；若不需要或超时，你将承受这次攻击。<br />可为你挡刀的玩家：{roster}{countdown}</>}
+      body={<>{attackerName ? <>{attackerName} 对你发起攻击。</> : <>一次攻击对你发起。</>}请求挡刀将向所有有资格的玩家发起询问；若不需要或超时，你将承受这次攻击。<br />可为你挡刀的玩家：{roster}{countdown}</>}
       confirmText="请求挡刀"
       cancelText="自己承受"
       onConfirm={() => send("answer-intervention-request", { need: true })}
@@ -266,5 +269,5 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
     send(c.command, c.payload);
   };
 
-  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && <><label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => toggleNoBlock(e.target.checked)} />默认不挡刀</label><label className="pref-toggle" title="开启后被攻击时不再弹出挡刀请求确认，自动视为不需要他人挡刀"><input type="checkbox" checked={noAssist} onChange={(e) => toggleNoAssist(e.target.checked)} />默认不让他人挡刀</label></>}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{pending?.kind === "intervention" && pending.stage === "gate" && <InterventionGateLayer game={game} serverTime={state.serverTime} noAssist={noAssist} send={send} />}{pending?.kind === "intervention" && pending.stage !== "gate" && <InterventionPollLayer game={game} serverTime={state.serverTime} noBlock={noBlock} send={send} />}{pending && pending.kind !== "intervention" && <SingleWindowLayer game={game} serverTime={state.serverTime} />}<ActionsPanel game={game} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
+  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && <><label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => toggleNoBlock(e.target.checked)} />默认不挡刀</label><label className="pref-toggle" title="开启后被攻击时不再弹出挡刀请求确认，自动视为不需要他人挡刀"><input type="checkbox" checked={noAssist} onChange={(e) => toggleNoAssist(e.target.checked)} />默认不让他人挡刀</label></>}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{pending?.kind === "intervention" && pending.stage === "gate" && <InterventionGateLayer game={game} events={events} serverTime={state.serverTime} noAssist={noAssist} send={send} />}{pending?.kind === "intervention" && pending.stage !== "gate" && <InterventionPollLayer game={game} serverTime={state.serverTime} noBlock={noBlock} send={send} />}{pending && pending.kind !== "intervention" && <SingleWindowLayer game={game} serverTime={state.serverTime} />}<ActionsPanel game={game} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
 }

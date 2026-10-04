@@ -9,11 +9,11 @@ import type { GameEvent, GameState, PlayerView, RoomState } from "./types";
 // 文案锚点 = spec Q6 拍板抄本，一字不改。
 
 // GameScreen 级用例 mock 掉 socket 层（同 HelpOverlay.test.tsx 模式）。
-const socketMock = vi.hoisted(() => ({ state: null as RoomState | null, send: vi.fn() }));
+const socketMock = vi.hoisted(() => ({ state: null as RoomState | null, events: [] as GameEvent[], send: vi.fn() }));
 vi.mock("./useSocket", () => ({
   useGameSocket: () => ({
     state: socketMock.state,
-    events: [],
+    events: socketMock.events,
     error: null,
     closed: false,
     reconnecting: false,
@@ -73,15 +73,21 @@ describe("describeEvent 门控事件四条文案", () => {
   });
 });
 
-// 门控期视角夹具：p0 阿攻持匕首攻击 p1 小标，小二/小三有挡刀资格。
+// 门控期视角夹具：p0 阿攻攻击 p1 小标，小二/小三有挡刀资格。引擎在攻击
+// 瞬间把匕首抵押给目标（_attack 先移交匕首再开门控），所以门控期
+// daggerHolderId 是目标 p1，攻击者只能从公开的 AttackDeclared 事件取。
 // 目标视角 legalActions 与 projection.py 的门控分支一致（两条 need 变体）。
+const gateEvents: GameEvent[] = [
+  { ...gateEvent("AttackDeclared", { attackerPlayerId: "p0", targetPlayerId: "p1" }) },
+];
+
 function makeGateGame(viewerIsTarget: boolean, deadlineOffset = 30): GameState {
   return {
     gameId: "game-1",
     revision: 12,
     status: "active",
     players: gatePlayers,
-    daggerHolderId: "p0",
+    daggerHolderId: "p1",
     phase: { kind: "intervention", stage: "gate", activePlayerId: "p1" },
     pending: {
       kind: "intervention",
@@ -105,9 +111,9 @@ function makeGateGame(viewerIsTarget: boolean, deadlineOffset = 30): GameState {
 }
 
 describe("InterventionGateLayer 门控弹窗（被攻击者视角）", () => {
-  it("标题/正文/名单行/倒计时按 Q6 拍板文案渲染", () => {
+  it("标题/正文/名单行/倒计时按 Q6 拍板文案渲染（攻击者取公开攻击声明事件）", () => {
     const serverTime = Date.now() / 1000;
-    const { container } = render(<InterventionGateLayer game={makeGateGame(true)} serverTime={serverTime} noAssist={false} send={vi.fn()} />);
+    const { container } = render(<InterventionGateLayer game={makeGateGame(true)} events={gateEvents} serverTime={serverTime} noAssist={false} send={vi.fn()} />);
     const dialog = container.querySelector(".modal");
     expect(dialog?.getAttribute("aria-labelledby")).toBe("modal-title");
     expect(container.querySelector("#modal-title")?.textContent).toBe("是否需要他人为你挡刀？");
@@ -116,6 +122,15 @@ describe("InterventionGateLayer 门控弹窗（被攻击者视角）", () => {
     expect(body).toContain("可为你挡刀的玩家：小二、小三");
     expect(body).toContain("（剩 30 秒）");
     expect(body).not.toContain("?");
+    // 匕首已抵押给目标，绝不能把目标自己当成攻击者念出来
+    expect(body).not.toContain("小标 对你发起攻击");
+  });
+
+  it("事件缺失（如重连）时退化为不点名正文，也不误把匕首持有者当攻击者", () => {
+    const { container } = render(<InterventionGateLayer game={makeGateGame(true)} serverTime={Date.now() / 1000} noAssist={false} send={vi.fn()} />);
+    const body = container.querySelector(".modal-body")?.textContent ?? "";
+    expect(body).toContain("一次攻击对你发起。");
+    expect(body).not.toContain("小标 对你发起攻击");
   });
 
   it("「请求挡刀」发送 answer-intervention-request need=true，「自己承受」发送 need=false", () => {
