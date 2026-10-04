@@ -97,23 +97,28 @@ def answer_poll(engine, *volunteers):
     return events
 
 
-def attack_wound(engine, victim_id, prefix, reveal_token=None, color=None):
-    """Resolve one real attack on victim_id end to end: reroute the dagger if
-    the victim holds it, declare the attack, decline the poll, then let the
-    victim answer their reveal window with the given token.
-
-    A wound the engine resolves directly (the last plain marker at the forced
-    third point) opens no window and needs no token; a wound that opens the
-    victim's skill window leaves it open for the caller to answer. Returns the
-    wound's combined events, so the poll resolution (forced reveals, resource
-    returns) stays assertable.
-    """
+def attack_and_poll(engine, victim_id, command_id):
+    """Declare a real attack on victim_id — rerouting the dagger if the victim
+    holds it — and decline the poll. Returns the combined events, so the poll
+    resolution (forced reveals, resource returns) stays assertable."""
     holder = engine.state.dagger_holder_id
     if holder == victim_id:
         give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid != victim_id and not player.captured))
     attacker = engine.state.dagger_holder_id
-    events = list(engine.apply(command(engine, f"{prefix}-attack", attacker, "attack", targetPlayerId=victim_id)))
+    events = list(engine.apply(command(engine, command_id, attacker, "attack", targetPlayerId=victim_id)))
     events += answer_poll(engine)
+    return events
+
+
+def attack_wound(engine, victim_id, prefix, reveal_token=None, color=None):
+    """Resolve one real attack on victim_id end to end: declare it, decline the
+    poll, then let the victim answer their reveal window with the given token.
+
+    A wound the engine resolves directly (the last plain marker at the forced
+    third point) opens no window and needs no token; a wound that opens the
+    victim's skill window leaves it open for the caller to answer.
+    """
+    events = attack_and_poll(engine, victim_id, f"{prefix}-attack")
     pending = engine.state.pending
     if pending is not None and pending.kind == "reveal":
         assert reveal_token is not None, f"{prefix}: reveal window opened but no token given"
@@ -146,17 +151,24 @@ def assert_ward_returned(testcase, events, guardian_id, ward_id):
     )
 
 
+def assert_ward_settled(testcase, engine, guardian_id, ward_id, prefix):
+    """The shared B7 tail after the third point: the guardian sits at exactly
+    3 damage with both resources back to zero, and the fourth point captures
+    without re-emitting the ward return."""
+    guardian_player = engine.state.players[guardian_id]
+    testcase.assertEqual(guardian_player.damage, 3)
+    testcase.assertEqual(guardian_player.resources["sword"], 0)
+    testcase.assertEqual(engine.state.players[ward_id].resources["shield"], 0)
+    capture_events = capture_at_three_damage(engine, guardian_id, prefix)
+    testcase.assertEqual(engine.state.status, "ended")
+    testcase.assertIn("PlayerCaptured", [event.event_type for event in capture_events])
+    testcase.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+
+
 def capture_at_three_damage(engine, victim_id, prefix):
     """Take a 3-damage victim through the fourth point with a real attack: the
-    capture settles the game. Returns the capture command's events so tests can
-    assert the ward return never re-fires on them."""
-    holder = engine.state.dagger_holder_id
-    if holder == victim_id:
-        give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid != victim_id and not player.captured))
-    attacker = engine.state.dagger_holder_id
-    events = list(engine.apply(command(engine, f"{prefix}-capture", attacker, "attack", targetPlayerId=victim_id)))
-    events += answer_poll(engine)
-    return events
+    capture settles the game."""
+    return attack_and_poll(engine, victim_id, f"{prefix}-capture")
 
 
 def assassin_skill_scenario_log() -> list[list]:
@@ -825,16 +837,9 @@ class SkillBranchTests(unittest.TestCase):
         attack_wound(engine, guardian.player_id, "guardian-a2", reveal_token="marker-0")
         events = attack_wound(engine, guardian.player_id, "guardian-a3")
         assert_ward_returned(self, events, guardian.player_id, ward)
-        guardian_player = engine.state.players[guardian.player_id]
-        self.assertEqual(guardian_player.damage, 3)
-        self.assertIsNone(guardian_player.shield_ward_id)
-        self.assertEqual(guardian_player.resources["sword"], 0)
-        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
+        self.assertIsNone(engine.state.players[guardian.player_id].shield_ward_id)
         # the fourth point captures and must never re-emit the ward return
-        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-a4")
-        self.assertEqual(engine.state.status, "ended")
-        self.assertIn("PlayerCaptured", [event.event_type for event in capture_events])
-        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+        assert_ward_settled(self, engine, guardian.player_id, ward, "guardian-a4")
 
     def test_guardian_returns_sword_and_shield_on_intervention_damage(self):
         # B7 via the blocking source: the guardian volunteers as responder and
@@ -876,15 +881,9 @@ class SkillBranchTests(unittest.TestCase):
         self.assertEqual(damage.payload["source"], "intervention")
         self.assertEqual(damage.payload["targetPlayerId"], guardian.player_id)
         assert_ward_returned(self, events, guardian.player_id, ward)
-        guardian_player = engine.state.players[guardian.player_id]
         # the intervention wound force-reveals the rank on its way through
-        self.assertIn("rank", guardian_player.revealed)
-        self.assertEqual(guardian_player.damage, 3)
-        self.assertEqual(guardian_player.resources["sword"], 0)
-        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
-        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-b6")
-        self.assertEqual(engine.state.status, "ended")
-        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+        self.assertIn("rank", engine.state.players[guardian.player_id].revealed)
+        assert_ward_settled(self, engine, guardian.player_id, ward, "guardian-b6")
 
     def test_guardian_returns_sword_and_shield_on_mentalist_skill_damage(self):
         # B7 via the skill-damage source: the mentalist's wound is the third
@@ -906,12 +905,7 @@ class SkillBranchTests(unittest.TestCase):
             [("ClueRevealed", {"playerId": guardian.player_id, "kind": "marker-1", "value": guardian_player.identity_markers[1]})],
         )
         assert_ward_returned(self, events, guardian.player_id, ward)
-        self.assertEqual(guardian_player.damage, 3)
-        self.assertEqual(guardian_player.resources["sword"], 0)
-        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
-        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-c4")
-        self.assertEqual(engine.state.status, "ended")
-        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+        assert_ward_settled(self, engine, guardian.player_id, ward, "guardian-c4")
 
     def test_guardian_returns_sword_and_shield_on_berserker_reaction_damage(self):
         # B7 via the reaction source: the guardian attacks the berserker and
@@ -932,13 +926,7 @@ class SkillBranchTests(unittest.TestCase):
         reaction = next(event for event in events if event.event_type == "DamageApplied")
         self.assertEqual(reaction.payload, {"targetPlayerId": guardian.player_id, "amount": 1, "source": "reaction", "triggerContext": None})
         assert_ward_returned(self, events, guardian.player_id, ward)
-        guardian_player = engine.state.players[guardian.player_id]
-        self.assertEqual(guardian_player.damage, 3)
-        self.assertEqual(guardian_player.resources["sword"], 0)
-        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
-        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-d4")
-        self.assertEqual(engine.state.status, "ended")
-        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+        assert_ward_settled(self, engine, guardian.player_id, ward, "guardian-d4")
 
     def test_mage_obscures_markers_and_grants_staff(self):
         engine, found = started_with_ranks(6, 8)
