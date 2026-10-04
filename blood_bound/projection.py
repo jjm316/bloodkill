@@ -31,10 +31,21 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
     pending = state.pending
     if pending is not None:
         if pending.kind == "intervention":
+            stage = pending.context.get("stage")
+            if stage == "gate":
+                # ADR 0012: the request gate belongs to the target alone —
+                # everyone else (attacker and eligibles included) waits with
+                # no action, which keeps the gate modal-exclusive.
+                if pending.actor_player_id != player_id:
+                    return []
+                return [
+                    {"type": "answer-intervention-request", "need": True},
+                    {"type": "answer-intervention-request", "need": False},
+                ]
             # The volunteer poll is a multi-actor window: every eligible player
             # who has not answered yet holds their own respond action, while
             # the choice stage belongs to the target alone.
-            if pending.context.get("stage") == "poll":
+            if stage == "poll":
                 responses: dict[str, bool] = pending.context.get("responses", {})
                 if player_id in pending.eligible_player_ids and player_id not in responses:
                     return [
@@ -212,12 +223,16 @@ def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:
         "forceRank": bool(getattr(pending, "context", {}).get("forceRank")) if pending.kind == "reveal" else False,
     }
     if pending.kind == "intervention":
-        # Votes are public in real time (ADR 0002); the stage and each
-        # response are surfaced as first-class fields, never via context. The
-        # countdown deadline is server-owned wall clock and is injected into
-        # this view by the server, not the engine.
-        responses: dict[str, bool] = dict(pending.context.get("responses", {}))
+        # Votes are public in real time (ADR 0002) once the poll opens; the
+        # stage is surfaced as a first-class field, never via context. During
+        # the request gate (ADR 0012) no vote has happened yet, so the vote
+        # fields do not exist — the view carries the stage and the eligible
+        # list (a base field) only. The countdown deadline is server-owned
+        # wall clock and is injected into this view by the server, not the
+        # engine.
         view["stage"] = pending.context.get("stage")
-        view["responses"] = responses
-        view["volunteerPlayerIds"] = [player_id for player_id in pending.eligible_player_ids if responses.get(player_id)]
+        if view["stage"] != "gate":
+            responses: dict[str, bool] = dict(pending.context.get("responses", {}))
+            view["responses"] = responses
+            view["volunteerPlayerIds"] = [player_id for player_id in pending.eligible_player_ids if responses.get(player_id)]
     return view

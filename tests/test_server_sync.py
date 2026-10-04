@@ -180,6 +180,12 @@ class DeadlineWindowTests(unittest.TestCase):
             self.room,
             Command("attack-deadline", self.room.game_id, attacker, self.room.engine.state.revision, "attack", {"targetPlayerId": target}),
         )
+        # these tests baseline on an open poll window: the target accepts the
+        # request gate (ADR 0012); the gate window itself is ticket 02
+        self.app.manager.apply_command(
+            self.room,
+            Command("gate-deadline", self.room.game_id, target, self.room.engine.state.revision, "answer-intervention-request", {"need": True}),
+        )
         return attacker, target
 
     def _respond(self, player_id, volunteer, command_id):
@@ -337,6 +343,11 @@ class SingleWindowDeadlineTests(unittest.TestCase):
             self.room,
             Command(command_id, self.room.game_id, attacker, self.room.engine.state.revision, "attack", {"targetPlayerId": victim_id}),
         )
+        # walk the request gate (ADR 0012) so the poll answers below are legal
+        self.app.manager.apply_command(
+            self.room,
+            Command(f"gate-{command_id}", self.room.game_id, victim_id, self.room.engine.state.revision, "answer-intervention-request", {"need": True}),
+        )
         pending = self.room.engine.state.pending
         for player_id in list(pending.eligible_player_ids):
             pending = self.room.engine.state.pending
@@ -454,8 +465,14 @@ class SingleWindowDeadlineTests(unittest.TestCase):
             self.app.manager.apply_command(room, BCommand(command_id, room.game_id, actor, room.engine.state.revision, command_type, payload))
 
         def decline_poll(prefix):
-            while room.engine.state.pending and room.engine.state.pending.kind == "intervention" and room.engine.state.pending.context.get("stage") == "poll":
+            while room.engine.state.pending and room.engine.state.pending.kind == "intervention":
                 pending = room.engine.state.pending
+                stage = pending.context.get("stage")
+                if stage == "gate":
+                    send(f"gate-{prefix}-{room.engine.state.revision}", pending.actor_player_id, "answer-intervention-request", need=True)
+                    continue
+                if stage != "poll":
+                    break
                 responder = next(pid for pid in pending.eligible_player_ids if pid not in pending.context["responses"])
                 send(f"{prefix}-{room.engine.state.revision}", responder, "respond-intervention", volunteer=False)
 
@@ -484,8 +501,14 @@ class SingleWindowDeadlineTests(unittest.TestCase):
         if room.engine.state.dagger_holder_id != attacker:
             send("pass-three", room.engine.state.dagger_holder_id, "pass-dagger", targetPlayerId=attacker)
         send("attack-three", attacker, "attack", targetPlayerId=victim)
-        while room.engine.state.pending and room.engine.state.pending.kind == "intervention" and room.engine.state.pending.context.get("stage") == "poll":
+        while room.engine.state.pending and room.engine.state.pending.kind == "intervention":
             pending = room.engine.state.pending
+            stage = pending.context.get("stage")
+            if stage == "gate":
+                send(f"gate-three-{room.engine.state.revision}", pending.actor_player_id, "answer-intervention-request", need=True)
+                continue
+            if stage != "poll":
+                break
             responder = next(pid for pid in pending.eligible_player_ids if pid not in pending.context["responses"])
             send(f"yes-{room.engine.state.revision}", responder, "respond-intervention", volunteer=responder == alchemist)
         self.assertEqual(room.engine.state.pending.kind, "skill")

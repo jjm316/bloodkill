@@ -127,7 +127,12 @@ class RoomManagerTests(unittest.TestCase):
                 )
                 while room.engine.state.pending and room.engine.state.pending.kind == "intervention":
                     pending = room.engine.state.pending
-                    if pending.context.get("stage") == "poll":
+                    stage = pending.context.get("stage")
+                    if stage == "gate":
+                        self.manager.apply_command(
+                            room, command(room.engine, f"gate-{turn}-{room.engine.state.revision}", pending.actor_player_id, "answer-intervention-request", need=True)
+                        )
+                    elif stage == "poll":
                         responses = pending.context["responses"]
                         responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
                         self.manager.apply_command(
@@ -166,7 +171,12 @@ class RoomManagerTests(unittest.TestCase):
             )
             while room.engine.state.pending and room.engine.state.pending.kind == "intervention":
                 pending = room.engine.state.pending
-                if pending.context.get("stage") == "poll":
+                stage = pending.context.get("stage")
+                if stage == "gate":
+                    self.manager.apply_command(
+                        room, command(room.engine, f"gate-{turn}-{room.engine.state.revision}", pending.actor_player_id, "answer-intervention-request", need=True)
+                    )
+                elif stage == "poll":
                     responses = pending.context["responses"]
                     responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
                     self.manager.apply_command(

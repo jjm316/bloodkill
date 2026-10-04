@@ -97,7 +97,19 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
                 raise RuntimeError("deterministic runner exceeded window budget")
             pending = engine.state.pending
             if pending.kind == "intervention":
-                if pending.context.get("stage") == "poll":
+                stage = pending.context.get("stage")
+                if stage == "gate":
+                    # ADR 0012 request gate: the walker always asks for the
+                    # poll, so the fixtures keep their volunteer-branch
+                    # coverage; the gate decline path mixes in when ticket 05
+                    # regenerates the goldens.
+                    send(
+                        f"gate-yes-{engine.state.revision}",
+                        pending.actor_player_id,
+                        "answer-intervention-request",
+                        need=True,
+                    )
+                elif stage == "poll":
                     responses: dict[str, bool] = pending.context["responses"]
                     # The volunteering plan is made once, when the game's first
                     # poll opens, and survives across the per-responder

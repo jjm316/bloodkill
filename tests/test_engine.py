@@ -42,13 +42,23 @@ def reveal_rank(engine, player_id, command_id="reveal-rank"):
 
 
 def decline_poll(engine):
-    """Answer the open intervention poll: every eligible player declines to volunteer.
+    """Walk an attack through to a fully declined volunteer poll.
 
-    Returns the last command's events, which carry the poll's resolution.
+    The target first accepts the request gate (ADR 0012), then every eligible
+    player declines to volunteer. Returns the last command's events, which
+    carry the poll's resolution.
     """
     events: tuple = ()
-    while engine.state.pending and engine.state.pending.kind == "intervention" and engine.state.pending.context.get("stage") == "poll":
+    while engine.state.pending and engine.state.pending.kind == "intervention":
         pending = engine.state.pending
+        stage = pending.context.get("stage")
+        if stage == "gate":
+            events = engine.apply(
+                command(engine, f"gate-{engine.state.revision}", pending.actor_player_id, "answer-intervention-request", need=True)
+            )
+            continue
+        if stage != "poll":
+            break
         responses = pending.context["responses"]
         responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
         events = engine.apply(command(engine, f"respond-{engine.state.revision}", responder, "respond-intervention", volunteer=False))
@@ -167,6 +177,8 @@ class RulesEngineTests(unittest.TestCase):
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        # the target requests assistance, opening the volunteer poll
+        engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
         responder = engine.state.pending.eligible_player_ids[0]
         for player_id in engine.state.pending.eligible_player_ids:
             if player_id != responder:
@@ -237,11 +249,11 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(len(replay.command_ids), len(set(replay.command_ids)))
 
-    def test_ruleset_is_0_5_and_older_checkpoints_are_rejected(self):
+    def test_ruleset_is_0_6_and_older_checkpoints_are_rejected(self):
         engine = self.started()
-        self.assertEqual(engine.state.ruleset_version, "0.5")
+        self.assertEqual(engine.state.ruleset_version, "0.6")
         stale = deepcopy(engine.checkpoint())
-        stale.ruleset_version = "0.4"
+        stale.ruleset_version = "0.5"
         with self.assertRaises(RuleError):
             RulesEngine.resume_from_checkpoint(stale, clock=FixedClock())
 

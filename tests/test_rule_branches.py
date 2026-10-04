@@ -80,15 +80,26 @@ def reveal_rank(engine, player_id, command_id="reveal-rank"):
 
 
 def answer_poll(engine, *volunteers):
-    """Answer the open intervention poll in seat order; named players volunteer, the rest decline.
+    """Walk an attack's request gate and answer the poll in seat order; named
+    players volunteer, the rest decline.
 
-    Stops once the poll stage closes (all answered), leaving a choice-stage
-    pending when two or more players volunteered. Returns the last command's
-    events, which carry the poll's resolution (or the choice-stage opening).
+    The target first accepts the request gate (ADR 0012), which opens the
+    poll. Stops once the poll stage closes (all answered), leaving a
+    choice-stage pending when two or more players volunteered. Returns the
+    last command's events, which carry the poll's resolution (or the
+    choice-stage opening).
     """
     events: tuple = ()
-    while engine.state.pending and engine.state.pending.kind == "intervention" and engine.state.pending.context.get("stage") == "poll":
+    while engine.state.pending and engine.state.pending.kind == "intervention":
         pending = engine.state.pending
+        stage = pending.context.get("stage")
+        if stage == "gate":
+            events = engine.apply(
+                command(engine, f"gate-{engine.state.revision}", pending.actor_player_id, "answer-intervention-request", need=True)
+            )
+            continue
+        if stage != "poll":
+            break
         responses = pending.context["responses"]
         responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
         events = engine.apply(
@@ -331,17 +342,23 @@ class CommandGuardBranchTests(unittest.TestCase):
 
 
 class AttackBranchTests(unittest.TestCase):
-    def test_attack_opens_poll_hands_dagger_and_lists_eligible(self):
+    def test_attack_opens_gate_then_poll_hands_dagger_and_lists_eligible(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         events = engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         self.assertEqual(events[0].event_type, "AttackDeclared")
         self.assertEqual(events[0].payload, {"attackerPlayerId": attacker, "targetPlayerId": target})
-        self.assertEqual(events[1].event_type, "InterventionPollOpened")
+        self.assertEqual(events[1].event_type, "InterventionGateOpened")
         self.assertEqual(events[1].payload["targetPlayerId"], target)
         self.assertEqual(events[1].payload["attackerPlayerId"], attacker)
         self.assertEqual(engine.state.dagger_holder_id, target)
+        self.assertEqual(engine.state.phase, {"kind": "intervention", "stage": "gate", "activePlayerId": target})
+        # the target's accept relays into the poll with its fields unchanged
+        events = engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
+        self.assertEqual(events[1].event_type, "InterventionPollOpened")
+        self.assertEqual(events[1].payload["targetPlayerId"], target)
+        self.assertEqual(events[1].payload["attackerPlayerId"], attacker)
         self.assertEqual(engine.state.phase, {"kind": "intervention", "stage": "poll", "activePlayerId": target})
         pending = engine.state.pending
         self.assertEqual(pending.kind, "intervention")
@@ -413,7 +430,9 @@ class AttackBranchTests(unittest.TestCase):
         engine.state.players[target].resources["fan"] = 1
         events = engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         # every other player still holds an unrevealed rank, yet nobody is
-        # eligible: no poll opens and the attack resolves immediately
+        # eligible: no gate and no poll open (ADR 0012 moves the empty-set
+        # short-circuit ahead of the gate), the attack resolves immediately
+        self.assertNotIn("InterventionGateOpened", [event.event_type for event in events])
         self.assertNotIn("InterventionPollOpened", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
 
@@ -430,6 +449,7 @@ class AttackBranchTests(unittest.TestCase):
                 player.damage = 1
                 player.revealed = {"rank"}
         events = engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        self.assertNotIn("InterventionGateOpened", [event.event_type for event in events])
         self.assertNotIn("InterventionPollOpened", [event.event_type for event in events])
         self.assertIn("DamageApplied", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target].damage, 1)
@@ -443,6 +463,7 @@ class AttackBranchTests(unittest.TestCase):
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
         for actor in (attacker, target):
             with self.subTest(actor=actor):
                 with self.assertRaises(RuleError) as error:
@@ -465,6 +486,7 @@ class AttackBranchTests(unittest.TestCase):
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
         responder = next(pid for pid in engine.state.pending.eligible_player_ids)
         with self.assertRaises(RuleError) as error:
             engine.apply(command(engine, "jump", target, "choose-intervention", responderPlayerId=responder))
@@ -1722,12 +1744,24 @@ class ProjectionBranchTests(unittest.TestCase):
         # the plain token action stays bare: no colour choice on a rank reveal
         self.assertNotIn("color", next(action for action in actions if action["token"] == "rank"))
 
-    def test_pending_intervention_actions_across_poll_and_choice_stages(self):
+    def test_pending_intervention_actions_across_gate_poll_and_choice_stages(self):
         engine = started()
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
         eligible = list(engine.state.pending.eligible_player_ids)
+        # gate stage: the answer actions belong to the target alone; the
+        # attacker, the eligibles and every other bystander hold nothing
+        self.assertEqual(
+            legal_actions(engine.state, target),
+            [
+                {"type": "answer-intervention-request", "need": True},
+                {"type": "answer-intervention-request", "need": False},
+            ],
+        )
+        for watcher in (attacker, eligible[0], eligible[1]):
+            self.assertEqual(legal_actions(engine.state, watcher), [])
+        engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
         # poll stage: each unanswered eligible player holds their own respond
         # actions; the target and the attacker hold nothing
         self.assertEqual(
@@ -1769,6 +1803,12 @@ class ProjectionBranchTests(unittest.TestCase):
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        # during the gate the vote fields do not exist yet (ADR 0012)
+        gate_view = project_state(engine.state, target)
+        self.assertEqual(gate_view["pending"]["stage"], "gate")
+        self.assertNotIn("responses", gate_view["pending"])
+        self.assertNotIn("volunteerPlayerIds", gate_view["pending"])
+        engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
         eligible = list(engine.state.pending.eligible_player_ids)
         engine.apply(command(engine, "yes", eligible[0], "respond-intervention", volunteer=True))
         view = project_state(engine.state, target)
@@ -1782,6 +1822,160 @@ class ProjectionBranchTests(unittest.TestCase):
         self.assertEqual(spectator["pending"]["responses"], {eligible[0]: True})
 
 
+class InterventionGateBranchTests(unittest.TestCase):
+    """The target's request gate before the volunteer poll (ADR 0012)."""
+
+    def attack(self, engine):
+        attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid != attacker)
+        events = engine.apply(command(engine, "attack-1", attacker, "attack", targetPlayerId=target))
+        return events, attacker, target
+
+    def test_gate_opens_with_target_as_actor_and_the_eligible_list(self):
+        engine = started()
+        events, attacker, target = self.attack(engine)
+        self.assertEqual(events[0].event_type, "AttackDeclared")
+        self.assertEqual(events[1].event_type, "InterventionGateOpened")
+        pending = engine.state.pending
+        self.assertEqual(
+            events[1].payload,
+            {"targetPlayerId": target, "attackerPlayerId": attacker, "eligiblePlayerIds": list(pending.eligible_player_ids)},
+        )
+        # the poll is not open yet: only the confirmation window stands
+        self.assertNotIn("InterventionPollOpened", [event.event_type for event in events])
+        # the dagger still moves to the target at declaration time
+        self.assertEqual(engine.state.dagger_holder_id, target)
+        self.assertEqual(engine.state.phase, {"kind": "intervention", "stage": "gate", "activePlayerId": target})
+        self.assertEqual(pending.kind, "intervention")
+        self.assertEqual(pending.actor_player_id, target)
+        self.assertEqual(pending.target_player_id, target)
+        self.assertEqual(pending.context["attackerPlayerId"], attacker)
+        self.assertEqual(pending.context["stage"], "gate")
+        self.assertNotIn("responses", pending.context)
+        # eligibility conditions are unchanged: attacker, target, rank-shown
+        # and captured players are never on the list
+        self.assertNotIn(attacker, pending.eligible_player_ids)
+        self.assertNotIn(target, pending.eligible_player_ids)
+        self.assertEqual(
+            set(pending.eligible_player_ids),
+            {pid for pid in engine.state.players if pid not in (attacker, target)},
+        )
+
+    def test_empty_eligible_set_skips_the_gate_with_zero_gate_events(self):
+        # a fan-holding target makes the eligible set empty (rank 9, injected
+        # directly): the 0.5 short-circuit moves ahead of the gate — no
+        # confirmation window, no gate events, the attack settles at once
+        engine = started()
+        attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid != attacker)
+        engine.state.players[target].resources["fan"] = 1
+        events = engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        self.assertNotIn("InterventionGateOpened", [event.event_type for event in events])
+        self.assertNotIn("InterventionPollOpened", [event.event_type for event in events])
+        self.assertIn("DamageApplied", [event.event_type for event in events])
+        self.assertEqual(engine.state.players[target].damage, 1)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+
+    def test_gate_accept_relays_into_the_unchanged_poll(self):
+        engine = started()
+        _, attacker, target = self.attack(engine)
+        eligible = list(engine.state.pending.eligible_player_ids)
+        events = engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
+        self.assertEqual(events[0].event_type, "InterventionGateAccepted")
+        self.assertEqual(events[0].payload, {"targetPlayerId": target})
+        self.assertEqual(events[1].event_type, "InterventionPollOpened")
+        # the poll opens with exactly the fields it always had
+        self.assertEqual(
+            events[1].payload,
+            {"targetPlayerId": target, "attackerPlayerId": attacker, "eligiblePlayerIds": eligible},
+        )
+        pending = engine.state.pending
+        self.assertEqual(pending.context["stage"], "poll")
+        self.assertEqual(pending.context["responses"], {})
+        self.assertEqual(pending.eligible_player_ids, tuple(eligible))
+        self.assertEqual(pending.actor_player_id, target)
+        self.assertEqual(engine.state.phase, {"kind": "intervention", "stage": "poll", "activePlayerId": target})
+
+    def test_gate_decline_settles_the_attack_on_the_target(self):
+        engine = started()
+        _, attacker, target = self.attack(engine)
+        events = engine.apply(command(engine, "gate-no", target, "answer-intervention-request", need=False))
+        declined = next(event for event in events if event.event_type == "InterventionGateDeclined")
+        self.assertEqual(declined.payload, {"targetPlayerId": target, "reason": "target-declined"})
+        # the gate decline replaces the poll-decline event: nobody was polled
+        self.assertNotIn("InterventionDeclined", [event.event_type for event in events])
+        damage = next(event for event in events if event.event_type == "DamageApplied")
+        self.assertEqual(damage.payload["targetPlayerId"], target)
+        self.assertEqual(damage.payload["source"], "attack")
+        # the settlement drives the usual wound windows and dagger hand-off
+        self.assertEqual(engine.state.players[target].damage, 1)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        engine.apply(command(engine, "reveal", target, "choose-reveal", token="marker-0"))
+        self.assertEqual(engine.state.dagger_holder_id, target)
+        self.assertEqual(engine.state.phase, {"kind": "action", "activePlayerId": target})
+
+    def test_only_the_target_may_answer_the_gate(self):
+        engine = started()
+        _, attacker, target = self.attack(engine)
+        bystander = next(pid for pid in engine.state.pending.eligible_player_ids)
+        for actor in (attacker, bystander):
+            with self.subTest(actor=actor):
+                with self.assertRaises(RuleError) as error:
+                    engine.apply(command(engine, f"wrong-{actor}", actor, "answer-intervention-request", need=True))
+                self.assertEqual(error.exception.code, "intervention.not-target")
+        # the window is still armed and untouched after the rejections
+        self.assertEqual(engine.state.pending.context["stage"], "gate")
+
+    def test_answer_outside_the_gate_stage_is_rejected(self):
+        engine = started()
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "nothing", "p0", "answer-intervention-request", need=True))
+        self.assertEqual(error.exception.code, "intervention.not-open")
+        _, _, target = self.attack(engine)
+        engine.apply(command(engine, "gate-yes", target, "answer-intervention-request", need=True))
+        # once the poll stage took over, the answer command is stage-locked out
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "again", target, "answer-intervention-request", need=False))
+        self.assertEqual(error.exception.code, "intervention.not-gate")
+
+    def test_other_commands_are_rejected_while_the_gate_is_pending(self):
+        engine = started()
+        _, attacker, target = self.attack(engine)
+        responder = next(pid for pid in engine.state.pending.eligible_player_ids)
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "early-respond", responder, "respond-intervention", volunteer=True))
+        self.assertEqual(error.exception.code, "intervention.not-poll")
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "early-choose", target, "choose-intervention", responderPlayerId=responder))
+        self.assertEqual(error.exception.code, "intervention.not-choice")
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "early-decline", target, "decline-intervention"))
+        self.assertEqual(error.exception.code, "intervention.not-choice")
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "rush", attacker, "pass-dagger", targetPlayerId=target))
+        self.assertEqual(error.exception.code, "game.not-active")
+
+    def test_gate_timeout_declines_and_settles_the_attack(self):
+        # Q1:A — an unanswered gate counts as "no assistance needed": the
+        # timeout emits GateDeclined(timeout) and the attack settles
+        engine = started()
+        _, attacker, target = self.attack(engine)
+        events = engine.apply(command(engine, "timeout", None, "timeout-intervention", stage="gate"))
+        declined = next(event for event in events if event.event_type == "InterventionGateDeclined")
+        self.assertEqual(declined.payload, {"targetPlayerId": target, "reason": "timeout"})
+        self.assertNotIn("InterventionDeclined", [event.event_type for event in events])
+        self.assertIn("DamageApplied", [event.event_type for event in events])
+        self.assertEqual(engine.state.players[target].damage, 1)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+
+    def test_gate_timeout_payload_stage_must_match_the_armed_window(self):
+        engine = started()
+        _, _, _target = self.attack(engine)
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "wrong-stage", None, "timeout-intervention", stage="poll"))
+        self.assertEqual(error.exception.code, "intervention.not-open")
+
+
 class InterventionPollBranchTests(unittest.TestCase):
     """The volunteer poll model (issue 23 / ADR 0002)."""
 
@@ -1793,9 +1987,11 @@ class InterventionPollBranchTests(unittest.TestCase):
         return engine
 
     def attack(self, engine):
+        """Open a poll-window test baseline: attack, then accept the gate."""
         attacker = engine.state.dagger_holder_id
         target = next(pid for pid in engine.state.players if pid != attacker)
         engine.apply(command(engine, "attack-1", attacker, "attack", targetPlayerId=target))
+        engine.apply(command(engine, "gate-accept-1", target, "answer-intervention-request", need=True))
         return attacker, target
 
     def test_host_timeout_configuration_is_fixed_at_start(self):

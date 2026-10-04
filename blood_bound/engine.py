@@ -12,8 +12,10 @@ from .projection import legal_actions as _legal_actions, project_state as _proje
 
 Clock = Callable[[], float]
 
-# Host-configurable intervention poll timeout (issue 23 / ADR 0002). The value
-# is fixed at start-game time and covers both poll phases: the volunteer vote
+# Host-configurable intervention timeout (issue 23 / ADR 0002, ADR 0012). The
+# value is fixed at start-game time and covers all three intervention windows,
+# each with its own independent countdown: the target's request gate
+# (unanswered counts as no assistance needed, ADR 0012), the volunteer vote
 # (unanswered players count as not volunteering) and the target's choice among
 # >=2 volunteers (timeout declines all of them).
 INTERVENTION_TIMEOUT_CHOICES = (30, 60, 90, 120, 180)
@@ -153,6 +155,10 @@ class RulesEngine:
             EngineState(
                 schema_version=2,
                 ruleset_id="blood-bound-compatible",
+                # 0.6: intervention request gate (ADR 0012, 2026-10-04) — after a
+                # dagger attack only the target is asked whether others may
+                # volunteer (stage "gate" before the poll); timeout counts as no
+                # assistance needed and settles the attack on the target.
                 # 0.5: rule-coupling batch 2026-10-03 — victim-choice reveals for
                 # skill damage (ADR 0006), the skill-window general rule with the
                 # mentalist's seal (ADR 0009), the captured inquisitor's solo win
@@ -160,7 +166,7 @@ class RulesEngine:
                 # timeouts (ADR 0011) and the wild question-mark reveal (issue 26).
                 # 0.4: curse distribution became a reveal-triggered skill (ADR 0003);
                 # 0.3 saves are explicitly rejected, affected games must be rebuilt.
-                ruleset_version="0.5",
+                ruleset_version="0.6",
                 game_id=game_id,
                 seed=seed,
             ),
@@ -173,7 +179,7 @@ class RulesEngine:
 
     @classmethod
     def resume_from_checkpoint(cls, checkpoint: EngineState, *, clock: Clock | None = None) -> "RulesEngine":
-        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.5":
+        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.6":
             raise RuleError("state.invalid", reason="unsupported schema version")
         engine = cls(deepcopy(checkpoint), clock=clock)
         cls._validate(engine.state)
@@ -228,6 +234,7 @@ class RulesEngine:
             "pass-dagger": self._pass_dagger,
             "attack": self._attack,
             "respond-intervention": self._respond_intervention,
+            "answer-intervention-request": self._answer_intervention_request,
             "choose-intervention": self._choose_intervention,
             "decline-intervention": self._decline_intervention,
             "timeout-intervention": self._timeout_intervention,
@@ -368,15 +375,21 @@ class RulesEngine:
         events = [self._event(state, command, "AttackDeclared", {"attackerPlayerId": actor.player_id, "targetPlayerId": target.player_id})]
         if not eligible:
             # Nobody may volunteer (e.g. the target holds a fan): the attack
-            # resolves immediately without opening a poll.
+            # resolves immediately without opening a gate or a poll (ADR 0012
+            # moves the empty-set short-circuit ahead of the gate; nobody
+            # could answer, so the window would be pure noise).
             events.extend(
                 self._resolve_damage(state, command, target.player_id, "attack", active_player_id=actor.player_id)
             )
             return events
-        # The engine records the poll's stage but never a wall-clock deadline:
-        # replay determinism forbids real time in authoritative state. The
-        # server owns the countdown (deadline = window opened + configured
-        # seconds) and resolves expiry via the timeout-intervention command.
+        # ADR 0012: the attack first opens the target's request gate — only
+        # the attacked player may decide whether the volunteer poll opens at
+        # all. The gate reuses the intervention pending with stage "gate".
+        # The engine records the window's stage but never a wall-clock
+        # deadline: replay determinism forbids real time in authoritative
+        # state. The server owns the countdown (deadline = window opened +
+        # configured seconds) and resolves expiry via the timeout-intervention
+        # command.
         state.pending = Pending(
             "intervention",
             target.player_id,
@@ -384,16 +397,15 @@ class RulesEngine:
             eligible,
             context={
                 "attackerPlayerId": actor.player_id,
-                "stage": "poll",
-                "responses": {},
+                "stage": "gate",
             },
         )
-        state.phase = {"kind": "intervention", "stage": "poll", "activePlayerId": target.player_id}
+        state.phase = {"kind": "intervention", "stage": "gate", "activePlayerId": target.player_id}
         events.append(
             self._event(
                 state,
                 command,
-                "InterventionPollOpened",
+                "InterventionGateOpened",
                 {
                     "targetPlayerId": target.player_id,
                     "attackerPlayerId": actor.player_id,
@@ -476,6 +488,49 @@ class RulesEngine:
             self._event(state, command, "InterventionDeclined", {"targetPlayerId": target_id, "reason": reason})
         ] + self._resolve_damage(state, command, target_id, "attack", active_player_id=active_player_id)
 
+    def _answer_intervention_request(self, state: EngineState, command: Command) -> list[Event]:
+        """The target's answer to the request gate (ADR 0012): open the poll or take the hit."""
+        pending = self._require_pending(state, command, "intervention")
+        if pending.context.get("stage") != "gate":
+            raise RuleError("intervention.not-gate")
+        if pending.actor_player_id != command.actor_player_id:
+            raise RuleError("intervention.not-target")
+        if bool(command.payload.get("need", False)):
+            # The poll opens exactly as it did pre-gate: same pending object,
+            # same fields, only the context flips to the poll stage (the stage
+            # mutation mirrors _close_poll's poll -> choice relay).
+            pending.context["stage"] = "poll"
+            pending.context["responses"] = {}
+            state.phase = {"kind": "intervention", "stage": "poll", "activePlayerId": pending.actor_player_id}
+            return [
+                self._event(state, command, "InterventionGateAccepted", {"targetPlayerId": pending.target_player_id}),
+                self._event(
+                    state,
+                    command,
+                    "InterventionPollOpened",
+                    {
+                        "targetPlayerId": pending.target_player_id,
+                        "attackerPlayerId": pending.context.get("attackerPlayerId"),
+                        "eligiblePlayerIds": list(pending.eligible_player_ids),
+                    },
+                ),
+            ]
+        return self._decline_gate(state, command, pending, reason="target-declined")
+
+    def _decline_gate(self, state: EngineState, command: Command, pending: Pending, *, reason: str) -> list[Event]:
+        """Close the gate with the attack settling on the original target.
+
+        The same settlement the nobody-volunteered poll path runs, but with the
+        gate's own decline event: nobody was polled, so no InterventionDeclined
+        is emitted.
+        """
+        active_player_id = pending.context.get("attackerPlayerId", command.actor_player_id)
+        state.pending = None
+        target_id = pending.target_player_id or ""
+        return [
+            self._event(state, command, "InterventionGateDeclined", {"targetPlayerId": target_id, "reason": reason})
+        ] + self._resolve_damage(state, command, target_id, "attack", active_player_id=active_player_id)
+
     def _choose_intervention(self, state: EngineState, command: Command) -> list[Event]:
         pending = self._require_pending(state, command, "intervention")
         if pending.context.get("stage") != "choice":
@@ -501,6 +556,11 @@ class RulesEngine:
         stage = pending.context.get("stage")
         if command.payload.get("stage", stage) != stage:
             raise RuleError("intervention.not-open")
+        if stage == "gate":
+            # Q1 (ADR 0012): an unanswered gate counts as "no assistance
+            # needed" — GateDeclined(timeout), then the attack settles on the
+            # target. This branch must stay ahead of the choice fallthrough.
+            return self._decline_gate(state, command, pending, reason="timeout")
         if stage == "poll":
             # Timeout counts every unanswered player as not volunteering.
             responses: dict[str, bool] = pending.context["responses"]

@@ -13,9 +13,18 @@ def reveal_rank(engine, player_id, command_id="reveal-rank"):
 
 
 def decline_poll(engine):
-    """Answer the open intervention poll: every eligible player declines to volunteer."""
-    while engine.state.pending and engine.state.pending.kind == "intervention" and engine.state.pending.context.get("stage") == "poll":
+    """Walk an attack through to a fully declined volunteer poll: the target
+    accepts the request gate (ADR 0012), then every eligible player declines."""
+    while engine.state.pending and engine.state.pending.kind == "intervention":
         pending = engine.state.pending
+        stage = pending.context.get("stage")
+        if stage == "gate":
+            engine.apply(
+                command(engine, f"gate-{engine.state.revision}", pending.actor_player_id, "answer-intervention-request", need=True)
+            )
+            continue
+        if stage != "poll":
+            break
         responses = pending.context["responses"]
         responder = next(pid for pid in pending.eligible_player_ids if pid not in responses)
         engine.apply(command(engine, f"respond-{engine.state.revision}", responder, "respond-intervention", volunteer=False))
@@ -192,6 +201,43 @@ class ProjectionTests(unittest.TestCase):
         # a non-holder has no actions in the action phase
         other = next(pid for pid in engine.state.players if pid != holder)
         self.assertEqual(project_state(engine.state, other)["legalActions"], [])
+
+    def test_gate_window_offers_the_answer_to_the_target_only(self):
+        engine = self.started()
+        attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid != attacker)
+        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        # only the attacked player holds the answer actions during the gate
+        self.assertEqual(
+            project_state(engine.state, target)["legalActions"],
+            [
+                {"type": "answer-intervention-request", "need": True},
+                {"type": "answer-intervention-request", "need": False},
+            ],
+        )
+        other = next(pid for pid in engine.state.players if pid not in (attacker, target))
+        self.assertEqual(project_state(engine.state, other)["legalActions"], [])
+        self.assertEqual(project_state(engine.state, attacker)["legalActions"], [])
+        self.assertEqual(project_state(engine.state)["legalActions"], [])
+
+    def test_gate_pending_view_carries_stage_and_eligible_but_no_votes(self):
+        engine = self.started()
+        attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid != attacker)
+        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=target))
+        eligible = list(engine.state.pending.eligible_player_ids)
+        for viewer in (target, attacker, None):
+            view = project_state(engine.state, viewer)
+            self.assertEqual(view["pending"]["stage"], "gate")
+            self.assertEqual(view["pending"]["eligiblePlayerIds"], eligible)
+            # votes only exist once the poll opens
+            self.assertNotIn("responses", view["pending"])
+            self.assertNotIn("volunteerPlayerIds", view["pending"])
+        # the spectator's pending view carries nothing a player's does not
+        self.assertEqual(
+            project_state(engine.state)["pending"],
+            project_state(engine.state, target)["pending"],
+        )
 
     def test_rank_two_skill_window_offers_valid_targets(self):
         engine = self.started(6)
