@@ -1,7 +1,7 @@
 # 审判者诅咒分发改为亮等级技能窗口（含真假标注与攻击过滤）
 
 Type: task
-Status: ready-for-agent
+Status: resolved（2026-09-05 实现，commit f80018d，ruleset 0.4；收尾记录见本文件末尾 Comments）
 ADR: docs/adr/0003-inquisitor-curse-as-reveal-triggered-skill.md
 裁决日期: 2026-09-05（产品方 grilling 裁决）
 
@@ -76,3 +76,9 @@ ADR: docs/adr/0003-inquisitor-curse-as-reveal-triggered-skill.md
 - 用户实测观察到的"给了一次刀之后仍显示可以用技能"即旧常驻入口所致；新模型下该入口不复存在。
 - 上线影响：当前测试房间（0.3 版本）在部署后作废，需重建对局。
 - 词表已同步：CONTEXT.md 新增真诅咒/假诅咒条目，改写诅咒卡与技能窗口条目。
+
+## Comments
+
+### 2026-10-04 状态补记
+
+- 实现与验收详见 `issues/01-inquisitor-curse-skill.md`（resolved）：commit f80018d（ruleset 0.3 → 0.4 硬切，ADR 0003），e2e 驱动 `.scratch/e2e-curse.py`。本 spec 头部 Status 此前漏更，2026-10-04 补刷为 resolved。

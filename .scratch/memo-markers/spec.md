@@ -1,7 +1,7 @@
 # 玩家备忘标记（玩家框右上角的私有备忘角标）
 
 Type: task
-Status: ready-for-agent
+Status: resolved（2026-09-05 实现，commit 6c5ce08；收尾记录见本文件末尾 Comments）
 ADR: docs/adr/0004-memo-markers-client-only.md
 裁决日期: 2026-09-05（产品方 grilling 裁决，CONTEXT.md 已增"备忘标记"词条）
 
@@ -66,3 +66,9 @@ ADR: docs/adr/0004-memo-markers-client-only.md
 
 - 徽记不是阵营事实（rank 3 徽记恒为敌对家族、审判者徽记随机），自动填充的初始颜色只是"所见"，不是真相——词表已明确备忘标记始终是猜测，与公开亮牌矛盾时无需一致。
 - 文档已随裁决落盘：CONTEXT.md 新增"备忘标记 (Memo Marker)"词条；ADR 0004 记录"纯客户端本地状态"决策与被否决的备选方案。
+
+## Comments
+
+### 2026-10-04 状态补记
+
+- 实现与验收详见 `issues/01-memo-markers.md`（resolved）：commit 6c5ce08（纯前端，ADR 0004），含同名接管座位回归与 e2e-memo 驱动配方。本 spec 头部 Status 此前漏更，2026-10-04 补刷为 resolved。

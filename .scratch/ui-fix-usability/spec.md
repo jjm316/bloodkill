@@ -72,3 +72,7 @@ Status: resolved
 - 实现：服务端单点修复（`error_message` 的 `code=` 关键字冲突 → `roomCode=`）+ WsHandshakeTests 回归；客户端 useSocket 初始进房 10s 超时（从挂载起算，覆盖"服务器未启动"；首份状态到达即解除）、GameScreen 失败 Banner 与 `room.not-found` 文案映射、标签页标题 `鲜血盟约 #房间号`（离开还原）；CSS `--panel-max-width: min(380px, calc(100vw - 32px))`（大厅/回放加载/弹窗，banner 同族 420px 版）、≤480px 座位区 CSS Grid、`body overflow-x: hidden` 兜底；index.html `lang=zh-CN` / 标题 / 内联血滴 SVG favicon / theme-color #12141a。PROTOCOL.md 补一行 ws 不存在房间的行为说明（仅文档，帧结构未动）。
 - 自动化：vitest 新增 `client/src/joinFailure.test.tsx` 三例（10s 无应答 → 失败 Banner + 返回大厅；已收过状态的断线静默 120s 不触发失败态；room.not-found 错误帧 → 立即"房间不存在"）；后端 unittest 全量 155 例通过。
 - 视觉验收（Chrome DevTools 真实渲染，判据 `document.documentElement.scrollWidth <= window.innerWidth` + 人工目检截图）：390×844 与 1440×900 两档下，大厅 / 等待房 / 对局桌面 / 挡刀弹窗全部无横向溢出；390 下座位两列网格、备忘选择器浮层在屏内（8–252px）；错房间号一键链接秒级显示"无法加入房间 / 房间不存在，请核对房间号"，返回大厅后标题还原；uvicorn.log 无 TypeError。驱动脚本 `.scratch/ui-usability-visual.py`（setup/start/attack）。
+
+### 2026-10-04 第三批（Spec C）取消
+
+- 用户裁决：Out of Scope 中推迟到第三批 Spec C 的四项——动效、横幅合并、倒计时紧迫态、复制分享——不再推进，直接关闭（wontfix）。UI 三批至此全部收口：Spec A（本 spec）与 Spec B（圆桌主题，`ui-table-theme`）已实现，Spec C 取消，不另立 spec。若日后重启，按 `ui-polish` 的先例拆小票再立项。
