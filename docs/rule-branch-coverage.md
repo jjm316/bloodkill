@@ -4,7 +4,7 @@
 [`tests/test_engine.py`](../tests/test_engine.py)、[`tests/test_projection.py`](../tests/test_projection.py)、
 [`tests/test_rule_branches.py`](../tests/test_rule_branches.py)、[`tests/test_properties.py`](../tests/test_properties.py)
 与 [`tests/test_golden_replays.py`](../tests/test_golden_replays.py)（golden 回放双向验证 +
-规则耦合批次的分支覆盖锁 `GoldenBranchCoverageTests`，ruleset 0.5）。
+规则耦合批次的分支覆盖锁 `GoldenBranchCoverageTests`，ruleset 0.6）。
 性质测试的随机 sweep 对多数分支给出额外的「随机路径」覆盖，下表只列确定性测试。
 
 标记说明：
@@ -17,7 +17,7 @@ Issue 23 branch additions (干涉投票模型，ADR 0002):
 
 | Branch | Behavior | Coverage |
 | --- | --- | --- |
-| `attack` 自动开投票 | `InterventionPollOpened` + 资格名单 + poll 阶段 pending | `AttackBranchTests.test_attack_opens_poll_hands_dagger_and_lists_eligible` |
+| `attack` 自动开投票 | 攻击先开目标门控（ADR 0012），目标 `need=true` 后 `InterventionPollOpened` + 资格名单 + poll 阶段 pending | `AttackBranchTests.test_attack_opens_gate_then_poll_hands_dagger_and_lists_eligible` |
 | `attack` 资格集为空 | 不开投票直接结算（持扇注入） | `AttackBranchTests.test_fan_target_blocks_all_intervention_responders`、`test_attack_with_no_eligible_resolves_damage_directly` |
 | `respond-intervention` 守卫 | 非资格者/攻击者/目标 → `intervention.not-eligible`；重复表态 → `intervention.already-responded`；无窗口 → `intervention.not-open` | `AttackBranchTests.test_respond_guards_target_attacker_and_double_answers`、`test_respond_without_window_is_rejected` |
 | 0 人自愿 | `InterventionDeclined`(no-volunteers) + 攻击正常结算 + 匕首归目标 | `AttackBranchTests.test_all_declining_attack_leaves_dagger_with_wounded_target` |
@@ -29,7 +29,7 @@ Issue 23 branch additions (干涉投票模型，ADR 0002):
 | 超时守卫 | 阶段不匹配/无窗口 → `intervention.not-open` | `InterventionPollBranchTests.test_timeout_guards` |
 | 超时配置 | start-game 携带 30/60/90/120/180，非法值 `game.invalid-timeout`，缺省 90，开始后固定 | `InterventionPollBranchTests.test_host_timeout_configuration_is_fixed_at_start`、`test_default_timeout_is_ninety_seconds`、`test_invalid_timeout_choice_is_rejected` |
 | 服务端倒计时 | Room 持有窗口 deadline 并注入投影；到期定时器代发 `timeout-intervention`；重启后过期窗口立即可结算 | `DeadlineWindowTests`（test_server_sync.py） |
-| 投影公开性 | pending 携带 stage/responses/volunteerPlayerIds，旁观者同见；context 不暴露 | `ProjectionBranchTests.test_pending_intervention_actions_across_poll_and_choice_stages`、`test_pending_view_hides_private_context_and_publishes_votes` |
+| 投影公开性 | pending 携带 stage/responses/volunteerPlayerIds，旁观者同见；context 不暴露 | `ProjectionBranchTests.test_pending_intervention_actions_across_gate_poll_and_choice_stages`、`test_pending_view_hides_private_context_and_publishes_votes` |
 | 默认不挡刀 | 客户端 localStorage 偏好 + 常驻开关 + 自动代发（服务端超时兜底断线） | 手动验收；代发走同一 `respond-intervention` 命令路径 |
 
 Issue 05 branch additions (单人窗口超时，ADR 0011):
@@ -77,6 +77,22 @@ Issue 26 branch additions（wild 色选窗「问号」选项，ruleset 0.5 批�
 | 自选问号亮牌 | 审判者主动选「？」→ `ClueRevealed.value = "unknown"`；非 wild 标记照旧无色选；引擎接受 unknown（05 的超时默认同一入口） | `ProjectionBranchTests.test_wild_marker_colour_window_offers_the_question_mark`；golden 奇数局回放含玩家自选与超时默认两路（`GoldenBranchCoverageTests.test_some_golden_reveals_a_wild_marker_as_the_question_mark`） |
 | 客户端第三钮 | 选色浮层按服务端选项渲染第三钮（灰样式「？」，文案「问号」）——按钮列表是投影选项的直通渲染，无独立客户端测试 | 人工验收（浮层按钮由 `selfActions` 逐条映射，Board.tsx `COLOR_LABELS`/`MARKER_DOTS` 提供文案与灰样式） |
 
+ADR 0012 branch additions（干涉请求门控 `intervention.gate`，ruleset 0.6 批次）:
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| 门控开窗 | 攻击后 pending stage=gate、目标独占 actor；`InterventionGateOpened`（target/attacker/eligiblePlayerIds），随后才可能有投票 | `InterventionGateBranchTests.test_gate_opens_with_target_as_actor_and_the_eligible_list`；`AttackBranchTests.test_attack_opens_gate_then_poll_hands_dagger_and_lists_eligible` |
+| 静默跳过 | 资格集为空零门控事件、直接结算（持扇/无资格照旧） | `InterventionGateBranchTests.test_empty_eligible_set_skips_the_gate_with_zero_gate_events`；`AttackBranchTests.test_fan_target_blocks_all_intervention_responders`、`test_attack_with_no_eligible_resolves_damage_directly` |
+| 独占合法性 | 他人发答 → `intervention.not-target`；非门控阶段发答 → `intervention.not-gate` | `InterventionGateBranchTests.test_only_the_target_may_answer_the_gate`、`test_answer_outside_the_gate_stage_is_rejected` |
+| 期间互斥 | 门控期间 respond/choose/decline/attack 均被拒 | `InterventionGateBranchTests.test_other_commands_are_rejected_while_the_gate_is_pending` |
+| 接受接力 | `need=true` → `InterventionGateAccepted` + `InterventionPollOpened`，poll 字段与门控前完全一致 | `InterventionGateBranchTests.test_gate_accept_relays_into_the_unchanged_poll` |
+| 拒绝结算 | `need=false` → `InterventionGateDeclined`(target-declined) + 立即结算（伤害、亮牌窗、技能窗照常） | `InterventionGateBranchTests.test_gate_decline_settles_the_attack_on_the_target` |
+| 超时结算 | `timeout-intervention {stage:"gate"}` → `InterventionGateDeclined`(timeout) + 结算；payload stage 必须匹配在押窗口 | `InterventionGateBranchTests.test_gate_timeout_declines_and_settles_the_attack`、`test_gate_timeout_payload_stage_must_match_the_armed_window` |
+| 门控投影 | 仅目标 legalActions 含两条 `answer-intervention-request`；pending 携带 stage/eligiblePlayerIds，观众无私密泄露；deadline 由服务端注入 | `ProjectionTests.test_gate_window_offers_the_answer_to_the_target_only`、`test_gate_pending_view_carries_stage_and_eligible_but_no_votes`；`ProjectionBranchTests.test_pending_intervention_actions_across_gate_poll_and_choice_stages` |
+| 服务端门控窗 | 窗口跟踪 + meta 持久化（windowStage=gate）；投影带 deadline；静默到期结算；接受接力新 poll 窗（deadline 严格后移）；重启后过期门控立即补发 | `DeadlineWindowTests.test_gate_window_is_tracked_persisted_and_cleared`、`test_gate_projection_carries_deadline_and_eligibles`、`test_scheduler_expiry_settles_a_silent_gate`、`test_gate_accept_relays_to_a_fresh_poll_window`、`test_expired_gate_window_fires_immediately_after_restore` |
+| golden 分支锁 | 走查器首门控接受（投票分支覆盖不缩水）、次门控拒绝（target-declined 混入）、后续全接受；每个 fixture 锁接受接力和拒绝免投票结算两路 | `GoldenBranchCoverageTests.test_every_golden_accepts_a_gate_and_relays_it_into_a_poll`、`test_every_golden_mixes_a_target_declined_gate` |
+| 前端门控层 | 弹窗渲染/按钮命令/倒计时、no-assist 代发与防重复、四条「干涉」日志、门控窗与单人窗口互斥 | client vitest（ticket 04：`client/src/interventionGate.test.tsx` 等）；e2e 见 `.scratch/e2e-gate.py` |
+
 ## 引擎分支
 
 | 分支 | 行为 | 覆盖测试 |
@@ -95,9 +111,9 @@ Issue 26 branch additions（wild 色选窗「问号」选项，ruleset 0.5 批�
 | `join` 自动选座 | 最小空闲座位 + `PlayerJoined` | `SetupBranchTests.test_auto_seat_assigns_lowest_free_seat` |
 | `start` 非 setup | `game.not-setup` | `SetupBranchTests.test_second_start_is_rejected` |
 | `start` 人数不足 | `game.player-count` | `SetupBranchTests.test_start_with_fewer_than_six_is_rejected` |
-| `start` 偶数局 | 双家族各半、无诅咒 | `RulesEngineTests.test_setup_is_deterministic_and_odd_games_have_one_curse`；golden 6/8/10/12 |
+| `start` 偶数局 | 双家族各半、无诅咒 | `RulesEngineTests.test_setup_is_deterministic_and_odd_games_deal_true_and_false_curses`；golden 6/8/10/12 |
 | `start` 奇数局 | 审判者 + 1 诅咒 | 同上；golden 7/9/11 |
-| `start` 身份发放 | 不重复 rank、随机匕首持有者、`GameStarted` | `RulesEngineTests.test_setup_is_deterministic_and_odd_games_have_one_curse` |
+| `start` 身份发放 | 不重复 rank、随机匕首持有者、`GameStarted` | `RulesEngineTests.test_setup_is_deterministic_and_odd_games_deal_true_and_false_curses` |
 | `pass-dagger` 相位/持有者 | `game.not-active` / `player.not-dagger-holder` | `CommandGuardBranchTests.test_pass_by_non_holder_is_rejected`、`test_action_command_during_intervention_window_is_rejected` |
 | `pass-dagger` 传给自己 | `target.not-eligible` | `CommandGuardBranchTests.test_pass_to_self_is_rejected` |
 | `pass-dagger` 合法 | `DaggerPassed` + 相位 | `RulesEngineTests.test_pass_dagger_and_idempotency` |
@@ -105,7 +121,7 @@ Issue 26 branch additions（wild 色选窗「问号」选项，ruleset 0.5 批�
 | `attack` 攻击自己 | `target.not-eligible` | `CommandGuardBranchTests.test_attack_to_self_is_rejected` |
 | `attack` 盾目标 | `target.shielded`（注入） | `AttackBranchTests.test_shielded_target_is_rejected` |
 | `attack` 审判者攻 3 伤 | `target.already-three-damage`（注入） | `AttackBranchTests.test_inquisitor_cannot_attack_target_with_three_damage` |
-| `attack` 合法 | `AttackDeclared` + `InterventionPollOpened`、匕首移交、投票资格名单 | `AttackBranchTests.test_attack_opens_poll_hands_dagger_and_lists_eligible` |
+| `attack` 合法 | `AttackDeclared` + `InterventionGateOpened`（资格集非空时）、匕首移交、投票资格名单 | `AttackBranchTests.test_attack_opens_gate_then_poll_hands_dagger_and_lists_eligible` |
 | `attack` 目标持扇/资格集空 | 不开投票、直接结算伤害（注入） | `AttackBranchTests.test_fan_target_blocks_all_intervention_responders`、`test_attack_with_no_eligible_resolves_damage_directly` |
 | `respond-intervention` 窗口/资格 | `intervention.not-open` / `intervention.not-eligible`（攻击者、目标均不可表态） | `AttackBranchTests.test_respond_guards_target_attacker_and_double_answers`、`test_respond_without_window_is_rejected` |
 | `respond-intervention` 不可反悔 | 二次表态 → `intervention.already-responded` | `AttackBranchTests.test_respond_guards_target_attacker_and_double_answers` |
@@ -149,7 +165,7 @@ Issue 26 branch additions（wild 色选窗「问号」选项，ruleset 0.5 批�
 | `legal_actions` 行动阶段 | 仅匕首持有者有 pass/attack；盾目标不可攻击；审判者的攻击列表过滤已受 3 伤目标（他人不受限） | `ProjectionTests.test_dagger_holder_actions_are_derived_from_authority`；`ProjectionTests.test_inquisitor_attack_actions_filter_three_damage_targets` |
 | `legal_actions` 诅咒技能窗 | 审判者=放弃+发动两项，他人与观众无动作；分发完成后任何 viewer 不再有分发/技能动作 | `ProjectionTests.test_curse_window_offers_decline_and_use_to_the_inquisitor_only`、`test_after_distribution_no_viewer_has_a_curse_entry_point` |
 | `legal_actions` 技能窗 | rank 2 列出目标；rank 1 无目标；rank 7 持盾 owner 也给发动选项（ADR 0010，旧"只给放弃"特判已删） | `ProjectionTests.test_rank_two_skill_window_offers_valid_targets`；`ProjectionBranchTests.test_elder_skill_window_offers_use_without_a_target`；`SkillBranchTests.test_shielded_berserker_volunteer_can_react` |
-| `legal_actions` 干涉窗 | 投票阶段逐人 respond、三选一阶段目标专属选项 | `ProjectionBranchTests.test_pending_intervention_actions_across_poll_and_choice_stages` |
+| `legal_actions` 干涉窗 | 投票阶段逐人 respond、三选一阶段目标专属选项 | `ProjectionBranchTests.test_pending_intervention_actions_across_gate_poll_and_choice_stages` |
 | `legal_actions` 终局/未知玩家 | 空列表 | `ProjectionBranchTests.test_legal_actions_empty_for_unknown_player_and_ended_game` |
 | `_pending_view` | 不暴露私有 context；stage/responses/volunteerPlayerIds 公开 | `ProjectionBranchTests.test_pending_view_hides_private_context_and_publishes_votes` |
 | 投影保密 sweep | 任意 viewer 不泄露 seed/他人身份/诅咒 | 性质 `ProjectionSecrecyPropertyTests` |
