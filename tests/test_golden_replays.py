@@ -66,5 +66,112 @@ class GoldenReplayTests(unittest.TestCase):
                 self.assertEqual(regenerated, fixture)
 
 
+class GoldenBranchCoverageTests(unittest.TestCase):
+    """The rule-coupling batch (issue 07) deliberately routes the deterministic
+    runner through the new branches so every golden regeneration replays them.
+    These checks fail loudly if a future runner change quietly drops one, so
+    the dedicated unit tests never become the only witnesses."""
+
+    def fixtures(self):
+        for count in range(6, 13):
+            yield count, json.loads((FIXTURE_DIR / f"golden-{count}.json").read_text(encoding="utf-8"))
+
+    @staticmethod
+    def payloads(document, event_type):
+        return [record["event"]["payload"] for record in document["events"] if record["event"]["eventType"] == event_type]
+
+    @staticmethod
+    def commands(document, command_type):
+        return [record for record in document["commands"] if record["type"] == command_type]
+
+    @classmethod
+    def skill_use_commands(cls, document, rank):
+        """The choose-skill use commands whose owner used the given rank."""
+        used = {payload["playerId"]: payload["rank"] for payload in cls.payloads(document, "SkillUsed")}
+        return [
+            record for record in cls.commands(document, "choose-skill")
+            if record["payload"].get("use") and used.get(record["actorPlayerId"]) == rank
+        ]
+
+    def test_some_golden_uses_the_assassin_skill_and_its_victim_answers_reveal_windows(self):
+        # ADR 0006: the rank-2 skill's two wounds open victim-choice reveal
+        # windows on a player other than the attack victim.
+        for count, document in self.fixtures():
+            use_commands = self.skill_use_commands(document, 2)
+            if not use_commands:
+                continue
+            target_id = use_commands[0]["payload"]["targetPlayerId"]
+            target = document["snapshot"]["players"][target_id]
+            self.assertEqual(target["damage"], 2, f"golden-{count}: the assassin's target should carry exactly the two skill wounds")
+            self.assertEqual(
+                [token for token in target["revealed"] if token.startswith("marker-")],
+                ["marker-0", "marker-1"],
+                f"golden-{count}: the wounds must have been revealed through the victim's own choices",
+            )
+            self.assertTrue(any(c["actorPlayerId"] == target_id for c in self.commands(document, "choose-reveal")))
+            return
+        self.fail("no golden fixture exercises the assassin's skill damage")
+
+    def test_some_golden_seals_a_rank_through_the_mentalist_skill(self):
+        # ADR 0009 plan A: the rank-5 skill force-reveals its target's rank and
+        # writes it into skills_used — sealed, so the reveal opens no window.
+        for count, document in self.fixtures():
+            use_commands = self.skill_use_commands(document, 5)
+            if not use_commands:
+                continue
+            target_id = use_commands[0]["payload"]["targetPlayerId"]
+            target = document["snapshot"]["players"][target_id]
+            self.assertIn("rank", target["revealed"], f"golden-{count}: the mentalist must have force-revealed the rank")
+            self.assertIn(str(target["rank"]), target["skillsUsed"], f"golden-{count}: the forced rank must be sealed into skills_used")
+            self.assertFalse(
+                any(p["playerId"] == target_id for p in self.payloads(document, "SkillWindowOpened")),
+                f"golden-{count}: a sealed rank must never open a skill window",
+            )
+            return
+        self.fail("no golden fixture exercises the mentalist's seal")
+
+    def test_every_golden_carries_a_timeout_reveal_and_one_a_timeout_skill(self):
+        # ADR 0011: the scheduler's timeout commands are ordinary public
+        # commands, so they replay deterministically through the save pipeline.
+        skill_timeout_counts = 0
+        for count, document in self.fixtures():
+            self.assertTrue(self.commands(document, "timeout-reveal"), f"golden-{count}: the first reveal window must resolve through the timeout command")
+            self.assertTrue(
+                any(p.get("reason") == "timeout" for p in self.payloads(document, "ClueRevealed")),
+                f"golden-{count}: the timed-out reveal must be audited with its reason",
+            )
+            declined = [p for p in self.payloads(document, "SkillDeclined") if p.get("reason") == "timeout"]
+            if self.commands(document, "timeout-skill"):
+                self.assertTrue(declined, f"golden-{count}: a timed-out skill window must leave a reasoned SkillDeclined")
+                skill_timeout_counts += 1
+        self.assertTrue(skill_timeout_counts, "no golden fixture exercises the skill-window timeout")
+
+    def test_some_golden_reveals_a_wild_marker_as_the_question_mark(self):
+        # Issue 26: the inquisitor's wild markers can be revealed as the
+        # question mark, both by choice and through the timeout default — both
+        # reveals must belong to the wild holder, not to any plain "?" marker.
+        for count, document in self.fixtures():
+            wild_holders = {
+                player_id for player_id, player in document["snapshot"]["players"].items()
+                if "wild" in player["identityMarkers"]
+            }
+            chosen = [
+                record for record in self.commands(document, "choose-reveal")
+                if record["payload"].get("color") == "unknown" and record["actorPlayerId"] in wild_holders
+            ]
+            timed_out = [
+                payload for payload in self.payloads(document, "ClueRevealed")
+                if payload.get("reason") == "timeout" and payload["value"] == "unknown" and payload["playerId"] in wild_holders
+            ]
+            if not chosen or not timed_out:
+                continue
+            self.assertTrue(
+                any(p["kind"].startswith("marker-") for p in timed_out),
+                f"golden-{count}: the wild default should time out on a marker token",
+            )
+            return
+        self.fail("no golden fixture reveals a wild marker as the question mark both by choice and by timeout")
+
+
 if __name__ == "__main__":
     regenerate_fixtures()

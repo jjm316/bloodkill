@@ -1,7 +1,7 @@
 # wild 万能标记色选窗增加「问号」选项
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 
 ## 产品裁决
 
@@ -48,3 +48,5 @@ Status: ready-for-agent
 - 2026-10-03：规则共识访谈侧聊中用户提出并拍板开票。现状核查由主线程完成（引擎/投影/客户端三层行号见上），实现留待后续批次。
 - 2026-10-03（主线程共识落盘）：第 4 节文档同步中的语料与 CONTEXT.md 两项已随规则共识批次完成——语料「产品方裁决（2026-10-03）」小节已记「wild 身份标记含问号」条目并改写 `damage.reveal` 待验收与 fleur cross 行；CONTEXT.md「线索 token」词条已改"自选玫、兽或问号"。剩余：引擎/投影/客户端三处代码、helpContent 审判者条目、测试与版本（随 ruleset 0.4→0.5 批次，见 `.scratch/rule-coupling-review/spec.md`）。
 - 2026-10-03（issue 05 落地）：改动面第 1 条的引擎前置已随 `.scratch/rule-coupling-review/issues/05-single-window-timeouts.md` 先行落地——`_reveal_token` 的 wild 颜色校验集已扩为 `{"rose", "beast", "unknown"}`（超时默认问号需要它），引擎侧此票仅剩零工作。剩余：投影三选项展开（projection.py wild 仍只给玫/兽）、客户端 COLOR_LABELS 与浮层第三钮、helpContent 审判者条目、本票自己的分支测试与 ruleset bump。
+
+- 2026-10-04（随 07 批次销案）：剩余三处代码已落地——`projection.py` wild token 展开为玫/兽/？三条 `choose-reveal`；`Board.tsx` `COLOR_LABELS` 增加 `unknown: "问号"`，选色浮层第三钮用 `MARKER_DOTS` 灰样式（`tone: unknown`），浮层标题改为「选择标记」（不再暗示只有阵营），wild 暗槽 title 改「自选玫/兽/？」；`helpContent.ts` 审判者条目改「自选玫、兽或问号」。分支测试 `ProjectionBranchTests.test_wild_marker_colour_window_offers_the_question_mark`（三选项 + 自选 unknown 落 `revealed_values`）；golden 奇数局回放同时含玩家自选与超时默认两路问号亮法（`GoldenBranchCoverageTests.test_some_golden_reveals_a_wild_marker_as_the_question_mark`）；ruleset bump、coverage 加行、golden 重生成随 `.scratch/rule-coupling-review/issues/07` 一并完成。全量测试绿。

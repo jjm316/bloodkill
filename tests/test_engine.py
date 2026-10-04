@@ -237,11 +237,11 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(len(replay.command_ids), len(set(replay.command_ids)))
 
-    def test_ruleset_is_0_4_and_older_checkpoints_are_rejected(self):
+    def test_ruleset_is_0_5_and_older_checkpoints_are_rejected(self):
         engine = self.started()
-        self.assertEqual(engine.state.ruleset_version, "0.4")
+        self.assertEqual(engine.state.ruleset_version, "0.5")
         stale = deepcopy(engine.checkpoint())
-        stale.ruleset_version = "0.3"
+        stale.ruleset_version = "0.4"
         with self.assertRaises(RuleError):
             RulesEngine.resume_from_checkpoint(stale, clock=FixedClock())
 

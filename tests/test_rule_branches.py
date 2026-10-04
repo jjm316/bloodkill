@@ -1428,6 +1428,32 @@ class ProjectionBranchTests(unittest.TestCase):
         # only the pending actor is offered anything
         self.assertEqual(legal_actions(engine.state, attacker), [])
 
+    def test_wild_marker_colour_window_offers_the_question_mark(self):
+        # Issue 26: the inquisitor's wild colour window carries a third option
+        # — the question mark, which leans to neither faction — and choosing it
+        # records the neutral value on the revealed marker.
+        engine, found = started_with_ranks(7, "fleur-cross")
+        inquisitor = found["fleur-cross"]
+        attacker = engine.state.dagger_holder_id
+        if attacker == inquisitor.player_id:
+            give_dagger_to(engine, next(pid for pid in engine.state.players if pid != inquisitor.player_id))
+            attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "attack", attacker, "attack", targetPlayerId=inquisitor.player_id))
+        answer_poll(engine)
+        actions = legal_actions(engine.state, inquisitor.player_id)
+        self.assertEqual(
+            [action.get("color") for action in actions if action["type"] == "choose-reveal" and action["token"] == "marker-0"],
+            ["rose", "beast", "unknown"],
+        )
+        events = engine.apply(
+            command(engine, "reveal-question", inquisitor.player_id, "choose-reveal", token="marker-0", color="unknown")
+        )
+        revealed = next(event for event in events if event.event_type == "ClueRevealed")
+        self.assertEqual(revealed.payload["value"], "unknown")
+        self.assertEqual(engine.state.players[inquisitor.player_id].revealed_values["marker-0"], "unknown")
+        # the plain token action stays bare: no colour choice on a rank reveal
+        self.assertNotIn("color", next(action for action in actions if action["token"] == "rank"))
+
     def test_pending_intervention_actions_across_poll_and_choice_stages(self):
         engine = started()
         attacker = engine.state.dagger_holder_id

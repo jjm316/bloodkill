@@ -66,7 +66,8 @@ export const MARKER_DOTS: Record<string, { label: string; tone: string; name: st
 };
 
 const TOKEN_LABELS: Record<string, string> = { rank: "等级标记", "marker-0": "身份标记 1", "marker-1": "身份标记 2" };
-const COLOR_LABELS: Record<string, string> = { rose: "玫瑰", beast: "野兽" };
+// wild 色选窗的第三选项（issue 26）：文案写「问号」，勿写「未知」误导为没选
+const COLOR_LABELS: Record<string, string> = { rose: "玫瑰", beast: "野兽", unknown: "问号" };
 const tokenLabel = (token: string) => TOKEN_LABELS[token] ?? token;
 
 // 备忘角标的三色语言复用线索槽配色（玫红/兽蓝/灰），但造型是右上角徽章，与槽位明显不同
@@ -148,7 +149,7 @@ function ClueSlots({
     } else {
       const raw = selfMarkers?.[index];
       if (raw === "wild") {
-        slots.push({ token, className: "slot dot empty dim", label: "任", title: "未亮出的任选标记（亮出时自选红/蓝）" });
+        slots.push({ token, className: "slot dot empty dim", label: "任", title: "未亮出的任选标记（亮出时自选玫/兽/？）" });
       } else if (raw && MARKER_DOTS[raw]) {
         slots.push({ token, className: "slot dot empty dim", label: MARKER_DOTS[raw].label, title: `未亮出的${MARKER_DOTS[raw].name}` });
       } else {
@@ -192,7 +193,7 @@ function ClueSlots({
           <div
             className="slot-picker"
             role="dialog"
-            aria-label={`亮出${tokenLabel(activePicker.token)}时选择阵营`}
+            aria-label={`亮出${tokenLabel(activePicker.token)}时选择标记`}
             style={{
               left: Math.max(8, Math.min(activePicker.rect.left, window.innerWidth - PICKER_EST_SIZE)),
               top:
@@ -201,7 +202,7 @@ function ClueSlots({
                   : activePicker.rect.bottom + 8,
             }}
           >
-            <span className="slot-picker-label">亮出{tokenLabel(activePicker.token)}时选择阵营：</span>
+            <span className="slot-picker-label">亮出{tokenLabel(activePicker.token)}时选择：</span>
             {activePicker.options.map((a, index) => (
               <button
                 key={a.color ?? index}
@@ -211,7 +212,7 @@ function ClueSlots({
                   onSlotAction?.(a);
                 }}
               >
-                <span aria-hidden="true" className={`slot dot filled ${a.color === "rose" ? "rose" : "beast"}`}>
+                <span aria-hidden="true" className={`slot dot filled ${MARKER_DOTS[a.color ?? ""]?.tone ?? "unknown"}`}>
                   {MARKER_DOTS[a.color ?? ""]?.label ?? "？"}
                 </span>
                 {COLOR_LABELS[a.color ?? ""] ?? a.color}

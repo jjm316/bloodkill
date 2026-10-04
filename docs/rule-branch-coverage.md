@@ -2,7 +2,9 @@
 
 对应 issue 10 的交付物：每个已实现规则分支至少一条自动化测试。测试分布在
 [`tests/test_engine.py`](../tests/test_engine.py)、[`tests/test_projection.py`](../tests/test_projection.py)、
-[`tests/test_rule_branches.py`](../tests/test_rule_branches.py) 与 [`tests/test_properties.py`](../tests/test_properties.py)。
+[`tests/test_rule_branches.py`](../tests/test_rule_branches.py)、[`tests/test_properties.py`](../tests/test_properties.py)
+与 [`tests/test_golden_replays.py`](../tests/test_golden_replays.py)（golden 回放双向验证 +
+规则耦合批次的分支覆盖锁 `GoldenBranchCoverageTests`，ruleset 0.5）。
 性质测试的随机 sweep 对多数分支给出额外的「随机路径」覆盖，下表只列确定性测试。
 
 标记说明：
@@ -35,12 +37,12 @@ Issue 05 branch additions (单人窗口超时，ADR 0011):
 | Branch | Behavior | Coverage |
 | --- | --- | --- |
 | 亮牌窗超时 | `timeout-reveal` 自动亮排序第一张（marker-0 → marker-1 → rank 确定序），`ClueRevealed.reason=timeout`；连续窗口逐个到期逐个亮 | `SingleWindowTimeoutBranchTests.test_reveal_timeout_reveals_markers_in_order_across_chained_windows` |
-| wild 色选窗超时 | wild 标记到期默认「？」（value=unknown，不暴露阵营倾向；引擎接受 unknown 色即 wild-26 的引擎前置） | `SingleWindowTimeoutBranchTests.test_reveal_timeout_on_a_wild_marker_takes_the_question_mark` |
+| wild 色选窗超时 | wild 标记到期默认「？」（value=unknown，不暴露阵营倾向；引擎接受 unknown 色即 wild-26 的玩家自选值，26 已随 0.5 批次落地） | `SingleWindowTimeoutBranchTests.test_reveal_timeout_on_a_wild_marker_takes_the_question_mark` |
 | 技能窗超时 | `timeout-skill` 视为放弃（ADR 0008）：`SkillDeclined.reason=timeout` + 写 `skills_used` 永久失去 | `SingleWindowTimeoutBranchTests.test_skill_timeout_declines_and_permanently_spends_the_skill` |
 | 退牌窗超时 | `timeout-return` 自动退排序第一张已亮标记（marker 先于 rank，保住亮槽数 = 伤害数） | `SingleWindowTimeoutBranchTests.test_return_timeout_returns_the_first_marker_before_rank` |
 | 超时守卫 | 无窗口/错演员/过期资格集 → `reveal.not-open` / `skill.not-open` / `token-return.not-open` | `SingleWindowTimeoutBranchTests.test_reveal_timeout_guards`、`test_skill_timeout_guards`、`test_return_timeout_guard` |
 | 超时配置 | start-game 携带 `singleWindowTimeoutSeconds`（30/60/90/120/180，缺省 90，非法值 `game.invalid-timeout`），入 `GameStarted` 事件 | `SingleWindowTimeoutBranchTests.test_single_window_timeout_configuration_is_fixed_at_start`、`test_default_single_window_timeout_is_ninety_seconds`、`test_invalid_single_window_timeout_choice_is_rejected` |
-| 重放确定性 | 超时命令走公共命令管线，存档双向往返（命令重放 = 快照） | `SingleWindowTimeoutBranchTests.test_timeout_commands_replay_deterministically_through_the_save_pipeline` |
+| 重放确定性 | 超时命令走公共命令管线，存档双向往返（命令重放 = 快照）；golden 回放含 `timeout-reveal`（每局）与 `timeout-skill`（局 10）双路 | `SingleWindowTimeoutBranchTests.test_timeout_commands_replay_deterministically_through_the_save_pipeline`；`GoldenBranchCoverageTests.test_every_golden_carries_a_timeout_reveal_and_one_a_timeout_skill` |
 | 服务端倒计时 | 三类单人窗口由 Room 持 deadline、`single_window` provider 代发 timeout 命令；窗口身份（actor+资格）变化即重新起算；投影注入 `pending.deadline` | `SingleWindowDeadlineTests`（test_server_sync.py） |
 
 Issue 21 branch additions:
@@ -66,6 +68,14 @@ Issue 06 branch additions（炼金 harm 选项过滤盾目标，耦合点 B1 投
 | Branch | Behavior | Coverage |
 | --- | --- | --- |
 | rank 4 harm affordance | 被保护者持盾时投影不给 harm 选项（与刺客/感应者目标列表同口径，纯投影改动）；引擎防御性拒绝保留——强行提交仍报 `target.shielded` 且不烧技能 | `SkillBranchTests.test_alchemist_harm_affordance_filters_shielded_protected_player` |
+
+Issue 26 branch additions（wild 色选窗「问号」选项，ruleset 0.5 批次收尾）:
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| wild 色选三选项 | 投影把 wild 标记展开为玫 / 兽 / ？三条 `choose-reveal`（问号不暴露阵营倾向） | `ProjectionBranchTests.test_wild_marker_colour_window_offers_the_question_mark` |
+| 自选问号亮牌 | 审判者主动选「？」→ `ClueRevealed.value = "unknown"`；非 wild 标记照旧无色选；引擎接受 unknown（05 的超时默认同一入口） | `ProjectionBranchTests.test_wild_marker_colour_window_offers_the_question_mark`；golden 奇数局回放含玩家自选与超时默认两路（`GoldenBranchCoverageTests.test_some_golden_reveals_a_wild_marker_as_the_question_mark`） |
+| 客户端第三钮 | 选色浮层按服务端选项渲染第三钮（灰样式「？」，文案「问号」）——按钮列表是投影选项的直通渲染，无独立客户端测试 | 人工验收（浮层按钮由 `selfActions` 逐条映射，Board.tsx `COLOR_LABELS`/`MARKER_DOTS` 提供文案与灰样式） |
 
 ## 引擎分支
 
@@ -118,9 +128,9 @@ Issue 06 branch additions（炼金 harm 选项过滤盾目标，耦合点 B1 投
 | 诅咒发动校验 | 分配键与待分发集合不符（含空）→ `curse.invalid-count`；重复收件人 → `curse.duplicate-recipient`；未知/已捕获收件人 → `target.not-found` / `target.captured`；非审判者 → `player.not-eligible`；窗口已关 → `skill.not-open`；重复发动 → `skill.already-used`（注入） | `CurseBranchTests.test_distribute_with_no_curses_is_rejected`、`test_distribute_with_wrong_assignment_keys_is_rejected`、`test_distribute_to_unknown_or_captured_recipient_is_rejected`、`test_distribute_duplicate_recipient_is_rejected`、`test_distribute_by_non_inquisitor_is_rejected`、`test_distribute_then_decline_is_rejected_as_window_closed`、`test_repeated_use_in_a_reopened_window_is_rejected` |
 | 旧 `distribute-curse` 命令移除 | 旧命令 → `command.unknown`，分发仅剩技能命令一条路径 | `CurseBranchTests.test_standalone_distribute_curse_command_is_gone` |
 | `_end_game` 真诅咒夺胜 | 正常家族胜方领袖持真诅咒 → 胜方改写为审判者独赢（`inquisitor-true-curse`） | `CurseBranchTests.test_winning_leader_holding_true_curse_gives_the_inquisitor_a_solo_win` |
-| `_apply_damage` 技能伤害亮牌（ADR 0006，旧口径"首伤展示 rank / 后续展示 affiliation"作废） | 一切伤害源统一走受害者自选亮牌窗（第 3 点被迫 rank、wild 色选窗）；感应者技能伤害带 `forceRank` 直接亮 rank，不开窗且把该 rank 写入 `skills_used` 构成永久封印（ADR 0009 方案 A）；本批新分支行与 golden 同步归 issue 07 | `SkillBranchTests.test_assassin_skill_deals_two_damage_opens_victim_choice_windows_and_hands_dagger`、`test_mentalist_damages_target_forces_rank_and_hands_dagger`、`test_mentalist_wound_on_shown_rank_falls_back_to_victim_choice`、`test_assassin_skill_scenario_log_is_identical_across_hash_seeds`；`SkillBranchTests.test_alchemist_harm_targets_protected_player_without_skill_window` |
+| `_apply_damage` 技能伤害亮牌（ADR 0006，旧口径"首伤展示 rank / 后续展示 affiliation"作废） | 一切伤害源统一走受害者自选亮牌窗（第 3 点被迫 rank、wild 色选窗）；感应者技能伤害带 `forceRank` 直接亮 rank，不开窗且把该 rank 写入 `skills_used` 构成永久封印（ADR 0009 方案 A）；golden 回放覆盖：刺客技能经受害者自选窗逐点亮牌（`GoldenBranchCoverageTests.test_some_golden_uses_the_assassin_skill_and_its_victim_answers_reveal_windows`） | `SkillBranchTests.test_assassin_skill_deals_two_damage_opens_victim_choice_windows_and_hands_dagger`、`test_mentalist_damages_target_forces_rank_and_hands_dagger`、`test_mentalist_wound_on_shown_rank_falls_back_to_victim_choice`、`test_assassin_skill_scenario_log_is_identical_across_hash_seeds`；`SkillBranchTests.test_alchemist_harm_targets_protected_player_without_skill_window` |
 | `_apply_damage` 第 4 伤 | `PlayerCaptured` + `GameEnded`、立即终局 | `EndGameBranchTests` 四项；golden 全部 |
-| `_after_damage` 开窗总则（ADR 0009） | 本次伤害新亮出 rank 即开技能窗（攻击/挡刀/技能/反伤，自选或被迫，`trigger` 可为 None）；唯一例外 = 感应者强制亮出（封印，永不再开）；rank 4 仅 intervention 开窗（语料"仅在自己干涉后"）；已使用/已弃用/已封印永不再开；技能伤害永不触发干涉投票 | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window`；`SkillBranchTests.test_assassin_victim_self_chosen_rank_reveal_opens_skill_window_and_defers_dagger`、`test_alchemist_harm_third_point_forced_rank_opens_victim_window`、`test_berserker_reaction_third_point_forced_rank_opens_attacker_window`、`test_berserker_window_from_skill_damage_counters_the_skill_user`、`test_skill_window_only_opens_once_per_rank_reveal`、`test_mentalist_seal_kills_the_curse_path_and_heal_cannot_unseal` |
+| `_after_damage` 开窗总则（ADR 0009） | 本次伤害新亮出 rank 即开技能窗（攻击/挡刀/技能/反伤，自选或被迫，`trigger` 可为 None）；唯一例外 = 感应者强制亮出（封印，永不再开）；rank 4 仅 intervention 开窗（语料"仅在自己干涉后"）；已使用/已弃用/已封印永不再开；技能伤害永不触发干涉投票；golden 回放覆盖：感应者封印写入 `skills_used` 且被点者不开窗（`GoldenBranchCoverageTests.test_some_golden_seals_a_rank_through_the_mentalist_skill`） | `RulesEngineTests.test_attack_decline_reveals_and_opens_skill_window`、`test_alchemist_attack_trigger_does_not_open_skill_window`、`test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`AttackBranchTests.test_intervention_damage_reveals_responder_rank_and_opens_skill_window`；`SkillBranchTests.test_assassin_victim_self_chosen_rank_reveal_opens_skill_window_and_defers_dagger`、`test_alchemist_harm_third_point_forced_rank_opens_victim_window`、`test_berserker_reaction_third_point_forced_rank_opens_attacker_window`、`test_berserker_window_from_skill_damage_counters_the_skill_user`、`test_skill_window_only_opens_once_per_rank_reveal`、`test_mentalist_seal_kills_the_curse_path_and_heal_cannot_unseal` |
 | `_end_game` 捕获家族领袖 | `captured-leader`，攻击方胜 | `EndGameBranchTests.test_captured_leader_branch` |
 | `_end_game` 捕获普通成员 | `captured-player`，攻击方负 | `EndGameBranchTests.test_captured_non_leader_branch` |
 | `_end_game` 审判者被捕获 | `inquisitor-captured`，审判者独赢（ADR 0007，原平局作废） | `EndGameBranchTests.test_inquisitor_captured_gives_the_inquisitor_a_solo_win` |

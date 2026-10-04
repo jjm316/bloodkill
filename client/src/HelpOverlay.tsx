@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { MARKER_DOTS } from "./Board";
 import {
+  HELP_ADVANCED_NOTES,
   HELP_CLUE_NOTES,
   HELP_INTRO,
   HELP_INTRO_LINK,
@@ -180,6 +181,11 @@ export function RulesOverlay({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
             <p className="rules-note">※ {HELP_SKILL_NOTE}</p>
+            {HELP_ADVANCED_NOTES.map((note) => (
+              <p className="rules-note" key={note.slice(0, 8)}>
+                ※ {note}
+              </p>
+            ))}
             <p className="rules-note">※ {HELP_WINDOW_TIMEOUT_NOTE}</p>
           </section>
           <section className="rules-section" aria-labelledby="rules-legend">

@@ -103,7 +103,9 @@ def legal_actions(state: "EngineState", player_id: str) -> list[dict[str, Any]]:
             for token in sorted(tokens):
                 if token.startswith("marker-") and target.identity_markers[int(token[-1])] == "wild":
                     actions = [action for action in actions if action["token"] != token]
-                    actions.extend({"type": "choose-reveal", "token": token, "color": color} for color in ("rose", "beast"))
+                    # The wild colour window offers the question mark alongside
+                    # the two factions (issue 26): it leans neither way.
+                    actions.extend({"type": "choose-reveal", "token": token, "color": color} for color in ("rose", "beast", "unknown"))
             return actions
         return []
     if state.status != "active":

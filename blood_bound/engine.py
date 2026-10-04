@@ -153,9 +153,14 @@ class RulesEngine:
             EngineState(
                 schema_version=2,
                 ruleset_id="blood-bound-compatible",
+                # 0.5: rule-coupling batch 2026-10-03 — victim-choice reveals for
+                # skill damage (ADR 0006), the skill-window general rule with the
+                # mentalist's seal (ADR 0009), the captured inquisitor's solo win
+                # (ADR 0007), shield-blocks-targeting-only (ADR 0010), single-window
+                # timeouts (ADR 0011) and the wild question-mark reveal (issue 26).
                 # 0.4: curse distribution became a reveal-triggered skill (ADR 0003);
                 # 0.3 saves are explicitly rejected, affected games must be rebuilt.
-                ruleset_version="0.4",
+                ruleset_version="0.5",
                 game_id=game_id,
                 seed=seed,
             ),
@@ -168,7 +173,7 @@ class RulesEngine:
 
     @classmethod
     def resume_from_checkpoint(cls, checkpoint: EngineState, *, clock: Clock | None = None) -> "RulesEngine":
-        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.4":
+        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.5":
             raise RuleError("state.invalid", reason="unsupported schema version")
         engine = cls(deepcopy(checkpoint), clock=clock)
         cls._validate(engine.state)

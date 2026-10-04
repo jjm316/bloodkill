@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  HELP_ADVANCED_NOTES,
   HELP_CLUE_NOTES,
   HELP_INTRO,
   HELP_INTRO_LINK,
   HELP_LEGEND_ITEMS,
   HELP_RANKS,
   HELP_SKILL_NOTE,
+  HELP_WINDOW_TIMEOUT_NOTE,
   type RankMarkerKind,
 } from "./helpContent";
 import { displayResource } from "./types";
@@ -85,8 +87,80 @@ describe("helpContent 图例与简介数据", () => {
     expect(HELP_INTRO_LINK).toContain("？");
   });
 
-  it("通用注释提及技能伤害不再产生干涉或技能窗口", () => {
+  it("通用注释：技能伤害不触发干涉，但新亮等级照常开窗（ADR 0006/0009）", () => {
     expect(HELP_SKILL_NOTE).toContain("干涉");
     expect(HELP_SKILL_NOTE).toContain("技能窗口");
+    expect(HELP_SKILL_NOTE).toContain("感应者");
+    expect(HELP_SKILL_NOTE).toContain("永不再开");
+  });
+});
+
+// 2026-10 规则共识批次的 E1 清单（issue 07）：11 条高影响推论散布在
+// 进阶裁定清单与等级行文案里，这里逐条锚定关键词，防实现时抄漏。
+describe("helpContent 规则共识批次（E1 清单）", () => {
+  const rankEffect = (rank: number | "fleur-cross") =>
+    HELP_RANKS.find((row) => row.rank === rank)?.effect ?? "";
+
+  it("进阶裁定清单六条非空", () => {
+    expect(HELP_ADVANCED_NOTES.length).toBe(6);
+    for (const note of HELP_ADVANCED_NOTES) expect(note.trim().length).toBeGreaterThan(0);
+  });
+
+  it("技能伤害由受害者自选亮牌（P1）", () => {
+    expect(HELP_ADVANCED_NOTES[0]).toContain("受害者本人决定");
+  });
+
+  it("封印写进感应者条目：永久不可发动，炼金不可解（P4）", () => {
+    expect(rankEffect(5)).toContain("封印");
+    expect(rankEffect(5)).toContain("永久不可发动");
+    expect(rankEffect(5)).toContain("解不开");
+  });
+
+  it("已亮等级者不能再挡刀（C1 推论）", () => {
+    expect(HELP_ADVANCED_NOTES.some((note) => note.includes("已亮出等级") && note.includes("挡刀"))).toBe(true);
+  });
+
+  it("审判者被捕获独赢（P2）", () => {
+    expect(rankEffect("fleur-cross")).toContain("被捕获同样由其独赢");
+    expect(HELP_ADVANCED_NOTES.some((note) => note.includes("审判者") && note.includes("独赢"))).toBe(true);
+  });
+
+  it("捕获归因链四路齐全（D6）", () => {
+    const attribution = HELP_ADVANCED_NOTES.find((note) => note.includes("第 4 点伤害"));
+    expect(attribution).toContain("挡刀＝原攻击者");
+    expect(attribution).toContain("技能＝技能使用者");
+    expect(attribution).toContain("狂战士反伤＝狂战士本人");
+  });
+
+  it("技能误捕非领袖判技能方负（B13）", () => {
+    expect(HELP_ADVANCED_NOTES.some((note) => note.includes("误捕非领袖"))).toBe(true);
+  });
+
+  it("诅咒发给自己是浪费（D2）", () => {
+    expect(HELP_ADVANCED_NOTES.some((note) => note.includes("诅咒") && note.includes("自己"))).toBe(true);
+  });
+
+  it("技能伤害与反伤也归还守护者剑盾（B7）", () => {
+    expect(rankEffect(6)).toContain("技能伤害");
+    expect(rankEffect(6)).toContain("狂战士反伤");
+  });
+
+  it("扇子可以给自己（B10）", () => {
+    expect(rankEffect(9)).toContain("可以是自己");
+  });
+
+  it("技能伤害不触发干涉但新亮 rank 开窗，感应者例外（A3 新表述）", () => {
+    expect(HELP_SKILL_NOTE).toContain("不触发干涉投票");
+    expect(HELP_SKILL_NOTE).not.toContain("不会开出新的技能窗口");
+  });
+
+  it("单人窗口超时默认三件套（L4）", () => {
+    expect(HELP_WINDOW_TIMEOUT_NOTE).toContain("排序第一张");
+    expect(HELP_WINDOW_TIMEOUT_NOTE).toContain("「？」");
+    expect(HELP_WINDOW_TIMEOUT_NOTE).toContain("视为放弃");
+  });
+
+  it("审判者万能标记可亮问号（issue 26）", () => {
+    expect(rankEffect("fleur-cross")).toContain("玫、兽或问号");
   });
 });
