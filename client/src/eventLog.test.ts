@@ -5,6 +5,7 @@ import { EVENT_CATEGORIES, categoryOf, isLogVisible, loadMutedCategories, saveMu
 // 本测试就是 spec 第 26 条说的"映射表完整性核对"的自动化形态：引擎加事件而漏补映射时会在这里红。
 const PUBLIC_EVENT_TYPES = [
   "PlayerJoined", "GameStarted", "ClueIconsShown", "DaggerPassed", "AttackDeclared",
+  "InterventionGateOpened", "InterventionGateAccepted", "InterventionGateDeclined",
   "InterventionPollOpened", "InterventionResponded", "InterventionChoiceOpened", "InterventionSelected", "InterventionDeclined",
   "SkillDeclined", "SkillUsed", "ResourceGranted", "ResourceSpent", "HarlequinInspected",
   "TokenReturnOpened", "IdentityMarkersObscured", "DamageHealed", "TokenReturned", "ResourceReturned",

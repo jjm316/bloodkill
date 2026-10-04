@@ -20,6 +20,13 @@ describe("RulesOverlay 浮层", () => {
     expect(screen.getByText(HELP_INTRO[0])).toBeInTheDocument();
   });
 
+  // 挡刀请求门控（ADR 0012）：怎么玩区渲染门关注释，覆盖流程与偏好开关。
+  it("怎么玩区渲染挡刀请求门关注释", () => {
+    render(<RulesOverlay onClose={() => {}} />);
+    expect(screen.getByText(/被攻击者先确认是否请求挡刀/)).toBeInTheDocument();
+    expect(screen.getByText(/「默认不让他人挡刀」/)).toBeInTheDocument();
+  });
+
   it("等级表渲染 10 行，审判者行带仅奇数局标注", () => {
     const { container } = render(<RulesOverlay onClose={() => {}} />);
     const rows = container.querySelectorAll("ul.rank-list > li.rank-row");

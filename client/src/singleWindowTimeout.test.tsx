@@ -106,11 +106,17 @@ describe("SingleWindowLayer 等待横幅", () => {
     expect(container.querySelector(".waiting-banner")?.textContent).toContain("超时将自动退回排序第一张已亮标记");
   });
 
-  it("干涉窗口与无窗口时不渲染", () => {
+  it("干涉窗口（poll 与 gate 两阶段）与无窗口时不渲染", () => {
     const serverTime = Date.now() / 1000;
     const interventionGame = makeGame({ kind: "intervention", actorPlayerId: "p0", targetPlayerId: "p0", eligiblePlayerIds: [], rank: null, trigger: null, deadline: serverTime + 90 }, players);
     const { container, unmount } = render(<SingleWindowLayer game={interventionGame} serverTime={serverTime} />);
     expect(container.querySelector(".waiting-banner")).toBeNull();
+    unmount();
+    // 门控阶段（ADR 0012）同样是 intervention pending：单人窗口层不得抢渲染，
+    // 门控弹窗/横幅由 InterventionGateLayer 承载（互斥关系的另一半）。
+    const gateGame = makeGame({ kind: "intervention", actorPlayerId: "p0", targetPlayerId: "p0", eligiblePlayerIds: [], rank: null, trigger: null, stage: "gate", deadline: serverTime + 90 }, players);
+    const { container: gateContainer } = render(<SingleWindowLayer game={gateGame} serverTime={serverTime} />);
+    expect(gateContainer.querySelector(".waiting-banner")).toBeNull();
     unmount();
     const { container: empty } = render(<SingleWindowLayer game={makeGame(null, players)} serverTime={serverTime} />);
     expect(empty.querySelector(".waiting-banner")).toBeNull();

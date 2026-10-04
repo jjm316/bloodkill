@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   HELP_ADVANCED_NOTES,
   HELP_CLUE_NOTES,
+  HELP_GATE_NOTE,
   HELP_INTRO,
   HELP_INTRO_LINK,
   HELP_LEGEND_ITEMS,
@@ -162,5 +163,23 @@ describe("helpContent 规则共识批次（E1 清单）", () => {
 
   it("审判者万能标记可亮问号（issue 26）", () => {
     expect(rankEffect("fleur-cross")).toContain("玫、兽或问号");
+  });
+});
+
+// 挡刀请求门控（ADR 0012 / intervention-request-gate 04）：简介改为门控在前，
+// 新增门关注释说明流程与「默认不让他人挡刀」偏好（界面偏好，不是规则）。
+describe("helpContent 挡刀请求门控", () => {
+  it("简介第三句先讲被攻击者确认，请求后才询问其他玩家", () => {
+    expect(HELP_INTRO[2]).toContain("先由被攻击者确认是否请求挡刀");
+    expect(HELP_INTRO[2]).toContain("请求后其他玩家才可表态挡刀");
+  });
+
+  it("门关注释覆盖：门控流程、自己承受/超时语义、偏好开关明写不是对局规则", () => {
+    expect(HELP_GATE_NOTE).toContain("被攻击者先确认是否请求挡刀");
+    expect(HELP_GATE_NOTE).toContain("请求后才会询问");
+    expect(HELP_GATE_NOTE).toContain("视为不需要");
+    expect(HELP_GATE_NOTE).toContain("「默认不让他人挡刀」");
+    expect(HELP_GATE_NOTE).toContain("界面偏好");
+    expect(HELP_GATE_NOTE).toContain("而非对局规则");
   });
 });

@@ -3,6 +3,7 @@ import { MARKER_DOTS } from "./Board";
 import {
   HELP_ADVANCED_NOTES,
   HELP_CLUE_NOTES,
+  HELP_GATE_NOTE,
   HELP_INTRO,
   HELP_INTRO_LINK,
   HELP_LEGEND_ITEMS,
@@ -187,6 +188,7 @@ export function RulesOverlay({ onClose }: { onClose: () => void }) {
             <div className="rules-intro">
               <IntroLines />
             </div>
+            <p className="rules-note">※ {HELP_GATE_NOTE}</p>
           </section>
           <section className="rules-section" aria-labelledby="rules-ranks">
             <h4 id="rules-ranks">等级技能表</h4>

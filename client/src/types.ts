@@ -8,6 +8,8 @@ export interface Action {
   targetPlayerIds?: string[];
   responderPlayerId?: string;
   volunteer?: boolean;
+  /** answer-intervention-request：门控确认是否请求他人挡刀 */
+  need?: boolean;
   use?: boolean;
   token?: string;
   color?: string;
@@ -51,7 +53,7 @@ export interface PendingView {
   trigger: string | null;
   eligibleTokens?: string[];
   forceRank?: boolean;
-  /** 干涉投票：poll = 逐人表态阶段；choice = 被攻击者三选一阶段 */
+  /** 干涉投票：gate = 被攻击者挡刀请求门控（ADR 0012）；poll = 逐人表态阶段；choice = 被攻击者三选一阶段 */
   stage?: string;
   /** 实时公开表态：playerId -> 是否愿意挡刀 */
   responses?: Record<string, boolean>;

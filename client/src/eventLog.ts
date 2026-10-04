@@ -30,6 +30,9 @@ const CATEGORY_OF: Record<string, EventCategoryId> = {
   DamageApplied: "dagger",
   PlayerCaptured: "dagger",
   // 干涉
+  InterventionGateOpened: "intervention",
+  InterventionGateAccepted: "intervention",
+  InterventionGateDeclined: "intervention",
   InterventionPollOpened: "intervention",
   InterventionResponded: "intervention",
   InterventionChoiceOpened: "intervention",
