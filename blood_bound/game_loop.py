@@ -36,6 +36,10 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
       wounds run through the victim-choice reveal windows (ADR 0006);
     - the run's first reveal window and first declined skill window resolve
       through the scheduler's timeout commands (ADR 0011 determinism);
+    - the first intervention request gate is answered with ``need=true`` (so
+      every fixture keeps the accept -> poll -> volunteer branch coverage) and
+      the second gate declines, replaying the target-declined settlement of
+      ADR 0012; every later gate accepts again;
     - wild markers are revealed as the question mark (issue 26).
 
     It exists for golden replay and CI smoke coverage, not as an AI strategy.
@@ -69,6 +73,7 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
     seen_timeout_skill = False
     volunteer_pid: str | None = None
     volunteer_planned = False
+    gate_count = 0
 
     def fresh_target(owner_id: str) -> str:
         """First live zero-damage player that is neither the window owner nor the fixed victim."""
@@ -99,15 +104,19 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
             if pending.kind == "intervention":
                 stage = pending.context.get("stage")
                 if stage == "gate":
-                    # ADR 0012 request gate: the walker always asks for the
-                    # poll, so the fixtures keep their volunteer-branch
-                    # coverage; the gate decline path mixes in when ticket 05
-                    # regenerates the goldens.
+                    # ADR 0012 request gate policy (issue 05): the first gate
+                    # is accepted — before any decline can happen, the poll
+                    # with the volunteer plan must be locked into the replay —
+                    # the second gate declines so the target-declined
+                    # settlement also replays, and every later gate accepts
+                    # again so the poll coverage does not shrink.
+                    gate_count += 1
+                    need = gate_count != 2
                     send(
-                        f"gate-yes-{engine.state.revision}",
+                        f"gate-{'yes' if need else 'no'}-{engine.state.revision}",
                         pending.actor_player_id,
                         "answer-intervention-request",
-                        need=True,
+                        need=need,
                     )
                 elif stage == "poll":
                     responses: dict[str, bool] = pending.context["responses"]

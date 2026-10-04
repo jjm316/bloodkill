@@ -93,6 +93,77 @@ class GoldenBranchCoverageTests(unittest.TestCase):
             if record["payload"].get("use") and used.get(record["actorPlayerId"]) == rank
         ]
 
+    def test_every_golden_accepts_a_gate_and_relays_it_into_a_poll(self):
+        # ADR 0012: every fixture must keep the accept path — the attacked
+        # target asking for the volunteer poll — so the poll branch coverage
+        # the older fixtures carried never shrinks away.
+        for count, document in self.fixtures():
+            accepted = [
+                record for record in self.commands(document, "answer-intervention-request")
+                if record["payload"].get("need") is True
+            ]
+            self.assertTrue(accepted, f"golden-{count}: the walker must accept at least one request gate")
+            self.assertTrue(
+                self.payloads(document, "InterventionGateAccepted"),
+                f"golden-{count}: an accepted gate must leave an InterventionGateAccepted event",
+            )
+            opened = self.payloads(document, "InterventionGateOpened")
+            declined = self.payloads(document, "InterventionGateDeclined")
+            self.assertEqual(
+                len(opened), len(self.payloads(document, "InterventionGateAccepted")) + len(declined),
+                f"golden-{count}: every opened gate must resolve through exactly one accept or decline",
+            )
+            self.assertTrue(
+                self.payloads(document, "InterventionResponded"),
+                f"golden-{count}: the relayed poll must actually gather responder answers",
+            )
+            # The accept relay: every GateAccepted is immediately followed by
+            # the InterventionPollOpened of the same command.
+            sequence = [record["event"]["eventType"] for record in document["events"]]
+            for index, event_type in enumerate(sequence):
+                if event_type != "InterventionGateAccepted":
+                    continue
+                self.assertEqual(
+                    sequence[index + 1 : index + 2],
+                    ["InterventionPollOpened"],
+                    f"golden-{count}: a gate accept must relay straight into the poll",
+                )
+
+    def test_every_golden_mixes_a_target_declined_gate(self):
+        # ADR 0012: the walker also declines a gate (need=false), and the
+        # declined attack must settle on the target without ever polling.
+        for count, document in self.fixtures():
+            declined_answers = [
+                record for record in self.commands(document, "answer-intervention-request")
+                if record["payload"].get("need") is False
+            ]
+            self.assertTrue(declined_answers, f"golden-{count}: the walker must decline at least one request gate")
+            declined_events = [
+                payload for payload in self.payloads(document, "InterventionGateDeclined")
+                if payload.get("reason") == "target-declined"
+            ]
+            self.assertTrue(
+                declined_events,
+                f"golden-{count}: a need=false answer must leave a target-declined InterventionGateDeclined",
+            )
+            sequence = [record["event"]["eventType"] for record in document["events"]]
+            for index, event_type in enumerate(sequence):
+                if event_type != "InterventionGateDeclined":
+                    continue
+                until_next_gate = sequence[index + 1 :]
+                if "InterventionGateOpened" in until_next_gate:
+                    until_next_gate = until_next_gate[: until_next_gate.index("InterventionGateOpened")]
+                self.assertNotIn(
+                    "InterventionPollOpened",
+                    until_next_gate,
+                    f"golden-{count}: a declined gate must settle without opening the poll",
+                )
+                self.assertNotIn(
+                    "InterventionResponded",
+                    until_next_gate,
+                    f"golden-{count}: a declined gate must not gather responder answers",
+                )
+
     def test_some_golden_uses_the_assassin_skill_and_its_victim_answers_reveal_windows(self):
         # ADR 0006: the rank-2 skill's two wounds open victim-choice reveal
         # windows on a player other than the attack victim.
