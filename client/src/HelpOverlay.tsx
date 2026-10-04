@@ -17,8 +17,10 @@ import {
 import { Icon } from "./icons";
 
 // 规则与图例浮层（.scratch/ui-help-legend/spec.md）：怎么玩 / 等级技能表 /
-// 标记图例三区，全部文案来自 helpContent（单一来源）。Escape 与点击遮罩关闭
-// （与既有弹窗一致的退出方式），内容超一屏在浮层内竖向滚动。
+// 标记图例三区，全部文案来自 helpContent（单一来源）。页头 ✕ 是主关闭路径
+// （.scratch/ui-help-close/spec.md：手机没有 Esc、遮罩只剩细边按不中），
+// Escape 与点击遮罩两条旧路径保留（与既有弹窗一致的退出方式），
+// 内容超一屏在浮层内竖向滚动。
 
 // "字 + 色块"渲染（与 Board 的线索槽同语言）：玫/兽/？沿用 MARKER_DOTS，
 // 万能标记（wild）是帮助浮层独有的第四色——金底"任"，亮出时自选玫或兽。
@@ -165,7 +167,9 @@ export function RulesOverlay({ onClose }: { onClose: () => void }) {
           {/* 与页头徽记同源的 help 图标（svg 自带圆环）：全角"？"字体墨迹偏左无法居中，见 icons.tsx */}
           <span className="rules-q" aria-hidden="true"><Icon name="help" /></span>
           <h3 id="rules-title">规则与图例</h3>
-          <span className="rules-esc">Esc / 点击遮罩关闭</span>
+          <button className="rules-close" onClick={onClose} aria-label="关闭" title="关闭">
+            <Icon name="close" />
+          </button>
         </div>
         <div className="rules-body">
           <section className="rules-section" aria-labelledby="rules-how">

@@ -55,6 +55,16 @@ describe("RulesOverlay 浮层", () => {
     fireEvent.click(container.querySelector(".modal-overlay")!);
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  // .scratch/ui-help-close/spec.md：手机没有 Esc、遮罩只剩 8px 细边按不中，
+  // 页头 ✕ 是主关闭路径；旧提示文案指向的两条路径在触屏上不成立，整行移除。
+  it("页头 ✕ 关闭按钮点击即关，Esc 提示不再出现", () => {
+    const onClose = vi.fn();
+    render(<RulesOverlay onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Esc / 点击遮罩关闭")).toBeNull();
+  });
 });
 
 describe("大厅怎么玩折叠块", () => {

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // 不引第三方图标库、无位图。造型源：mockups/icon-strip.html（2026-09-13 拍板）。
 // 玫瑰/野兽/未知标记维持"字 + 色块"现状，不走此组件（兼顾色弱辨识）。
 
-export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill" | "help";
+export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill" | "help" | "close";
 
 const ICON_SHAPES: Record<IconName, ReactNode> = {
   dagger: (
@@ -68,6 +68,14 @@ const ICON_SHAPES: Record<IconName, ReactNode> = {
         strokeWidth={1.5}
       />
       <circle cx="12" cy="17.2" r="0.9" strokeWidth={1.5} fill="currentColor" />
+    </>
+  ),
+  // 关闭（✕）：规则浮层页头关闭按钮（.scratch/ui-help-close/spec.md）——
+  // 不走字符 ✕（字形跨机型不可靠，同 help 问号不走 <text> 的先例）。
+  close: (
+    <>
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="18" y1="6" x2="6" y2="18" />
     </>
   ),
 };

@@ -859,7 +859,26 @@ h2 {
   color: var(--gold-text);
 }
 
-.rules-esc { margin-left: auto; color: var(--muted); font-size: 12px; }
+/* 页头 ✕ 关闭按钮（.scratch/ui-help-close/spec.md）：手机没有 Esc、遮罩只剩
+   8px 细边按不中，✕ 是主关闭路径。36px 触控目标；min-height:0 覆盖全局
+   button 的 40px（同 .help-button 坑位）；margin-left:auto 接替旧提示的推右位 */
+.rules-close {
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
+  flex: none;
+  margin-left: auto;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+}
+
+.rules-close svg { width: 18px; height: 18px; }
+
+.rules-close:hover,
+.rules-close:active { color: var(--gold-text); }
 
 .rules-body {
   overflow-y: auto;
