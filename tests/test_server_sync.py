@@ -181,10 +181,22 @@ class DeadlineWindowTests(unittest.TestCase):
             Command("attack-deadline", self.room.game_id, attacker, self.room.engine.state.revision, "attack", {"targetPlayerId": target}),
         )
         # these tests baseline on an open poll window: the target accepts the
-        # request gate (ADR 0012); the gate window itself is ticket 02
+        # request gate (ADR 0012); the gate window itself has its own tests below
         self.app.manager.apply_command(
             self.room,
             Command("gate-deadline", self.room.game_id, target, self.room.engine.state.revision, "answer-intervention-request", {"need": True}),
+        )
+        return attacker, target
+
+    def _open_gate(self):
+        """Attack without answering the request gate (ADR 0012): the gate stays open."""
+        from blood_bound import Command
+
+        attacker = self.room.engine.state.dagger_holder_id
+        target = next(pid for pid in self.player_ids if pid != attacker)
+        self.app.manager.apply_command(
+            self.room,
+            Command("attack-gate", self.room.game_id, attacker, self.room.engine.state.revision, "attack", {"targetPlayerId": target}),
         )
         return attacker, target
 
@@ -301,6 +313,122 @@ class DeadlineWindowTests(unittest.TestCase):
         asyncio.run(run())
         self.assertEqual(restored.engine.state.players[target].damage, 1)
         self.assertIn("InterventionDeclined", [event.event_type for event in restored.engine.state.events])
+
+
+    def test_gate_window_is_tracked_persisted_and_cleared(self):
+        """The request gate (ADR 0012) is a tracked countdown like the poll it may open."""
+        import time as time_module
+
+        from blood_bound import Command
+
+        _, target = self._open_gate()
+        self.assertEqual(self.room.window_stage, "gate")
+        self.assertIsNotNone(self.room.window_deadline)
+        self.assertGreater(self.room.window_deadline, time_module.time())
+
+        meta = json.loads((Path(self._tmp.name) / f"{self.room.game_id}.meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["windowStage"], "gate")
+        self.assertEqual(meta["windowDeadline"], self.room.window_deadline)
+
+        # decline: the gate window clears and the settlement chain's follow-up
+        # window (the victim's reveal) takes over the tracked countdown
+        self.app.manager.apply_command(
+            self.room,
+            Command("gate-decline", self.room.game_id, target, self.room.engine.state.revision, "answer-intervention-request", {"need": False}),
+        )
+        self.assertIsNotNone(self.room.engine.state.pending)
+        self.assertTrue(self.room.window_stage.startswith("reveal:"))
+        self.assertIsNotNone(self.room.window_deadline)
+        self.assertEqual(self.room.engine.state.players[target].damage, 1)
+
+    def test_gate_projection_carries_deadline_and_eligibles(self):
+        _, target = self._open_gate()
+        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=target)
+        state = self.app.build_state(conn)
+        pending = state["game"]["pending"]
+        self.assertEqual(pending["kind"], "intervention")
+        self.assertEqual(pending["stage"], "gate")
+        self.assertIsNotNone(pending["deadline"])
+        self.assertEqual(pending["deadline"], self.room.window_deadline)
+        self.assertTrue(pending["eligiblePlayerIds"])
+        # no vote has happened yet: the engine view passes the gate through
+        # without the poll-only fields
+        self.assertNotIn("responses", pending)
+        self.assertNotIn("volunteerPlayerIds", pending)
+
+    def test_scheduler_expiry_settles_a_silent_gate(self):
+        import time as time_module
+
+        _, target = self._open_gate()
+        self.room.window_deadline = time_module.time() - 1.0
+
+        async def run():
+            await self.app.deadline_scheduler.sync(self.room)
+            await asyncio.sleep(0.05)
+
+        asyncio.run(run())
+        self.assertEqual(self.room.engine.state.players[target].damage, 1)
+        # The unanswered gate counted as "no assistance needed" (Q1) and the
+        # victim's reveal window (issue 05) is now the tracked, armed window.
+        self.assertTrue(self.room.window_stage.startswith("reveal:"))
+        declined = [event for event in self.room.engine.state.events if event.event_type == "InterventionGateDeclined"]
+        self.assertEqual(declined[-1].payload["reason"], "timeout")
+
+    def test_gate_accept_relays_to_a_fresh_poll_window(self):
+        """Accepting the gate re-arms an independent poll countdown (Q2)."""
+        import time as time_module
+
+        from blood_bound import Command
+
+        _, target = self._open_gate()
+        self.assertEqual(self.room.window_stage, "gate")
+        gate_deadline = self.room.window_deadline
+
+        self.app.manager.apply_command(
+            self.room,
+            Command("gate-accept", self.room.game_id, target, self.room.engine.state.revision, "answer-intervention-request", {"need": True}),
+        )
+        self.assertEqual(self.room.engine.state.pending.context.get("stage"), "poll")
+        self.assertEqual(self.room.window_stage, "poll")
+        self.assertGreater(self.room.window_deadline, gate_deadline)
+
+        # the relay keeps the persisted meta consistent with the tracked window
+        meta = json.loads((Path(self._tmp.name) / f"{self.room.game_id}.meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["windowStage"], "poll")
+        self.assertEqual(meta["windowDeadline"], self.room.window_deadline)
+
+    def test_expired_gate_window_fires_immediately_after_restore(self):
+        import time as time_module
+
+        _, target = self._open_gate()
+        # simulate a deadline that expired while the server was down
+        meta_path = Path(self._tmp.name) / f"{self.room.game_id}.meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.assertEqual(meta["windowStage"], "gate")
+        meta["windowDeadline"] = time_module.time() - 5.0
+        meta_path.write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
+
+        from server.rooms import RoomManager
+
+        restored_manager = RoomManager(Path(self._tmp.name))
+        restored_manager.restore()
+        restored = restored_manager.get_room(self.room.code)
+        self.assertIsNotNone(restored)
+        self.assertEqual(restored.window_stage, "gate")
+        self.assertLess(restored.window_deadline, time_module.time())
+
+        # the startup hook arms restored rooms; an already-expired gate fires
+        # with delay 0 through the normal command pipeline and settles the attack
+        self.app.manager = restored_manager
+
+        async def run():
+            await self.app.deadline_scheduler.sync(restored)
+            await asyncio.sleep(0.05)
+
+        asyncio.run(run())
+        self.assertEqual(restored.engine.state.players[target].damage, 1)
+        declined = [event for event in restored.engine.state.events if event.event_type == "InterventionGateDeclined"]
+        self.assertEqual(declined[-1].payload["reason"], "timeout")
 
 
 class SingleWindowDeadlineTests(unittest.TestCase):

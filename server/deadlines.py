@@ -10,9 +10,9 @@ action, so the resolution lands in the event log and stays replayable.
 
 New window kinds plug in by appending a provider to :data:`WINDOW_PROVIDERS`;
 each provider maps a room to a ``(command_type, command_payload, deadline)``
-window. Issue 23 wires the two intervention phases (volunteer poll and the
-target's choice); issue 05 / ADR 0011 adds the three single-player windows
-(reveal / skill / token-return).
+window. Issue 23 wires the intervention phases (the request gate of ADR 0012,
+the volunteer poll, and the target's choice); issue 05 / ADR 0011 adds the
+three single-player windows (reveal / skill / token-return).
 """
 
 from __future__ import annotations
@@ -28,14 +28,20 @@ ExpiryHandler = Callable[[Any, str, dict[str, Any]], Awaitable[None]]
 
 
 def intervention_window(room: Any) -> tuple[str, dict[str, Any], float] | None:
-    """The intervention poll / target-choice window and its timeout command."""
+    """An intervention window (gate / poll / choice) and its timeout command.
+
+    The request gate (ADR 0012) shares the intervention timeout and arms the
+    same way; its expiry payload ``{"stage": "gate"}`` matches the engine's
+    timeout stage guard, so a raced timer after the target answered is
+    rejected like any other stale window.
+    """
     state = room.engine.state
     pending = getattr(state, "pending", None)
     if pending is None or pending.kind != "intervention":
         return None
     stage = room.window_stage
     deadline = room.window_deadline
-    if stage not in {"poll", "choice"} or not isinstance(deadline, (int, float)):
+    if stage not in {"gate", "poll", "choice"} or not isinstance(deadline, (int, float)):
         return None
     return "timeout-intervention", {"stage": stage}, float(deadline)
 

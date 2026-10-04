@@ -45,7 +45,7 @@ class Room:
     finished_at: float | None = None
     host_player_id: str | None = None
     # Wall-clock expiry of the engine's current decision window (intervention
-    # poll/choice or one of the single-player windows). The engine stays
+    # gate/poll/choice or one of the single-player windows). The engine stays
     # deterministic (no real time in state); the room owns the countdown and
     # the server injects the deadline into projections.
     window_deadline: float | None = None
@@ -71,19 +71,21 @@ class Room:
     def _window_identity(self, pending: Any) -> tuple[str | None, int]:
         """Stable identity of the pending window: same key = same countdown.
 
-        The intervention stages keep their bare legacy keys ("poll"/"choice")
-        so a stored meta re-arms without resetting the countdown after a
-        restart. The three single-player windows (issue 05 / ADR 0011) key on
-        the actor plus the eligibility frozen at open, so a damage chain that
-        re-opens the same actor's reveal window re-arms a fresh countdown
-        instead of inheriting a possibly-expired deadline.
+        The intervention stages keep their bare stage keys ("gate", "poll",
+        "choice") so a stored meta re-arms without resetting the countdown
+        after a restart; the request gate (ADR 0012) reuses the room's
+        intervention timeout — no separate config. The three single-player
+        windows (issue 05 / ADR 0011) key on the actor plus the eligibility
+        frozen at open, so a damage chain that re-opens the same actor's
+        reveal window re-arms a fresh countdown instead of inheriting a
+        possibly-expired deadline.
         """
         state = self.engine.state
         if pending is None:
             return None, 0
         if pending.kind == "intervention":
             stage = pending.context.get("stage")
-            if stage in {"poll", "choice"}:
+            if stage in {"gate", "poll", "choice"}:
                 return str(stage), state.intervention_timeout_seconds
             return None, 0
         if pending.kind in SINGLE_WINDOW_KINDS:
