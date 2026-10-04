@@ -76,8 +76,8 @@ describe("helpContent 图例与简介数据", () => {
     }
   });
 
-  it("线索与徽记各压成一条短注", () => {
-    expect(HELP_CLUE_NOTES.map((n) => n.kind)).toEqual(["slots", "emblems"]);
+  it("线索、徽记与真实阵营色各压成一条短注", () => {
+    expect(HELP_CLUE_NOTES.map((n) => n.kind)).toEqual(["slots", "emblems", "self-badge"]);
     for (const note of HELP_CLUE_NOTES) expect(note.body.trim().length).toBeGreaterThan(0);
   });
 

@@ -168,10 +168,10 @@ export const HELP_LEGEND_ITEMS: HelpLegendItem[] = [
   },
 ];
 
-// 线索与徽记两行短注（compact 拍板版）：visual 由浮层按 kind 渲染，
+// 线索、徽记与真实阵营色三行短注（compact 拍板版）：visual 由浮层按 kind 渲染，
 // 文案停留在此处与全部帮助内容同源。
 export interface HelpClueNote {
-  kind: "slots" | "emblems";
+  kind: "slots" | "emblems" | "self-badge";
   title: string;
   body: string;
 }
@@ -186,5 +186,10 @@ export const HELP_CLUE_NOTES: HelpClueNote[] = [
     kind: "emblems",
     title: "阵营徽记",
     body: "开局每人的徽记只给左邻看，你看到的是右邻的。徽记通常与真实阵营一致，但只是线索不是事实：小丑的徽记恒为敌对家族，审判者的必然与其真实所属不符。",
+  },
+  {
+    kind: "self-badge",
+    title: "真实阵营色徽",
+    body: "自己座位卡右上角的小圆点始终显示你的真实阵营：玫红＝玫瑰家族，兽蓝＝野兽家族，灰＝审判者（不属于任何家族）。它不是线索而是事实，因此允许与你的徽记矛盾——小丑与审判者的徽记本来就会骗人。",
   },
 ];

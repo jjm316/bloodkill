@@ -21,7 +21,7 @@
   --danger: #ff8a80;
   --focus: #72b7ff;
   /* 线索/备忘三色语言（玫红/兽蓝/灰，spec 用户故事 18 语义不变）：
-     槽位、备忘角标、备忘色板三处共用的单一出处 */
+     槽位、备忘角标、备忘色板、真实阵营色徽（含图例示意）共用的单一出处 */
   --rose-bg: #8e2723;
   --rose-border: #c0453c;
   --beast-bg: #33608f;
@@ -466,6 +466,36 @@ h2 {
 
 .memo-badge.empty:hover {
   border-color: var(--slot-dim);
+}
+
+/* 真实阵营色徽（spec 2026-10-04）：自己座位卡右上角的纯色圆点，读 viewer 真实阵营。
+   玫红/兽蓝沿用阵营 token；审判者不属于任何家族，复用灰 token（与"未知标记"的区分
+   靠位置与悬浮文字）。基类只管造型（图例浮层复用），贴角定位仅在自己座位内生效。 */
+.true-color-badge {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.seat > .true-color-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+}
+
+.true-color-badge.rose { background: var(--rose-bg); }
+.true-color-badge.beast { background: var(--beast-bg); }
+.true-color-badge.order { background: var(--mark-gray-bg); }
+
+.self-badge-demo {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .memo-picker-backdrop {

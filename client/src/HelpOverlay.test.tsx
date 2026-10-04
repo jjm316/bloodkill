@@ -32,7 +32,7 @@ describe("RulesOverlay 浮层", () => {
     expect(inquisitor.textContent).toContain("真诅咒");
   });
 
-  it("图例含 6 条道具条目与线索/徽记两条短注", () => {
+  it("图例含 6 条道具条目与线索/徽记/真实阵营色三条短注", () => {
     const { container } = render(<RulesOverlay onClose={() => {}} />);
     const items = container.querySelectorAll("ul.legend-list > li.legend-row");
     expect(items.length).toBe(6);
@@ -40,9 +40,10 @@ describe("RulesOverlay 浮层", () => {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     const notes = container.querySelectorAll("ul.clue-notes > li.clue-note");
-    expect(notes.length).toBe(2);
+    expect(notes.length).toBe(3);
     expect(notes[0].textContent).toContain("填亮几格");
     expect(notes[1].textContent).toContain("左邻");
+    expect(notes[2].textContent).toContain("真实阵营色徽");
   });
 
   it("Escape 与点击遮罩关闭，点击浮层内容不关闭", () => {

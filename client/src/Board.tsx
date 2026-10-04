@@ -78,6 +78,10 @@ const MEMO_COLORS: { value: MemoColor; label: string; name: string }[] = [
 ];
 const MEMO_MARKS: MemoMark[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, "审"];
 
+// 真实阵营色徽（spec 2026-10-04）：faction → 色调类。审判者不属于任何家族，无自有色，
+// 复用灰 token（拍板 Q3c）；与"未知标记"灰的区分靠位置（仅自己卡上）与悬浮文字。
+const FACTION_TONE: Record<string, string> = { rose: "rose", beast: "beast", "secret-order": "order" };
+
 // 备忘选择器浮层的预估尺寸（px）：定位贴边与上下翻转的保守估计
 const MEMO_PICKER_EST = { width: 240, height: 260 };
 
@@ -286,6 +290,16 @@ const Seat = memo(function Seat({
           </span>
         )}
       </div>
+      {/* 真实阵营色徽：identity 只由 Board 传给 self 座位，色徽因此只可能出现在自己卡上；
+          它是事实、徽记是线索，允许两者矛盾（小丑/审判者） */}
+      {identity && (
+        <span
+          role="img"
+          className={`true-color-badge ${FACTION_TONE[identity.faction] ?? "order"}`}
+          title={`你的真实阵营：${displayFaction(identity.faction)}`}
+          aria-label={`你的真实阵营：${displayFaction(identity.faction)}`}
+        />
+      )}
       {identity && clueLine && <div className="own-clue-icon">{clueLine}</div>}
       <ClueSlots player={player} selfMarkers={selfMarkers} selfRank={identity?.rank} highlight={highlight} selfActions={selfActions} onSlotAction={onSlotAction} />
       <Resources resources={player.resources} />
