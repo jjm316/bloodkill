@@ -97,6 +97,68 @@ def answer_poll(engine, *volunteers):
     return events
 
 
+def attack_wound(engine, victim_id, prefix, reveal_token=None, color=None):
+    """Resolve one real attack on victim_id end to end: reroute the dagger if
+    the victim holds it, declare the attack, decline the poll, then let the
+    victim answer their reveal window with the given token.
+
+    A wound the engine resolves directly (the last plain marker at the forced
+    third point) opens no window and needs no token; a wound that opens the
+    victim's skill window leaves it open for the caller to answer. Returns the
+    wound's combined events, so the poll resolution (forced reveals, resource
+    returns) stays assertable.
+    """
+    holder = engine.state.dagger_holder_id
+    if holder == victim_id:
+        give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid != victim_id and not player.captured))
+    attacker = engine.state.dagger_holder_id
+    events = list(engine.apply(command(engine, f"{prefix}-attack", attacker, "attack", targetPlayerId=victim_id)))
+    events += answer_poll(engine)
+    pending = engine.state.pending
+    if pending is not None and pending.kind == "reveal":
+        assert reveal_token is not None, f"{prefix}: reveal window opened but no token given"
+        payload = {"token": reveal_token}
+        if color is not None:
+            payload["color"] = color
+        events += engine.apply(command(engine, f"{prefix}-reveal", pending.actor_player_id, "choose-reveal", **payload))
+    return events
+
+
+def arm_guardian_ward(engine, guardian_id, ward_id, prefix):
+    """Walk the guardian's first wound through a real attack: the guardian
+    shows the rank, the rank-6 skill window opens on that reveal, and using it
+    hands the ward target the shield and the guardian the sword."""
+    attack_wound(engine, guardian_id, prefix, reveal_token="rank")
+    pending = engine.state.pending
+    assert pending is not None and pending.kind == "skill" and pending.rank == 6, f"{prefix}: expected the guardian's skill window"
+    return engine.apply(command(engine, f"{prefix}-skill", guardian_id, "choose-skill", use=True, targetPlayerId=ward_id))
+
+
+def assert_ward_returned(testcase, events, guardian_id, ward_id):
+    """The rank-6 third-point settlement: exactly one sword and one shield
+    return, both reasoned guardian-ward-complete, sword before shield."""
+    testcase.assertEqual(
+        [event.payload for event in events if event.event_type == "ResourceReturned"],
+        [
+            {"playerId": guardian_id, "resource": "sword", "amount": 1, "reason": "guardian-ward-complete"},
+            {"playerId": ward_id, "resource": "shield", "amount": 1, "reason": "guardian-ward-complete"},
+        ],
+    )
+
+
+def capture_at_three_damage(engine, victim_id, prefix):
+    """Take a 3-damage victim through the fourth point with a real attack: the
+    capture settles the game. Returns the capture command's events so tests can
+    assert the ward return never re-fires on them."""
+    holder = engine.state.dagger_holder_id
+    if holder == victim_id:
+        give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid != victim_id and not player.captured))
+    attacker = engine.state.dagger_holder_id
+    events = list(engine.apply(command(engine, f"{prefix}-capture", attacker, "attack", targetPlayerId=victim_id)))
+    events += answer_poll(engine)
+    return events
+
+
 def assassin_skill_scenario_log() -> list[list]:
     """Drive the assassin skill to completion and return its full event log.
 
@@ -745,22 +807,138 @@ class SkillBranchTests(unittest.TestCase):
         self.assertIsNone(engine.state.pending)
         self.assertEqual(engine.state.dagger_holder_id, target.player_id)
 
-    def test_guardian_grants_ward_resources_and_returns_them_at_three_damage(self):
+    def test_guardian_returns_sword_and_shield_on_third_attack_damage(self):
+        # B7 (corpus rank 6 / batch confirmation "含技能/反伤源"): the return
+        # rides the third damage point whatever its source. This scenario walks
+        # a plain attack through real commands — the old whitebox test called
+        # the private _after_damage on a hand-set damage total instead.
         engine, found = started_with_ranks(6, 6)
-        owner = found[6]
-        target = next(player for player in engine.state.players.values() if player.player_id != owner.player_id)
-        self.open_skill(engine, owner)
-        events = engine.apply(command(engine, "guardian", owner.player_id, "choose-skill", use=True, targetPlayerId=target.player_id))
-        self.assertEqual(engine.state.players[target.player_id].resources["shield"], 1)
-        self.assertEqual(engine.state.players[owner.player_id].resources["sword"], 1)
-        target = engine.state.players[target.player_id]
-        owner = engine.state.players[owner.player_id]
-        owner.damage = 3
-        owner.revealed = {"rank", "marker-0", "marker-1"}
-        returned = engine._after_damage(engine.state, command(engine, "return-ward", owner.player_id, "choose-skill", use=False), owner, {"trigger": None})
-        self.assertEqual([event.event_type for event in returned], ["ResourceReturned", "ResourceReturned"])
-        self.assertEqual(target.resources["shield"], 0)
-        self.assertEqual(engine.state.players[owner.player_id].resources["sword"], 0)
+        guardian = found[6]
+        ward = next(pid for pid in engine.state.players if pid != guardian.player_id)
+        skill_events = arm_guardian_ward(engine, guardian.player_id, ward, "guardian-a")
+        self.assertEqual(
+            [event.event_type for event in skill_events],
+            ["SkillUsed", "ResourceGranted", "ResourceGranted", "PhaseChanged"],
+        )
+        self.assertEqual(engine.state.players[guardian.player_id].resources["sword"], 1)
+        self.assertEqual(engine.state.players[ward].resources["shield"], 1)
+        attack_wound(engine, guardian.player_id, "guardian-a2", reveal_token="marker-0")
+        events = attack_wound(engine, guardian.player_id, "guardian-a3")
+        assert_ward_returned(self, events, guardian.player_id, ward)
+        guardian_player = engine.state.players[guardian.player_id]
+        self.assertEqual(guardian_player.damage, 3)
+        self.assertIsNone(guardian_player.shield_ward_id)
+        self.assertEqual(guardian_player.resources["sword"], 0)
+        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
+        # the fourth point captures and must never re-emit the ward return
+        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-a4")
+        self.assertEqual(engine.state.status, "ended")
+        self.assertIn("PlayerCaptured", [event.event_type for event in capture_events])
+        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+
+    def test_guardian_returns_sword_and_shield_on_intervention_damage(self):
+        # B7 via the blocking source: the guardian volunteers as responder and
+        # the intervention wound is the third point. C1 keeps rank-shown
+        # players off the volunteer list, so the witness first hides the
+        # guardian's rank again the only way the rules allow — the alchemist
+        # heals the token back (which also heals a point) — and then re-takes
+        # the wounds before blocking.
+        engine, found = started_with_ranks(6, 6, 4)
+        guardian = found[6]
+        alchemist = found[4]
+        ward = next(pid for pid in engine.state.players if pid not in (guardian.player_id, alchemist.player_id))
+        arm_guardian_ward(engine, guardian.player_id, ward, "guardian-b")
+        attack_wound(engine, guardian.player_id, "guardian-b2", reveal_token="marker-0")
+        self.assertEqual(engine.state.players[guardian.player_id].damage, 2)
+        # the alchemist blocks a third attack aimed at the guardian and heals
+        # the rank token back: damage 2 -> 1, rank hidden, sword and ward alive
+        give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid not in (guardian.player_id, alchemist.player_id) and not player.captured))
+        attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "guardian-b3-attack", attacker, "attack", targetPlayerId=guardian.player_id))
+        answer_poll(engine, alchemist.player_id)
+        self.assertEqual(engine.state.pending.kind, "skill")
+        self.assertEqual(engine.state.pending.rank, 4)
+        engine.apply(command(engine, "guardian-b3-heal", alchemist.player_id, "choose-skill", use=True, mode="heal"))
+        self.assertEqual(engine.state.pending.kind, "token-return")
+        engine.apply(command(engine, "guardian-b3-return", guardian.player_id, "choose-return", token="rank"))
+        guardian_player = engine.state.players[guardian.player_id]
+        self.assertEqual(guardian_player.damage, 1)
+        self.assertNotIn("rank", guardian_player.revealed)
+        # back to two wounds with the rank still hidden, then block for a victim
+        attack_wound(engine, guardian.player_id, "guardian-b4", reveal_token="marker-1")
+        self.assertEqual(engine.state.players[guardian.player_id].damage, 2)
+        give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid not in (guardian.player_id, ward) and not player.captured))
+        attacker = engine.state.dagger_holder_id
+        victim = next(pid for pid, player in engine.state.players.items() if pid not in (attacker, guardian.player_id, ward) and not player.captured)
+        engine.apply(command(engine, "guardian-b5-attack", attacker, "attack", targetPlayerId=victim))
+        events = answer_poll(engine, guardian.player_id)
+        damage = next(event for event in events if event.event_type == "DamageApplied")
+        self.assertEqual(damage.payload["source"], "intervention")
+        self.assertEqual(damage.payload["targetPlayerId"], guardian.player_id)
+        assert_ward_returned(self, events, guardian.player_id, ward)
+        guardian_player = engine.state.players[guardian.player_id]
+        # the intervention wound force-reveals the rank on its way through
+        self.assertIn("rank", guardian_player.revealed)
+        self.assertEqual(guardian_player.damage, 3)
+        self.assertEqual(guardian_player.resources["sword"], 0)
+        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
+        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-b6")
+        self.assertEqual(engine.state.status, "ended")
+        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+
+    def test_guardian_returns_sword_and_shield_on_mentalist_skill_damage(self):
+        # B7 via the skill-damage source: the mentalist's wound is the third
+        # point; with the guardian's rank already shown, the forced-rank text
+        # falls back to the last plain marker, revealed with no window.
+        engine, found = started_with_ranks(6, 6, 5)
+        guardian = found[6]
+        mentalist = found[5]
+        ward = next(pid for pid in engine.state.players if pid not in (guardian.player_id, mentalist.player_id))
+        arm_guardian_ward(engine, guardian.player_id, ward, "guardian-c")
+        attack_wound(engine, guardian.player_id, "guardian-c2", reveal_token="marker-0")
+        attack_wound(engine, mentalist.player_id, "mentalist-c", reveal_token="rank")
+        self.assertEqual(engine.state.pending.kind, "skill")
+        self.assertEqual(engine.state.pending.rank, 5)
+        events = engine.apply(command(engine, "mentalist-c-skill", mentalist.player_id, "choose-skill", use=True, targetPlayerId=guardian.player_id))
+        guardian_player = engine.state.players[guardian.player_id]
+        self.assertEqual(
+            [(event.event_type, event.payload) for event in events if event.event_type == "ClueRevealed"],
+            [("ClueRevealed", {"playerId": guardian.player_id, "kind": "marker-1", "value": guardian_player.identity_markers[1]})],
+        )
+        assert_ward_returned(self, events, guardian.player_id, ward)
+        self.assertEqual(guardian_player.damage, 3)
+        self.assertEqual(guardian_player.resources["sword"], 0)
+        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
+        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-c4")
+        self.assertEqual(engine.state.status, "ended")
+        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
+
+    def test_guardian_returns_sword_and_shield_on_berserker_reaction_damage(self):
+        # B7 via the reaction source: the guardian attacks the berserker and
+        # the counter wound is the third point.
+        engine, found = started_with_ranks(6, 6, 7)
+        guardian = found[6]
+        berserker = found[7]
+        ward = next(pid for pid in engine.state.players if pid not in (guardian.player_id, berserker.player_id))
+        arm_guardian_ward(engine, guardian.player_id, ward, "guardian-d")
+        attack_wound(engine, guardian.player_id, "guardian-d2", reveal_token="marker-0")
+        give_dagger_to(engine, guardian.player_id)
+        engine.apply(command(engine, "guardian-d3-attack", guardian.player_id, "attack", targetPlayerId=berserker.player_id))
+        answer_poll(engine)
+        reveal_rank(engine, berserker.player_id, "guardian-d3-reveal")
+        self.assertEqual(engine.state.pending.kind, "skill")
+        self.assertEqual(engine.state.pending.rank, 7)
+        events = engine.apply(command(engine, "guardian-d3-counter", berserker.player_id, "choose-skill", use=True))
+        reaction = next(event for event in events if event.event_type == "DamageApplied")
+        self.assertEqual(reaction.payload, {"targetPlayerId": guardian.player_id, "amount": 1, "source": "reaction", "triggerContext": None})
+        assert_ward_returned(self, events, guardian.player_id, ward)
+        guardian_player = engine.state.players[guardian.player_id]
+        self.assertEqual(guardian_player.damage, 3)
+        self.assertEqual(guardian_player.resources["sword"], 0)
+        self.assertEqual(engine.state.players[ward].resources["shield"], 0)
+        capture_events = capture_at_three_damage(engine, guardian.player_id, "guardian-d4")
+        self.assertEqual(engine.state.status, "ended")
+        self.assertNotIn("ResourceReturned", [event.event_type for event in capture_events])
 
     def test_mage_obscures_markers_and_grants_staff(self):
         engine, found = started_with_ranks(6, 8)
@@ -774,6 +952,108 @@ class SkillBranchTests(unittest.TestCase):
         self.assertEqual(engine.state.players[target.player_id].identity_markers, ["unknown", "unknown"])
         self.assertIn("IdentityMarkersObscured", [event.event_type for event in events])
         self.assertEqual(engine.state.players[target.player_id].revealed_values["marker-0"], "unknown")
+
+    def test_mage_erasure_turns_unlit_wild_markers_into_plain_question_marks(self):
+        # B9 (corpus ruling: 法杖把审判者 wild 标记变普通问号、自选色永久丧失,
+        # kept deliberately as the families' answer to the inquisitor). With
+        # both wild markers unlit, the erasure leaves plain question marks and
+        # the next wound's reveal window offers them bare — the rose/beast/
+        # question-mark colour window of issue 26 is gone for good.
+        engine, found = started_with_ranks(7, "fleur-cross", 8)
+        mage = found[8]
+        inquisitor = found["fleur-cross"]
+        self.assertEqual(engine.state.players[inquisitor.player_id].identity_markers, ["wild", "wild"])
+        attack_wound(engine, mage.player_id, "mage-a", reveal_token="rank")
+        self.assertEqual(engine.state.pending.rank, 8)
+        events = engine.apply(command(engine, "mage-a-skill", mage.player_id, "choose-skill", use=True, targetPlayerId=inquisitor.player_id))
+        obscured = next(event for event in events if event.event_type == "IdentityMarkersObscured")
+        self.assertEqual(obscured.payload, {"playerId": inquisitor.player_id})
+        granted = next(event for event in events if event.event_type == "ResourceGranted")
+        self.assertEqual(granted.payload, {"playerId": inquisitor.player_id, "resource": "staff", "amount": 1})
+        target = engine.state.players[inquisitor.player_id]
+        self.assertEqual(target.identity_markers, ["unknown", "unknown"])
+        self.assertEqual(target.resources["staff"], 1)
+        # the next wound reveals a marker straight as the question mark: no
+        # colour choice is offered and none is needed
+        give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid not in (mage.player_id, inquisitor.player_id) and not player.captured))
+        attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "inq-a-attack", attacker, "attack", targetPlayerId=inquisitor.player_id))
+        answer_poll(engine)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        actions = legal_actions(engine.state, inquisitor.player_id)
+        self.assertEqual(
+            [action for action in actions if action.get("token") == "marker-0"],
+            [{"type": "choose-reveal", "token": "marker-0"}],
+        )
+        self.assertEqual(
+            [action for action in actions if action.get("token") == "marker-1"],
+            [{"type": "choose-reveal", "token": "marker-1"}],
+        )
+        revealed_events = engine.apply(command(engine, "inq-a-reveal", inquisitor.player_id, "choose-reveal", token="marker-0"))
+        revealed = next(event for event in revealed_events if event.event_type == "ClueRevealed")
+        self.assertEqual(revealed.payload, {"playerId": inquisitor.player_id, "kind": "marker-0", "value": "unknown"})
+        self.assertEqual(engine.state.players[inquisitor.player_id].revealed_values["marker-0"], "unknown")
+
+    def test_mage_erasure_rewrites_a_public_wild_colour_to_the_question_mark(self):
+        # B8 × B9 crossover: a wild marker already shown with a chosen colour
+        # is public information the erasure rewrites — the token stays in the
+        # revealed set, its public value becomes the question mark, and the
+        # surviving wild marker loses the colour window too.
+        engine, found = started_with_ranks(7, "fleur-cross", 8)
+        mage = found[8]
+        inquisitor = found["fleur-cross"]
+        attack_wound(engine, inquisitor.player_id, "inq-b1", reveal_token="marker-0", color="rose")
+        target = engine.state.players[inquisitor.player_id]
+        self.assertEqual(target.revealed_values["marker-0"], "rose")
+        self.assertEqual(target.damage, 1)
+        attack_wound(engine, mage.player_id, "mage-b", reveal_token="rank")
+        events = engine.apply(command(engine, "mage-b-skill", mage.player_id, "choose-skill", use=True, targetPlayerId=inquisitor.player_id))
+        self.assertIn("IdentityMarkersObscured", [event.event_type for event in events])
+        target = engine.state.players[inquisitor.player_id]
+        self.assertEqual(target.identity_markers, ["unknown", "unknown"])
+        self.assertIn("marker-0", target.revealed)
+        self.assertEqual(target.revealed_values["marker-0"], "unknown")
+        self.assertEqual(target.resources["staff"], 1)
+        # the surviving wild marker reveals bare: the colour choice is gone
+        give_dagger_to(engine, next(pid for pid, player in engine.state.players.items() if pid not in (mage.player_id, inquisitor.player_id) and not player.captured))
+        attacker = engine.state.dagger_holder_id
+        engine.apply(command(engine, "inq-b2-attack", attacker, "attack", targetPlayerId=inquisitor.player_id))
+        answer_poll(engine)
+        self.assertEqual(engine.state.pending.kind, "reveal")
+        actions = legal_actions(engine.state, inquisitor.player_id)
+        self.assertEqual(
+            [action for action in actions if action.get("token") == "marker-1"],
+            [{"type": "choose-reveal", "token": "marker-1"}],
+        )
+        revealed_events = engine.apply(command(engine, "inq-b2-reveal", inquisitor.player_id, "choose-reveal", token="marker-1"))
+        revealed = next(event for event in revealed_events if event.event_type == "ClueRevealed")
+        self.assertEqual(revealed.payload["value"], "unknown")
+        self.assertEqual(engine.state.players[inquisitor.player_id].revealed_values["marker-1"], "unknown")
+
+    def test_rank_shown_player_is_never_listed_as_intervention_volunteer(self):
+        # C1/C2 machine note: the eligibility gate excludes rank-shown players
+        # outright. Together with the property invariant "damage 3 always
+        # shows the rank" this is what keeps "a 3-damage volunteer blocks for
+        # the inquisitor's victim" (corpus C2) unreachable.
+        engine = started(6)
+        attacker = engine.state.dagger_holder_id
+        shown = next(pid for pid in engine.state.players if pid != attacker)
+        engine.apply(command(engine, "wound-shown", attacker, "attack", targetPlayerId=shown))
+        answer_poll(engine)
+        reveal_rank(engine, shown)
+        engine.apply(command(engine, "no-skill", shown, "choose-skill", use=False))
+        self.assertIn("rank", engine.state.players[shown].revealed)
+        give_dagger_to(engine, next(pid for pid in engine.state.players if pid not in (attacker, shown)))
+        second_attacker = engine.state.dagger_holder_id
+        target = next(pid for pid in engine.state.players if pid not in (second_attacker, shown))
+        engine.apply(command(engine, "wound-second", second_attacker, "attack", targetPlayerId=target))
+        pending = engine.state.pending
+        self.assertIsNotNone(pending)
+        self.assertNotIn(shown, pending.eligible_player_ids)
+        # the gate is total: no legal action, not even a decline
+        self.assertEqual(legal_actions(engine.state, shown), [])
+        for pid in pending.eligible_player_ids:
+            self.assertNotIn("rank", engine.state.players[pid].revealed)
 
     def test_courtesan_grants_fan_and_blocks_intervention(self):
         engine, found = started_with_ranks(6, 9)

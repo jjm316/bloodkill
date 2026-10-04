@@ -180,6 +180,14 @@ def assert_state_invariants(testcase: unittest.TestCase, state) -> None:
         testcase.assertEqual(player.captured, player.damage == 4, player.player_id)
         testcase.assertLessEqual(len(player.revealed), 3, player.player_id)
         testcase.assertTrue(player.revealed <= {"rank", "marker-0", "marker-1"}, player.player_id)
+        # C2 consistency note, machine-checked (coupling review): the third
+        # point force-reveals the rank (A5), and the only command that hides a
+        # rank again — the alchemist's token return — also heals a point, so a
+        # player at exactly 3 damage always shows their rank. That is what
+        # keeps "3-damage volunteer" off the intervention list (C1) and the
+        # corpus C2 branch unreachable.
+        if player.damage == 3:
+            testcase.assertIn("rank", player.revealed, player.player_id)
     if state.status == "active":
         testcase.assertTrue(6 <= len(state.players) <= 12)
         testcase.assertIsNotNone(state.dagger_holder_id)
