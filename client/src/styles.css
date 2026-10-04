@@ -1,6 +1,6 @@
 /* 主题：深底烛光 + 绯红/金双强调（.scratch/ui-table-theme/spec.md，2026-09-13 拍板）。
    色值以 mockups/ 参考稿为起点，经对比度校验（正文 ≥4.5:1）。
-   金 = 匕首/等级/高亮；绯红 = 品牌/伤害/警示；玫红/兽蓝/灰线索语义不变。 */
+   金 = 匕首/等级/高亮/自己标记（2026-10-04 起：self 色徽金环 + 左上「你」字标）；绯红 = 品牌/伤害/警示；玫红/兽蓝/灰线索语义不变。 */
 :root {
   color-scheme: light dark;
   /* 居中卡片的视口自适应上限：窄屏左右各留 16px，消灭横向溢出 */
@@ -28,6 +28,9 @@
   --beast-border: #4f83b5;
   --mark-gray-bg: #46303a;
   --mark-gray-border: #5f4652;
+  /* 审判者色徽专属（P1 重设计拍板 2026-10-04）：紫罗兰对卡底 3.9:1 达标，
+     不进槽位/备忘三色语言；「灰」从此单义＝未知标记 */
+  --order-bg: #8a5fc0;
   --slot-dim: #937f88; /* 未亮出标记的暗记字 */
   --slot-dashed: #5d414d; /* 空槽虚线 */
   /* 页头"？"徽记的边长（ui-help-legend issues/01）：宽高同源一处定义，
@@ -468,17 +471,20 @@ h2 {
   border-color: var(--slot-dim);
 }
 
-/* 真实阵营色徽（spec 2026-10-04）：自己座位卡右上角的纯色圆点，读 viewer 真实阵营。
-   玫红/兽蓝沿用阵营 token；审判者不属于任何家族，复用灰 token（与"未知标记"的区分
-   靠位置与悬浮文字）。基类只管造型（图例浮层复用），贴角定位仅在自己座位内生效。 */
+/* 真实阵营色徽（spec 2026-10-04；P1 重设计拍板同日）：自己座位卡右上角的圆点。
+   金环＝「这是你自己」的标记语言（11:1，兼作全阵营达标的组件边界；
+   别人卡的备忘角标永远是暗环，两型不混淆）；芯色读 viewer 真实阵营：
+   玫红/兽蓝沿用阵营 token，审判者用专属紫罗兰 --order-bg。
+   允许与徽记线索矛盾（小丑/审判者的徽记会骗人），色徽是事实。
+   基类只管造型（图例浮层复用），贴角定位仅在自己座位内生效。 */
 .true-color-badge {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex: none;
   border-radius: 50%;
-  border: 2px solid var(--card);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--accent-gold);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
 }
 
 .seat > .true-color-badge {
@@ -490,7 +496,24 @@ h2 {
 
 .true-color-badge.rose { background: var(--rose-bg); }
 .true-color-badge.beast { background: var(--beast-bg); }
-.true-color-badge.order { background: var(--mark-gray-bg); }
+.true-color-badge.order { background: var(--order-bg); }
+
+/* 「你」字标（P1 重设计拍板）：自己座位卡左上角金底小 chip，页面级一眼定位自己；
+   与等待房名册「（你）」同语言。左上归身份标记、右上归阵营色徽，两角各司其职。 */
+.self-tag {
+  position: absolute;
+  top: -9px;
+  left: -8px;
+  z-index: 2;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-gold);
+  color: #1f1209;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
 
 .self-badge-demo {
   display: inline-flex;

@@ -290,6 +290,8 @@ const Seat = memo(function Seat({
           </span>
         )}
       </div>
+      {/* 「你」字标：页面级区分自己/他人（P1 重设计拍板），self 座位专属 */}
+      {self && <span className="self-tag">你</span>}
       {/* 真实阵营色徽：identity 只由 Board 传给 self 座位，色徽因此只可能出现在自己卡上；
           它是事实、徽记是线索，允许两者矛盾（小丑/审判者） */}
       {identity && (

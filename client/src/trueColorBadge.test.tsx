@@ -4,10 +4,10 @@ import { Board } from "./Board";
 import type { GameState, PlayerView } from "./types";
 import { displayFaction } from "./types";
 
-// 真实阵营色徽（spec 2026-10-04 拍板）：自己座位卡右上角的纯色圆点，
-// 读 viewer.identity.faction（玫红=玫瑰、兽蓝=野兽、灰=审判者"不属于任何家族"）。
-// 身份只下发给本人（PROTOCOL.md 隐私保证），色徽因此只可能出现在自己座位上，
-// 且允许与徽记线索矛盾（小丑/审判者的徽记会骗人）。
+// 真实阵营色徽（spec 2026-10-04 拍板；同日 P1 重设计）：自己座位卡右上角的
+// 「色芯+金环」圆点，读 viewer.identity.faction（玫红=玫瑰、兽蓝=野兽、紫=审判者
+// "不属于任何家族"；金环=自己标记语言）。身份只下发给本人（PROTOCOL.md 隐私保证），
+// 色徽因此只可能出现在自己座位上，且允许与徽记线索矛盾（小丑/审判者的徽记会骗人）。
 
 function makePlayer(id: string, seat: number): PlayerView {
   return {
@@ -74,5 +74,19 @@ describe("真实阵营色徽", () => {
   it("旁观/未发牌（viewer 为 null）不渲染色徽", () => {
     const { container } = render(<Board game={makeGame(null)} />);
     expect(container.querySelectorAll(".true-color-badge")).toHaveLength(0);
+  });
+
+  it("自己座位卡左上角渲染「你」字标，别人座位永不渲染（页面级区分自己/他人）", () => {
+    const { container } = render(<Board game={makeGame("rose")} />);
+    const tag = container.querySelector(".seat.self > .self-tag");
+    expect(tag, "「你」字标渲染在自己卡上").not.toBeNull();
+    expect(tag!.textContent).toBe("你");
+    expect(container.querySelectorAll(".seat:not(.self) .self-tag")).toHaveLength(0);
+    expect(container.querySelectorAll(".self-tag")).toHaveLength(1);
+  });
+
+  it("旁观（viewer 为 null）无自己座位，故无「你」字标", () => {
+    const { container } = render(<Board game={makeGame(null)} />);
+    expect(container.querySelectorAll(".self-tag")).toHaveLength(0);
   });
 });
