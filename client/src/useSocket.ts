@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandAck, GameEvent, RoomState, ServerError } from "./types";
 
-const PROTOCOL_VERSION = "2";
+const PROTOCOL_VERSION = "3";
 // 初始进房超时：从未收到过状态投影的连接，超过此时长仍未应答视为进房失败
 // （房间号错误 / 服务器未启动 / 网络不通）。已收到过状态的断线重连不受影响。
 const JOIN_TIMEOUT_MS = 10_000;

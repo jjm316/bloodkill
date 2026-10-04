@@ -6,6 +6,11 @@
 块带本人 `clueIcon` 与右邻徽记 `seenNeighbourClue`，公共 `players[]` 条目不含任何
 徽记字段。房主只有管理权（开始/锁定房间），不能替其他玩家操作。
 
+协议版本：当前 v3（2026-10-04，ADR 0012）。v2 → v3 硬切：干涉投票前新增被攻击者
+挡刀请求门控（`answer-intervention-request` 命令、`InterventionGate*` 三个事件、
+pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-target`），
+旧版本客户端与旧服务端互拒。
+
 ## REST API
 
 | 方法 | 路径 | 说明 |
@@ -25,7 +30,7 @@
 ### 客户端 → 服务器
 
 ```json
-{"type": "hello", "name": "小明", "token": "<hostToken 或省略>", "clientRevision": 12, "protocolVersion": "2"}
+{"type": "hello", "name": "小明", "token": "<hostToken 或省略>", "clientRevision": 12, "protocolVersion": "3"}
 ```
 
 - `name` 为空字符串 → 旁观者（`yourPlayerId = null`，不可操作）。
@@ -58,7 +63,8 @@
 | 命令 | payload | 说明 |
 | --- | --- | --- |
 | `pass-dagger` | `{"targetPlayerId"}` | 匕首持有者传递匕首 |
-| `attack` | `{"targetPlayerId"}` | 攻击目标（护盾/已捕获 → 引擎报错；审判者不可攻击已受 3 伤者，其投影攻击列表已预先过滤）；声明后自动开启干涉投票，资格集为空时直接结算 |
+| `attack` | `{"targetPlayerId"}` | 攻击目标（护盾/已捕获 → 引擎报错；审判者不可攻击已受 3 伤者，其投影攻击列表已预先过滤）；声明后先开被攻击者的挡刀请求门控（ADR 0012），资格集为空时不开门控直接结算 |
+| `answer-intervention-request` | `{"need": true\|false}` | 挡刀请求门控确认，仅门控阶段的被攻击者本人；「请求挡刀」开启干涉投票，「自己承受」攻击立即在原目标结算 |
 | `respond-intervention` | `{"volunteer": true\|false}` | 干涉投票表态，仅投票阶段的有资格未表态玩家；答后不可反悔 |
 | `choose-intervention` | `{"responderPlayerId"}` | ≥2 人自愿后，被攻击者从自愿者中选一人承伤（完成干涉） |
 | `decline-intervention` | `{}` | ≥2 人自愿后，被攻击者拒绝全部自愿者，攻击正常结算 |
@@ -71,7 +77,8 @@
 `start-game`、`join-game`、`timeout-intervention`、`timeout-reveal`、`timeout-skill`、
 `timeout-return` 由服务器托管：直接发送会得到 `command.server-managed`。
 `timeout-intervention` 是干涉窗口到期时由服务端定时器（`server/deadlines.py`，可复用抽象）
-代为提交的系统命令，payload 为 `{"stage": "poll"|"choice"}`；投票阶段到期未表态视为不干涉，
+代为提交的系统命令，payload 为 `{"stage": "gate"|"poll"|"choice"}`；门控阶段到期未确认
+视为不需要挡刀并立即结算，投票阶段到期未表态视为不干涉，
 三选一阶段到期视为全部拒绝。
 
 三条单人窗口超时命令（issue 05 / ADR 0011）走同一套定时器抽象，payload 携带窗口身份
@@ -86,15 +93,33 @@
 超时自动结算的 `ClueRevealed` / `SkillDeclined` / `TokenReturned` 事件携带
 `"reason": "timeout"`，事件日志据此后缀显示「（超时自动）」。
 
-### 干涉投票（协议 v2，ADR 0002）
+### 干涉窗口：请求门控 → 全员投票 → 三选一（协议 v3，ADR 0012）
 
-攻击声明后服务器自动开启全员公开自愿投票（`InterventionPollOpened`，含资格名单）。
-有资格玩家逐人 `respond-intervention` 表态，`InterventionResponded` 实时公开广播；
-全员表态完毕后：无人自愿 → `InterventionDeclined`（reason=no-volunteers）+ 攻击正常
-结算；恰一人自愿 → `InterventionSelected`，干涉必然发生；≥2 人自愿 →
-`InterventionChoiceOpened` 进入被攻击者三选一阶段（`choose-intervention` /
-`decline-intervention`）。倒计时 deadline 由服务端注入每个投影的
-`pending.deadline`（Unix 秒），配合 `serverTime` 对齐本地时钟；引擎状态本身不含墙钟。
+2026-10-04 裁决（ADR 0012）：攻击声明后不再自动开启全员投票，先开**仅被攻击者本人**
+作答的挡刀请求门控；门控放行后投票与三选一照 ADR 0002 原样运行。三个窗口依次为：
+
+1. **gate（请求门控）**：`attack` 后若挡刀资格集非空，引擎广播
+   `InterventionGateOpened {targetPlayerId, attackerPlayerId, eligiblePlayerIds}` 并进入
+   `stage:"gate"` 的 pending；资格集为空（如目标持扇）则**不开门控**、攻击直接结算。
+   门控期间只有被攻击者持有 `answer-intervention-request` 动作，其余玩家（含攻击者与
+   有资格玩家）无任何动作，只看到等待；
+   - `need=true` → `InterventionGateAccepted {targetPlayerId}`，随后紧跟
+     `InterventionPollOpened {targetPlayerId, attackerPlayerId, eligiblePlayerIds}`（字段
+     与 GateOpened 相同），进入全员投票；
+   - `need=false` → `InterventionGateDeclined {targetPlayerId, reason:"target-declined"}`，
+     攻击立即在原目标按无人自愿的既有路径结算（此路径不发 `InterventionDeclined`）；
+   - 到期未答 → 服务端代发 `timeout-intervention {"stage": "gate"}`，
+     `InterventionGateDeclined {targetPlayerId, reason:"timeout"}`，同样立即结算。
+2. **poll（全员公开自愿投票，ADR 0002 语义原样）**：有资格玩家逐人
+   `respond-intervention` 表态，`InterventionResponded` 实时公开广播；全员表态完毕后：
+   无人自愿 → `InterventionDeclined`（reason=no-volunteers）+ 攻击正常结算；恰一人自愿 →
+   `InterventionSelected`，干涉必然发生；≥2 人自愿 → `InterventionChoiceOpened` 进入
+   被攻击者三选一阶段（`choose-intervention` / `decline-intervention`）。
+3. **choice（三选一）**：与 v2 完全一致，无改动。
+
+三个窗口各自独立起算倒计时，且都复用房主开局配置的 `interventionTimeoutSeconds`
+（不新增配置项）。deadline 由服务端注入每个投影的 `pending.deadline`（Unix 秒），配合
+`serverTime` 对齐本地时钟；引擎状态本身不含墙钟，到期由服务端代发对应 timeout 命令。
 单人窗口（亮牌/技能/退牌，ADR 0011）同样携带 `pending.deadline`，到期由服务端代发
 上表的 timeout 命令自动结算，对局不停摆。
 
@@ -103,7 +128,7 @@
 | 类型 | 说明 |
 | --- | --- |
 | `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`，并附服务端墙钟 `serverTime`（倒计时对齐用）。 |
-| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉投票的表态事件（`InterventionResponded` 等）全部公开。 |
+| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉的请求门控事件（`InterventionGateOpened` / `InterventionGateAccepted` / `InterventionGateDeclined`）与投票表态事件（`InterventionResponded` 等）全部公开。 |
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
 | `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭。 |
@@ -155,10 +180,12 @@
     }
   ],
   "daggerHolderId": "p-…",
-  "phase": {"kind": "action", "…"} | {"kind": "intervention", "stage": "poll|choice", "activePlayerId": "p-…"} | {"kind": "skill", "…"},
+  "phase": {"kind": "action", "…"} | {"kind": "intervention", "stage": "gate|poll|choice", "activePlayerId": "p-…"} | {"kind": "skill", "…"},
   "pending": {
-    /* 干涉窗口额外携带：stage（poll|choice）、responses（{playerId: volunteer}，实时公开）、
-       volunteerPlayerIds（自愿者名单）、deadline（服务端注入的到期 Unix 秒）；
+    /* 干涉窗口额外携带：stage（gate|poll|choice）、deadline（服务端注入的到期 Unix 秒）；
+       gate 期间（ADR 0012）尚未开票，只有 stage 与既有基础字段 eligiblePlayerIds，
+       responses / volunteerPlayerIds 不存在；开票后才有 responses（{playerId: volunteer}，
+       实时公开）与 volunteerPlayerIds（自愿者名单）；
        单人窗口（reveal|skill|token-return）同样携带 deadline */
     "kind": "intervention", "stage": "poll", "responses": {"p-…": true}, "deadline": 1788537090.0
   },
@@ -177,6 +204,7 @@
   "legalActions": [
     {"type": "pass-dagger", "targetPlayerId": "p-…"},
     {"type": "attack", "targetPlayerId": "p-…"},
+    {"type": "answer-intervention-request", "need": true | false},
     {"type": "respond-intervention", "volunteer": true | false},
     {"type": "decline-intervention"},
     {"type": "choose-intervention", "responderPlayerId": "p-…"},
@@ -205,6 +233,8 @@
 `game.player-count`、`game.seat-occupied`、`game.invalid-timeout`、`target.not-eligible`、
 `target.shielded`、`target.already-three-damage`、`player.not-actor`、
 `intervention.not-open`、`intervention.not-poll`、`intervention.not-choice`、
+`intervention.not-gate`（门控命令发在非门控阶段）、`intervention.not-target`
+（门控回答非被攻击者本人发出）、
 `intervention.not-eligible`、`intervention.already-responded`、`reveal.not-open`、
 `skill.not-open`、`token-return.not-open`（三条单人窗口超时命令的身份守卫）、
 `skill.already-used`、

@@ -3,7 +3,7 @@
 See PROTOCOL.md for the full wire format and message-by-message behaviour.
 """
 
-PROTOCOL_VERSION = "2"
+PROTOCOL_VERSION = "3"
 
 # client -> server
 CLIENT_HELLO = "hello"

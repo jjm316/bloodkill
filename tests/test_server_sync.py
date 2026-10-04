@@ -146,6 +146,54 @@ class WebSocketRecoveryTests(unittest.TestCase):
         self.assertFalse(accepted)
         self.assertEqual(ws.sent[0]["code"], "protocol.version-mismatch")
 
+    def test_previous_version_hello_is_rejected_before_a_seat_is_resumed(self):
+        # Protocol v3 is a hard cut (ADR 0012): a v2 client ("2" is what the
+        # pre-gate client actually sends) must be refused by the current
+        # server before its seat is resumed.
+        ws = FakeWebSocket({"type": "hello", "name": "P0", "protocolVersion": "2"})
+        conn = self.app.Conn(ws=ws, room=self.room)
+
+        accepted = asyncio.run(self.app._handle_hello(conn, ws))
+
+        self.assertFalse(accepted)
+        self.assertEqual(ws.sent[0]["type"], "error")
+        self.assertEqual(ws.sent[0]["code"], "protocol.version-mismatch")
+        self.assertEqual(ws.sent[0]["details"]["expected"], "3")
+        self.assertEqual(ws.sent[0]["details"]["received"], "2")
+        self.assertIsNone(conn.player_id)
+        self.assertEqual(len(ws.sent), 1)  # no state broadcast: rejection precedes the resume
+
+    def test_current_version_hello_resumes_the_seat(self):
+        ws = FakeWebSocket({"type": "hello", "name": "P0", "protocolVersion": "3"})
+        conn = self.app.Conn(ws=ws, room=self.room)
+        self.app.conns["hello-current"] = conn
+
+        accepted = asyncio.run(self.app._handle_hello(conn, ws))
+
+        self.assertTrue(accepted)
+        self.assertEqual(conn.player_id, self.player_ids[0])
+        self.assertEqual(ws.sent[-1]["type"], "state")
+
+    def test_newer_version_hello_is_rejected_by_a_previous_server(self):
+        # The other direction of the hard cut: a v3 client against a v2
+        # server (simulated by patching the server constant back) is refused
+        # the same way, so old servers cannot half-accept new clients.
+        original = self.app.PROTOCOL_VERSION
+        self.app.PROTOCOL_VERSION = "2"
+        try:
+            ws = FakeWebSocket({"type": "hello", "name": "P0", "protocolVersion": "3"})
+            conn = self.app.Conn(ws=ws, room=self.room)
+
+            accepted = asyncio.run(self.app._handle_hello(conn, ws))
+
+            self.assertFalse(accepted)
+            self.assertEqual(ws.sent[0]["code"], "protocol.version-mismatch")
+            self.assertEqual(ws.sent[0]["details"]["expected"], "2")
+            self.assertEqual(ws.sent[0]["details"]["received"], "3")
+            self.assertIsNone(conn.player_id)
+        finally:
+            self.app.PROTOCOL_VERSION = original
+
 
 class DeadlineWindowTests(unittest.TestCase):
     """Server-owned countdown windows: room tracking, scheduler expiry, injection."""
