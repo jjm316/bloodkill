@@ -1,6 +1,6 @@
 # 02 服务端：门控窗口的墙钟调度与投影注入
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: 01
 
@@ -18,3 +18,7 @@ spec: `.scratch/intervention-request-gate/spec.md`（引擎不存墙钟约束下
 
 - DeadlineWindowTests 风格用例：门控窗跟踪并写入 meta、投影携带 deadline、静默到期调度器结算、接受后接力 poll 窗、重启补发。
 - `python -m unittest discover` 全绿（golden 归 05）。
+
+## Comments
+
+- 2026-10-04 implemented in commit `8b38592` (branch `gate/02-server`, merged to `spec/intervention-request-gate`). Changes minimal: `Room._window_identity` returns stage key `"gate"` with `intervention_timeout_seconds`; `deadlines.intervention_window` accepts `{"gate","poll","choice"}` arming `timeout-intervention {stage:"gate"}`. Relay/restart/projection/server-managed rejection all worked through existing generic machinery (verified untouched). 5 new DeadlineWindowTests mirror the poll precedents. Suite 208 tests green except the 14 known golden subTests (ticket 05).

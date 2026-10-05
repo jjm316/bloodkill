@@ -1,6 +1,6 @@
 # 03 协议 v3：版本硬切与文档
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: 01, 02
 
@@ -22,3 +22,7 @@ spec: `.scratch/intervention-request-gate/spec.md`（协议字段英文、界面
 
 - 新旧版本 hello 互拒测试（既有模式扩展）。
 - PROTOCOL.md 与实际消息字段逐一对得上（评审抽查）。
+
+## Comments
+
+- 2026-10-04 implemented in commit `8977bab` (branch `gate/03-protocol`, merged to `spec/intervention-request-gate`). `PROTOCOL_VERSION` "2"→"3" server + client hello; three new hello mutual-rejection tests (old→new literal "2" rejected before seat resume; current "3" accepted; new→old via scoped version patch). PROTOCOL.md rewritten for the v3 gate contract (command/event/error/pending-stage/三段窗口 + ADR 0012 pointer + preamble version-history note); every documented field self-audited against engine/projection/rooms source. Suite 211 tests, reds = the 14 known golden subTests only. Frontend suite deferred to 04/05 (client change is a one-character constant).

@@ -1,6 +1,6 @@
 # 05 测试与 golden：迁移、覆盖锁、重生成与 e2e 验收
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: 01, 02, 03, 04
 
@@ -37,3 +37,11 @@ spec: `.scratch/intervention-request-gate/spec.md`
 
 - 后端 `python -m unittest discover` 全绿（含新 golden 锁）；前端 `npm test`、`tsc && vite build` 全绿。
 - 分支覆盖文档行与新测试一一对应。
+
+## Comments
+
+- 2026-10-05 implemented across commits `a541e13`..`1f38f14` + review fix `ce2486b` (branch `gate/05-golden`, merged to `spec/intervention-request-gate`）。工作由两段完成：实现代理（a541e13 golden 策略与重生成、cede64f 覆盖文档行、33324d4 语料摘「待实施」、77337ae e2e 抓到的弹窗攻击者取名修复）在额度中断后，由集成会话接手收尾（a2d6e4b e2e 驱动脚本入库、3f9c1e3 桌面挂起条门控文案修复、1f38f14 pending.attackerPlayerId 下发修复重连点名）。
+- **golden**：walker 门控策略「接受、第 2 次拒绝、再接受」确定性混入；golden 6–12 全部重生成，字节锁与双向重放验证全绿；分支覆盖锁含接受/拒绝两路径；`docs/rule-branch-coverage.md` 补 `intervention.gate` 行（接受/拒绝/超时/静默跳过）交叉引用引擎 `InterventionGateBranchTests` 与服务端 DeadlineWindowTests。
+- **e2e**（`.scratch/e2e-gate.py` + chrome-devtools 驱动，截图证据 `.scratch/e2e-gate/`）：路径一 攻击→门控→请求→全员投票→P4 挡刀成立（承伤/强制亮 rank/接匕首）✓；路径二 自己承受→直接结算、他人视角无弹窗仅「干涉」日志两行 ✓；路径三 no-assist 开启→不弹窗自动代答拒绝 ✓；路径四 30s 静默超时→视为不需要结算 ✓；另验证门控期服务端重启+新页重连：门控窗携原 deadline 存活且正确点名攻击者（故事 19）。观众无私密泄露由 `status` 子命令断言（无 context、无 legalActions）。
+- 测试终态：后端 213 全绿（含 golden），前端 101/101，tsc/vite build 干净。
+- 遗留判断题（不阻塞销案）：no-assist/no-block 双偏好结构重复（评审 judgement call，可抽 hook）；corpus 规则行用「挡刀请求确认窗」而 CONTEXT 词条 _Avoid_ 称挡刀仅用于文案——ADR 0012 同款措辞，属产品方措辞，未擅改。

@@ -1,9 +1,10 @@
 # 干涉投票前增加被攻击者「挡刀请求」确认门控
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 ADR: docs/adr/0012-intervention-request-gate.md
 裁决日期: 2026-10-04（产品方 grilling 裁决，Q1–Q10 全部收口）
+实施完成: 2026-10-05（分支 `spec/intervention-request-gate`，issues 01–05 全部 resolved）
 
 ## Problem Statement
 
@@ -97,3 +98,8 @@ ADR: docs/adr/0012-intervention-request-gate.md
 - **技能产物公开性旁路裁决（2026-10-04，同日另一会话）**：扇、法杖、真/假诅咒、盾、剑、羽毛等技能产物状态在设计上一律公开（「被贴了扇子，所有人都应该知道」）。本 spec 已据此剔除「静默短路防扇泄露」旧理由——Q3 的跳过仅以 UX 成立。该裁决尚未写入规则语料；引擎/投影/前端三层的存量公开性差距核查仍在别线待办，如立新单与本 spec 互不阻塞。
 - **上线影响**：测试房间在部署后作废重建；旧客户端被协议 v3 拒绝，需同步更新前端。
 - **词表已随本 spec 批次先行更新**：CONTEXT.md 新增「干涉请求」条目、改写「干涉投票」「干涉超时」条目。
+
+## Comments
+
+- 2026-10-05 全部实施完成，集成分支 `spec/intervention-request-gate`（自 master `2c81836` 起 13 个提交）。issue→commit 对应：01 引擎 `6cb604a`；02 服务端 `8b38592`；03 协议 v3 `8977bab`；04 前端 `69e2503`；05 `a541e13`/`cede64f`/`33324d4`/`77337ae`/`a2d6e4b`/`3f9c1e3`/`1f38f14`；评审术语修复 `ce2486b`。终态：后端 213 全绿（golden 6–12 重生成后字节锁成立）、前端 101/12 文件全绿、tsc/vite build 干净；e2e 四路径+重连场景有截图证据（`.scratch/e2e-gate/`）。
+- 实施期两处超出 spec 字面的补充（均为 e2e 抓出的缺陷修复，spec 评审判定在精神范围内）：`pending.attackerPlayerId` 下发（重连无事件回放时门控弹窗仍能点名攻击者）；Board 挂起条门控阶段改用「正在确认是否需要他人挡刀」文案（旧文案在门控期误称投票进行中）。

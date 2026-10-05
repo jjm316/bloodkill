@@ -1,6 +1,6 @@
 # 01 引擎：intervention gate 阶段建模
 
-Status: ready-for-agent
+Status: resolved
 
 spec: `.scratch/intervention-request-gate/spec.md`（Q1/Q3/Q5/Q8 结论的引擎侧落地）
 
@@ -23,3 +23,7 @@ spec: `.scratch/intervention-request-gate/spec.md`（Q1/Q3/Q5/Q8 结论的引擎
 - 引擎层新增分支用例全部落地（清单见 spec Testing Decisions 第 1、2 条）。
 - 现有干涉用例经前置 `answer-intervention-request {need:true}` 全部转绿（助手更新）。
 - `python -m unittest discover` 全绿（golden 允许暂红，归 05 重生成）。
+
+## Comments
+
+- 2026-10-04 implemented in commit `6cb604a` (branch `gate/01-engine`, merged to `spec/intervention-request-gate`). New `InterventionGateBranchTests` cover open/silent-skip/accept-relay/decline-settle/timeout/guards/mutex; helpers migrated (`test_engine`/`test_projection`/`test_rule_branches`/`test_server_sync`/`test_server_rooms`); `game_loop` walker got a minimal accept-only gate branch (needed by non-golden walker suites; decline mixing deferred to ticket 05). Suite: 203 tests green except 14 golden subTests (expected until 05). Deviation: single atomic commit (engine change + test migrations only green together).

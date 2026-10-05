@@ -1,6 +1,6 @@
 # 04 前端：门控弹窗、等待横幅、日志文案与 no-assist 偏好
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: 01, 02, 03
 
@@ -32,3 +32,7 @@ spec: `.scratch/intervention-request-gate/spec.md`（Q6/Q7/Q10 结论的客户�
 - vitest 新用例：弹窗渲染条件/标题/正文/名单行/按钮命令/倒计时；no-assist 代发与防重复；四条日志文案与类别；helpContent 关键词；互斥关系。
 - `npm test`、`tsc && vite build` 全绿。
 - e2e 手动验收（chrome-devtools，配方归 05）。
+
+## Comments
+
+- 2026-10-04 implemented in commit `69e2503` (branch `gate/04-client`, merged to `spec/intervention-request-gate`). `InterventionGateLayer` exported from GameScreen with Q6 copy verbatim; waiting banner; four describeEvent lines + 干涉 category + PUBLIC_EVENT_TYPES; `bloodbound:no-assist` independent toggle with stage-scoped dedup key `gate:${revision}:${deadline}`; helpContent gate note (explicitly 界面偏好非规则); stage-split render mutex. New `interventionGate.test.tsx` (17 tests). Verified on integration branch: 98/98 vitest, tsc clean, vite build clean. Deviation: modal derives attacker name from `daggerHolderId` (wire pending carries no attackerPlayerId; sound because the pending mutex freezes the dagger during gate — documented in code comment).
