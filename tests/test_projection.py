@@ -230,6 +230,8 @@ class ProjectionTests(unittest.TestCase):
             view = project_state(engine.state, viewer)
             self.assertEqual(view["pending"]["stage"], "gate")
             self.assertEqual(view["pending"]["eligiblePlayerIds"], eligible)
+            # the attacker is public and carried for mid-gate reconnects
+            self.assertEqual(view["pending"]["attackerPlayerId"], attacker)
             # votes only exist once the poll opens
             self.assertNotIn("responses", view["pending"])
             self.assertNotIn("volunteerPlayerIds", view["pending"])

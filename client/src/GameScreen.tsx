@@ -105,10 +105,9 @@ function useDeadlineSeconds(deadline: number | null | undefined, serverTime: num
 // 挡刀请求门控层（ADR 0012）：门控窗只属于被攻击者本人——他持有
 // answer-intervention-request 动作时弹确认窗（「默认不让他人挡刀」开启时由
 // 上层自动代发、不弹窗），攻击者、有资格玩家与旁观者只看等待横幅。
-// 攻击者名取最近一条指向该目标的 AttackDeclared 公开事件：攻击是公开声明，
-// 事件一到全员都收到。不能取 daggerHolderId——引擎在攻击瞬间就把匕首抵押给
-// 目标，门控期内匕首在目标手里。协议 v3 的 pending 不带 attackerPlayerId，
-// 且服务端重连不回放历史事件，重连等极端情况下退化为不点名的正文。
+// 攻击者名优先取 pending.attackerPlayerId（公开信息，重连无事件回放也在）；
+// 兜底取最近一条指向该目标的 AttackDeclared 公开事件。不能取
+// daggerHolderId——引擎在攻击瞬间就把匕首抵押给目标，门控期内匕首在目标手里。
 export function InterventionGateLayer({ game, events, serverTime, noAssist, send }: { game: GameState; events?: GameEvent[]; serverTime: number | undefined; noAssist: boolean; send: (c: string, p?: Record<string, unknown>) => void }) {
   const pending = game.pending;
   const isGate = pending?.kind === "intervention" && pending.stage === "gate";
@@ -119,7 +118,8 @@ export function InterventionGateLayer({ game, events, serverTime, noAssist, send
   if (answerAction && !noAssist) {
     const roster = pending.eligiblePlayerIds.map((id) => nameOf(game.players, id)).join("、");
     const attack = [...(events ?? [])].reverse().find((e) => e.eventType === "AttackDeclared" && (e.payload as { targetPlayerId?: string } | undefined)?.targetPlayerId === pending.targetPlayerId);
-    const attackerName = attack ? nameOf(game.players, (attack.payload as { attackerPlayerId?: string }).attackerPlayerId) : null;
+    const attackerId = pending.attackerPlayerId ?? (attack ? (attack.payload as { attackerPlayerId?: string }).attackerPlayerId : undefined);
+    const attackerName = attackerId ? nameOf(game.players, attackerId) : null;
     return <ConfirmDialog
       title="是否需要他人为你挡刀？"
       body={<>{attackerName ? <>{attackerName} 对你发起攻击。</> : <>一次攻击对你发起。</>}请求挡刀将向所有有资格的玩家发起询问；若不需要或超时，你将承受这次攻击。<br />可为你挡刀的玩家：{roster}{countdown}</>}

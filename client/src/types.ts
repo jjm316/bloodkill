@@ -55,6 +55,8 @@ export interface PendingView {
   forceRank?: boolean;
   /** 干涉投票：gate = 被攻击者挡刀请求门控（ADR 0012）；poll = 逐人表态阶段；choice = 被攻击者三选一阶段 */
   stage?: string;
+  /** 攻击者（公开信息；门控弹窗点名用，重连无事件回放也能渲染） */
+  attackerPlayerId?: string | null;
   /** 实时公开表态：playerId -> 是否愿意挡刀 */
   responses?: Record<string, boolean>;
   volunteerPlayerIds?: string[];

@@ -75,7 +75,8 @@ describe("describeEvent 门控事件四条文案", () => {
 
 // 门控期视角夹具：p0 阿攻攻击 p1 小标，小二/小三有挡刀资格。引擎在攻击
 // 瞬间把匕首抵押给目标（_attack 先移交匕首再开门控），所以门控期
-// daggerHolderId 是目标 p1，攻击者只能从公开的 AttackDeclared 事件取。
+// daggerHolderId 是目标 p1；攻击者名优先来自 pending.attackerPlayerId（v3
+// 公开字段），兜底公开的 AttackDeclared 事件（见 GameScreen 弹窗实现）。
 // 目标视角 legalActions 与 projection.py 的门控分支一致（两条 need 变体）。
 const gateEvents: GameEvent[] = [
   { ...gateEvent("AttackDeclared", { attackerPlayerId: "p0", targetPlayerId: "p1" }) },
@@ -97,6 +98,7 @@ function makeGateGame(viewerIsTarget: boolean, deadlineOffset = 30): GameState {
       rank: null,
       trigger: null,
       stage: "gate",
+      attackerPlayerId: "p0",
       deadline: Date.now() / 1000 + deadlineOffset,
     },
     result: null,
@@ -111,9 +113,9 @@ function makeGateGame(viewerIsTarget: boolean, deadlineOffset = 30): GameState {
 }
 
 describe("InterventionGateLayer 门控弹窗（被攻击者视角）", () => {
-  it("标题/正文/名单行/倒计时按 Q6 拍板文案渲染（攻击者取公开攻击声明事件）", () => {
+  it("标题/正文/名单行/倒计时按 Q6 拍板文案渲染（攻击者优先取 pending.attackerPlayerId）", () => {
     const serverTime = Date.now() / 1000;
-    const { container } = render(<InterventionGateLayer game={makeGateGame(true)} events={gateEvents} serverTime={serverTime} noAssist={false} send={vi.fn()} />);
+    const { container } = render(<InterventionGateLayer game={makeGateGame(true)} serverTime={serverTime} noAssist={false} send={vi.fn()} />);
     const dialog = container.querySelector(".modal");
     expect(dialog?.getAttribute("aria-labelledby")).toBe("modal-title");
     expect(container.querySelector("#modal-title")?.textContent).toBe("是否需要他人为你挡刀？");
@@ -126,8 +128,15 @@ describe("InterventionGateLayer 门控弹窗（被攻击者视角）", () => {
     expect(body).not.toContain("小标 对你发起攻击");
   });
 
-  it("事件缺失（如重连）时退化为不点名正文，也不误把匕首持有者当攻击者", () => {
-    const { container } = render(<InterventionGateLayer game={makeGateGame(true)} serverTime={Date.now() / 1000} noAssist={false} send={vi.fn()} />);
+  it("wire 缺 attackerPlayerId 时退回公开 AttackDeclared 事件点名", () => {
+    const game = { ...makeGateGame(true), pending: { ...makeGateGame(true).pending!, attackerPlayerId: undefined } };
+    const { container } = render(<InterventionGateLayer game={game} events={gateEvents} serverTime={Date.now() / 1000} noAssist={false} send={vi.fn()} />);
+    expect(container.querySelector(".modal-body")?.textContent).toContain("阿攻 对你发起攻击。");
+  });
+
+  it("wire 与事件都缺失（极端重连）时退化为不点名正文，也不误把匕首持有者当攻击者", () => {
+    const game = { ...makeGateGame(true), pending: { ...makeGateGame(true).pending!, attackerPlayerId: undefined } };
+    const { container } = render(<InterventionGateLayer game={game} serverTime={Date.now() / 1000} noAssist={false} send={vi.fn()} />);
     const body = container.querySelector(".modal-body")?.textContent ?? "";
     expect(body).toContain("一次攻击对你发起。");
     expect(body).not.toContain("小标 对你发起攻击");
@@ -169,6 +178,17 @@ describe("InterventionGateLayer 等待横幅与其余视角", () => {
     const noPending: GameState = { ...makeGateGame(true), pending: null };
     const { container: empty } = render(<InterventionGateLayer game={noPending} serverTime={serverTime} noAssist={false} send={vi.fn()} />);
     expect(empty.querySelector(".waiting-banner")).toBeNull();
+  });
+});
+
+describe("门控期间桌面挂起条（Board PendingBanner）", () => {
+  it("门控阶段不显示投票汇总，显示目标正在确认挡刀请求", () => {
+    socketMock.state = makeGateRoomState(12, Date.now() / 1000 + 90);
+    const { container } = renderGame();
+    const banner = container.querySelector(".pending");
+    expect(banner?.textContent).toContain("小标 被攻击，正在确认是否需要他人挡刀…");
+    expect(banner?.textContent).not.toContain("干涉投票进行中");
+    expect(banner?.textContent).not.toContain("表态");
   });
 });
 

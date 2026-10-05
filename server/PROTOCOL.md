@@ -182,7 +182,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
   "daggerHolderId": "p-…",
   "phase": {"kind": "action", "…"} | {"kind": "intervention", "stage": "gate|poll|choice", "activePlayerId": "p-…"} | {"kind": "skill", "…"},
   "pending": {
-    /* 干涉窗口额外携带：stage（gate|poll|choice）、deadline（服务端注入的到期 Unix 秒）；
+    /* 干涉窗口额外携带：stage（gate|poll|choice）、attackerPlayerId（公开的攻击者，
+       门控弹窗点名用；重连无事件回放也在）、deadline（服务端注入的到期 Unix 秒）；
        gate 期间（ADR 0012）尚未开票，只有 stage 与既有基础字段 eligiblePlayerIds，
        responses / volunteerPlayerIds 不存在；开票后才有 responses（{playerId: volunteer}，
        实时公开）与 volunteerPlayerIds（自愿者名单）；

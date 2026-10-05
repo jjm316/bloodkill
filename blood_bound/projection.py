@@ -231,6 +231,10 @@ def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:
         # wall clock and is injected into this view by the server, not the
         # engine.
         view["stage"] = pending.context.get("stage")
+        # The attacker is public from the AttackDeclared/GateOpened events; the
+        # pending view repeats it so a mid-gate (re)connect — which gets no
+        # event replay — can still render "谁 对你发起攻击" without guessing.
+        view["attackerPlayerId"] = pending.context.get("attackerPlayerId")
         if view["stage"] != "gate":
             responses: dict[str, bool] = dict(pending.context.get("responses", {}))
             view["responses"] = responses
