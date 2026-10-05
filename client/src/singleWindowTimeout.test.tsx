@@ -106,7 +106,7 @@ describe("SingleWindowLayer 等待横幅", () => {
     expect(container.querySelector(".waiting-banner")?.textContent).toContain("超时将自动退回排序第一张已亮标记");
   });
 
-  it("干涉窗口（poll 与 gate 两阶段）与无窗口时不渲染", () => {
+  it("干涉三段窗口（poll 与 gate 两阶段）与无窗口时不渲染", () => {
     const serverTime = Date.now() / 1000;
     const interventionGame = makeGame({ kind: "intervention", actorPlayerId: "p0", targetPlayerId: "p0", eligiblePlayerIds: [], rank: null, trigger: null, deadline: serverTime + 90 }, players);
     const { container, unmount } = render(<SingleWindowLayer game={interventionGame} serverTime={serverTime} />);

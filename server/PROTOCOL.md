@@ -76,7 +76,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 `start-game`、`join-game`、`timeout-intervention`、`timeout-reveal`、`timeout-skill`、
 `timeout-return` 由服务器托管：直接发送会得到 `command.server-managed`。
-`timeout-intervention` 是干涉窗口到期时由服务端定时器（`server/deadlines.py`，可复用抽象）
+`timeout-intervention` 是干涉三段窗口到期时由服务端定时器（`server/deadlines.py`，可复用抽象）
 代为提交的系统命令，payload 为 `{"stage": "gate"|"poll"|"choice"}`；门控阶段到期未确认
 视为不需要挡刀并立即结算，投票阶段到期未表态视为不干涉，
 三选一阶段到期视为全部拒绝。
@@ -93,7 +93,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 超时自动结算的 `ClueRevealed` / `SkillDeclined` / `TokenReturned` 事件携带
 `"reason": "timeout"`，事件日志据此后缀显示「（超时自动）」。
 
-### 干涉窗口：请求门控 → 全员投票 → 三选一（协议 v3，ADR 0012）
+### 干涉三段窗口：请求门控 → 全员投票 → 三选一（协议 v3，ADR 0012）
 
 2026-10-04 裁决（ADR 0012）：攻击声明后不再自动开启全员投票，先开**仅被攻击者本人**
 作答的挡刀请求门控；门控放行后投票与三选一照 ADR 0002 原样运行。三个窗口依次为：
@@ -182,7 +182,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
   "daggerHolderId": "p-…",
   "phase": {"kind": "action", "…"} | {"kind": "intervention", "stage": "gate|poll|choice", "activePlayerId": "p-…"} | {"kind": "skill", "…"},
   "pending": {
-    /* 干涉窗口额外携带：stage（gate|poll|choice）、attackerPlayerId（公开的攻击者，
+    /* 干涉三段窗口的 pending 额外携带：stage（gate|poll|choice）、attackerPlayerId（公开的攻击者，
        门控弹窗点名用；重连无事件回放也在）、deadline（服务端注入的到期 Unix 秒）；
        gate 期间（ADR 0012）尚未开票，只有 stage 与既有基础字段 eligiblePlayerIds，
        responses / volunteerPlayerIds 不存在；开票后才有 responses（{playerId: volunteer}，

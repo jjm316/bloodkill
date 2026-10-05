@@ -87,7 +87,7 @@ function EventLog({ events, players }: { events: GameEvent[]; players?: PlayerVi
 function Banner({ title, detail, onBack }: { title: string; detail: string; onBack: () => void }) { return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p><button onClick={onBack}>返回大厅</button></section>; }
 const errorText = (code: string, _message: string) => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "game.player-count": "玩家人数必须为 6–12 人。", "player.name-required": "姓名不能为空。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
 
-/** 服务端墙钟锚定 + 本地每秒跳动的倒计时；仅在干涉窗口存在时启用。 */
+/** 服务端墙钟锚定 + 本地每秒跳动的倒计时；仅在干涉三段窗口存在时启用。 */
 function useDeadlineSeconds(deadline: number | null | undefined, serverTime: number | undefined) {
   const offsetRef = useRef(0);
   const [remaining, setRemaining] = useState<number | null>(null);
