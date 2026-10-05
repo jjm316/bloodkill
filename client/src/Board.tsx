@@ -390,6 +390,13 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
         </div>
       );
     }
+    if (pending.stage === "gate") {
+      return (
+        <div className="pending">
+          <strong>{target}</strong> 被攻击，正在确认是否需要他人挡刀…
+        </div>
+      );
+    }
     const answered = pending.eligiblePlayerIds.filter((id) => responses[id] !== undefined);
     const waiting = pending.eligiblePlayerIds.filter((id) => responses[id] === undefined);
     const summary = answered.length
