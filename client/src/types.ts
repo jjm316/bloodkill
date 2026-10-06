@@ -163,7 +163,7 @@ export function displayStatus(status: string): string {
 }
 
 export function displayPhase(phase: string): string {
-  return ({ action: "行动阶段", intervention: "干涉投票", skill: "技能阶段", reveal: "展示身份", "token-return": "归还标记", ended: "已结束" } as Record<string, string>)[phase] ?? phase;
+  return ({ setup: "开局准备", action: "行动阶段", intervention: "干涉投票", skill: "技能阶段", reveal: "展示身份", "token-return": "归还标记", ended: "已结束" } as Record<string, string>)[phase] ?? phase;
 }
 
 export function displayResource(resource: string): string {

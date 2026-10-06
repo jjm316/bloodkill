@@ -1,6 +1,7 @@
 import { fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { describeEvent, SingleWindowLayer, WaitingRoom } from "./GameScreen";
+import { SingleWindowLayer, WaitingRoom } from "./GameScreen";
+import { describeEvent } from "./eventLog";
 import type { GameState, PlayerView, RoomState } from "./types";
 
 // 单人窗口超时（ADR 0011 / issue 05）：开局配置、等待横幅、事件日志标注。

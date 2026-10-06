@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Board } from "./Board";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { RulesOverlay } from "./HelpOverlay";
-import { EVENT_CATEGORIES, categoryOf, isLogVisible, loadMutedCategories, saveMutedCategories } from "./eventLog";
-import type { EventCategoryId } from "./eventLog";
+import { EventLog } from "./EventLogView";
 import { Icon } from "./icons";
 import { useMemoMarkers } from "./memoMarkers";
 import type { Action, GameEvent, GameState, PlayerView, RoomState } from "./types";
-import { actionToCommand, APP_TITLE, displayFaction, displayPhase, displayRank, displayResource, displayStatus } from "./types";
+import { actionToCommand, APP_TITLE, displayStatus } from "./types";
 import { useGameSocket } from "./useSocket";
 import type { RoomCredentials } from "./Lobby";
 
@@ -58,31 +57,6 @@ export function WaitingRoom({ state, sendHost, spectating }: { state: RoomState;
   // 单人窗口超时（ADR 0011）：三类单人窗口共用一份时限，与干涉时限分开配置。
   const [singleTimeoutSeconds, setSingleTimeoutSeconds] = useState(90);
   return <div className="waiting"><p>等待玩家加入（{players.length}/12）。分享此房间号，玩家只需房间号和姓名即可加入。</p><ul className="roster">{players.map((p) => <li key={p.playerId} className={p.playerId === state.yourPlayerId ? "self" : undefined}>{p.displayName}{p.playerId === state.yourPlayerId ? "（你）" : ""}{p.playerId === state.hostPlayerId ? "（房主）" : ""}{state.connected[p.playerId] ? "" : "（离线）"}</li>)}</ul>{spectating && <p className="hint">你正在旁观。</p>}{state.isHost && <div className="host-panel"><label className="field" htmlFor="intervention-timeout">干涉投票时限<select id="intervention-timeout" value={timeoutSeconds} onChange={(e) => setTimeoutSeconds(Number(e.target.value))}>{TIMEOUT_CHOICES.map((s) => <option key={s} value={s}>{s} 秒</option>)}</select></label><label className="field" htmlFor="single-window-timeout">单人窗口超时<select id="single-window-timeout" value={singleTimeoutSeconds} onChange={(e) => setSingleTimeoutSeconds(Number(e.target.value))}>{TIMEOUT_CHOICES.map((s) => <option key={s} value={s}>{s} 秒</option>)}</select></label><button disabled={!canStart} onClick={() => sendHost("start", { interventionTimeoutSeconds: timeoutSeconds, singleWindowTimeoutSeconds: singleTimeoutSeconds })}>开始游戏{canStart ? "" : "（需要 6–12 名玩家）"}</button>{state.hostActions.filter((a) => a.type === "lock" || a.type === "unlock").map((a) => <button key={a.type} onClick={() => sendHost(a.type)}>{a.type === "lock" ? "锁定房间" : "解锁房间"}</button>)}</div>}<p className="hint">开始对局后干涉投票时限固定为 {state.isHost ? timeoutSeconds : (state.game?.interventionTimeoutSeconds ?? 90)} 秒、单人窗口超时固定为 {state.isHost ? singleTimeoutSeconds : (state.game?.singleWindowTimeoutSeconds ?? 90)} 秒，倒计时全员可见；单人窗口到期将自动执行默认操作。</p></div>;
-}
-const declinedReasons: Record<string, string> = { "no-volunteers": "无人愿意挡刀", "target-declined": "被攻击者拒绝全部挡刀", "timeout-declined": "选择超时，视为全部拒绝" };
-// 超时自动结算的事件带 reason=timeout（ADR 0011），行内标注"（超时自动）"以示可解释。
-const timedOut = (p: Record<string, unknown>) => (p.reason === "timeout" ? "（超时自动）" : "");
-// 行首类别标签已取代事件短名前缀，描述必须自足（不依赖前缀也能读懂）。
-export function describeEvent(e: GameEvent, players?: PlayerView[]) { const n = (id: unknown) => players?.find((p) => p.playerId === id)?.displayName ?? String(id); const p = e.payload; switch (e.eventType) { case "PlayerJoined": return `${n(p.playerId)} 加入了房间`; case "GameStarted": return `对局开始，共 ${p.playerCount} 名玩家`; case "ClueIconsShown": return "全员已向左邻展示阵营徽记"; case "DaggerPassed": return `${n(p.fromPlayerId)} 把匕首传给了 ${n(p.toPlayerId)}`; case "AttackDeclared": return `${n(p.attackerPlayerId)} 持匕首攻击了 ${n(p.targetPlayerId)}`; case "InterventionGateOpened": return `${n(p.targetPlayerId)} 正在确认是否需要他人挡刀`; case "InterventionGateAccepted": return `${n(p.targetPlayerId)} 请求他人挡刀`; case "InterventionGateDeclined": return p.reason === "timeout" ? `${n(p.targetPlayerId)} 未确认是否需要挡刀，视为不需要` : `${n(p.targetPlayerId)} 拒绝了他人挡刀`; case "InterventionPollOpened": return `${n(p.targetPlayerId)} 被攻击，全员开始表态是否挡刀`; case "InterventionResponded": return `${n(p.playerId)} ${p.volunteer ? "愿意挡刀" : "不干涉"}`; case "InterventionChoiceOpened": { const volunteerIds: string[] = Array.isArray(p.volunteerPlayerIds) ? p.volunteerPlayerIds : []; return `${volunteerIds.map((id) => n(id)).join("、")} 愿意挡刀，等待 ${n(p.targetPlayerId)} 选择`; } case "InterventionSelected": return `${n(p.responderPlayerId)} 为 ${n(p.targetPlayerId)} 挡刀`; case "InterventionDeclined": return `${n(p.targetPlayerId)}：${declinedReasons[String(p.reason)] ?? "攻击正常结算"}`; case "DamageApplied": return `${n(p.targetPlayerId)} 受到 ${p.amount} 点伤害`; case "ClueRevealed": return `${n(p.playerId)} 展示了${String(p.kind) === "rank" ? "等级" : "身份"}线索${timedOut(p)}`; case "SkillUsed": return p.rank === "fleur-cross" ? `${n(p.playerId)} 分发了诅咒牌` : `${n(p.playerId)} 发动了${displayRank(p.rank as number | string)}技能`; case "SkillDeclined": return `${n(p.playerId)} 放弃了技能${timedOut(p)}`; case "HarlequinInspected": { const targetIds: string[] = Array.isArray(p.targetPlayerIds) ? p.targetPlayerIds : []; return `${n(p.playerId)} 检视了 ${targetIds.map((id) => n(id)).join("、")} 的身份`; } case "DamageHealed": return `${n(p.playerId)} 恢复了 ${p.amount ?? 1} 点伤害`; case "TokenReturned": return `${n(p.playerId)} 归还了身份标记${timedOut(p)}`; case "IdentityMarkersObscured": return `${n(p.playerId)} 的身份标记被遮蔽为未知`; case "ResourceGranted": return `${n(p.playerId)} 获得了${displayResource(String(p.resource))}`; case "ResourceSpent": return `${n(p.playerId)} 消耗了${displayResource(String(p.resource))}`; case "ResourceReturned": return `${n(p.playerId)} 的${displayResource(String(p.resource))}已归还`; case "PlayerCaptured": return `${n(p.playerId)} 被捕获`; case "GameEnded": { const winner = String(p.winner ?? ""); return winner === "draw" ? "对局结束，平局" : `对局结束，${displayFaction(winner)}获胜`; } case "PhaseChanged": return `${displayPhase((p.from as { kind: string })?.kind ?? "?")} → ${displayPhase((p.to as { kind: string })?.kind ?? "?")}`; default: return e.eventType; } }
-// 事件日志：顶部类别选项卡（全选 + 六类），选中=显示、取消=屏蔽；屏蔽偏好只存本机、跨对局保留。
-function EventLog({ events, players }: { events: GameEvent[]; players?: PlayerView[] }) {
-  const [muted, setMuted] = useState<Set<EventCategoryId>>(loadMutedCategories);
-  if (!events.length) return null;
-  const shown = events.filter((e) => isLogVisible(e.eventType) && !muted.has(categoryOf(e.eventType).id)).slice(-60);
-  const allMuted = muted.size === EVENT_CATEGORIES.length;
-  const allSelected = muted.size === 0;
-  const applyMuted = (next: Set<EventCategoryId>) => { setMuted(next); saveMutedCategories(next); };
-  const toggleCategory = (id: EventCategoryId) => { const next = new Set(muted); if (next.has(id)) next.delete(id); else next.add(id); applyMuted(next); };
-  const toggleAll = () => applyMuted(allSelected ? new Set(EVENT_CATEGORIES.map((c) => c.id)) : new Set<EventCategoryId>());
-  return <details className="log"><summary>事件日志（{shown.length}）</summary>
-    <div className="log-filters" role="group" aria-label="按类别筛选事件日志">
-      <button type="button" className={`filter-tab${allSelected ? " selected" : ""}`} aria-pressed={allSelected} onClick={toggleAll}>全选</button>
-      {EVENT_CATEGORIES.map((c) => <button key={c.id} type="button" className={`filter-tab ${c.className}${muted.has(c.id) ? "" : " selected"}`} aria-pressed={!muted.has(c.id)} onClick={() => toggleCategory(c.id)}>{c.label}</button>)}
-    </div>
-    {allMuted
-      ? <p className="log-empty">已屏蔽全部类别</p>
-      : <ol aria-live="polite">{shown.reverse().map((e) => { const cat = categoryOf(e.eventType); return <li key={e.eventId}><span className={`cat-tag ${cat.className}`}>{cat.label}</span>{describeEvent(e, players)}</li>; })}</ol>}
-  </details>;
 }
 function Banner({ title, detail, onBack }: { title: string; detail: string; onBack: () => void }) { return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p><button onClick={onBack}>返回大厅</button></section>; }
 const errorText = (code: string, _message: string) => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "game.player-count": "玩家人数必须为 6–12 人。", "player.name-required": "姓名不能为空。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";

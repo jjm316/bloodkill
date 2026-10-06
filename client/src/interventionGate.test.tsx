@@ -1,6 +1,7 @@
 import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeEvent, GameScreen, InterventionGateLayer } from "./GameScreen";
+import { GameScreen, InterventionGateLayer } from "./GameScreen";
+import { describeEvent } from "./eventLog";
 import { categoryOf } from "./eventLog";
 import type { GameEvent, GameState, PlayerView, RoomState } from "./types";
 
