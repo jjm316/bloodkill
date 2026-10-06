@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Board } from "./Board";
+import { useIntervention } from "./intervention";
+import { useDeadlineSeconds } from "./useDeadlineSeconds";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { RulesOverlay } from "./HelpOverlay";
 import { EventLog } from "./EventLogView";
 import { Icon } from "./icons";
 import { useMemoMarkers } from "./memoMarkers";
-import type { Action, GameEvent, GameState, PlayerView, RoomState } from "./types";
+import type { Action, GameState, PlayerView, RoomState } from "./types";
 import { actionToCommand, APP_TITLE, displayStatus } from "./types";
 import { useGameSocket } from "./useSocket";
 import type { RoomCredentials } from "./Lobby";
 
 const nameOf = (players: PlayerView[], id: string | null | undefined) => players.find((p) => p.playerId === id)?.displayName ?? "?";
-const NO_BLOCK_KEY = "bloodbound:no-block";
-const NO_ASSIST_KEY = "bloodbound:no-assist";
 const TIMEOUT_CHOICES = [30, 60, 90, 120, 180];
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) { return <div className="action-group"><span className="action-label">{label}：</span><div className="action-buttons">{children}</div></div>; }
@@ -43,13 +43,11 @@ function CurseSkillUse({ game, send }: { game: GameState; send: (c: string, p?: 
     {confirming && <ConfirmDialog title="确认分发诅咒牌" body="分发后不可更改，归属对其他玩家永远保密。" confirmText="确认分发" cancelText="取消" onConfirm={() => { send("choose-skill", { use: true, assignments: picks }); setConfirming(false); }} onCancel={() => setConfirming(false)} />}
   </div>;
 }
-function ActionsPanel({ game, hostActions, send, sendHost }: { game: GameState; hostActions: Action[]; send: (c: string, p?: Record<string, unknown>) => void; sendHost: (a: string, p?: Record<string, unknown>) => void }) {
-  const actions = game.legalActions ?? []; const pass = actions.filter((a) => a.type === "pass-dagger"); const attack = actions.filter((a) => a.type === "attack"); const responders = actions.filter((a) => a.type === "choose-intervention"); const declineAll = actions.find((a) => a.type === "decline-intervention"); const reveals = actions.filter((a) => a.type === "choose-reveal"); const returns = actions.filter((a) => a.type === "choose-return"); const skillUse = actions.filter((a) => a.type === "choose-skill" && a.use); const skillDecline = actions.find((a) => a.type === "choose-skill" && a.use === false); const curseWindow = game.pending?.kind === "skill" && game.pending.rank === "fleur-cross"; const locks = hostActions.filter((a) => a.type === "lock" || a.type === "unlock");
-  // 干涉表态（respond-intervention）不进按钮区：由"是否为 X 挡刀？"模态弹窗承载。
-  const buttonActions = actions.filter((a) => a.type !== "respond-intervention");
-  if (!buttonActions.length && !locks.length) return <p className="hint">等待其他玩家行动。</p>;
+function ActionsPanel({ game, intervention, hostActions, send, sendHost }: { game: GameState; intervention: ReturnType<typeof useIntervention>; hostActions: Action[]; send: (c: string, p?: Record<string, unknown>) => void; sendHost: (a: string, p?: Record<string, unknown>) => void }) {
+  const actions = intervention.otherActions; const pass = actions.filter((a) => a.type === "pass-dagger"); const attack = actions.filter((a) => a.type === "attack"); const reveals = actions.filter((a) => a.type === "choose-reveal"); const returns = actions.filter((a) => a.type === "choose-return"); const skillUse = actions.filter((a) => a.type === "choose-skill" && a.use); const skillDecline = actions.find((a) => a.type === "choose-skill" && a.use === false); const curseWindow = game.pending?.kind === "skill" && game.pending.rank === "fleur-cross"; const locks = hostActions.filter((a) => a.type === "lock" || a.type === "unlock");
+  if (!intervention.hasPanelActions && !locks.length) return <p className="hint">等待其他玩家行动。</p>;
   // 亮牌 / 归还的入口改为直接点击座位上闪光的槽位（issue 25）：动作面板只留提示文案。
-  return <div className="actions">{pass.length > 0 && <Group label="将匕首传给">{pass.map((a) => <button key={a.targetPlayerId} onClick={() => { const c = actionToCommand(a); send(c.command, c.payload); }}>{nameOf(game.players, a.targetPlayerId)}</button>)}</Group>}{attack.length > 0 && <Group label="攻击">{attack.map((a) => <button key={a.targetPlayerId} onClick={() => { const c = actionToCommand(a); send(c.command, c.payload); }}>{nameOf(game.players, a.targetPlayerId)}</button>)}</Group>}{responders.length > 0 && <Group label="选择挡刀者">{responders.map((a) => <button key={a.responderPlayerId} onClick={() => { const c = actionToCommand(a); send(c.command, c.payload); }}>{nameOf(game.players, a.responderPlayerId)}</button>)}</Group>}{declineAll && <button onClick={() => send("decline-intervention")}>拒绝全部挡刀</button>}{(reveals.length > 0 || returns.length > 0) && <p className="hint">点击你座位上闪光的标记进行选择。</p>}{skillDecline && <button onClick={() => send("choose-skill", { use: false })}>放弃技能</button>}{skillUse.length > 0 && (curseWindow ? <CurseSkillUse game={game} send={send} /> : <SkillUse actions={skillUse} players={game.players} send={send} />)}{locks.map((a) => <button key={a.type} onClick={() => sendHost(a.type)}>{a.type === "lock" ? "锁定房间" : "解锁房间"}</button>)}</div>;
+  return <div className="actions">{pass.length > 0 && <Group label="将匕首传给">{pass.map((a) => <button key={a.targetPlayerId} onClick={() => { const c = actionToCommand(a); send(c.command, c.payload); }}>{nameOf(game.players, a.targetPlayerId)}</button>)}</Group>}{attack.length > 0 && <Group label="攻击">{attack.map((a) => <button key={a.targetPlayerId} onClick={() => { const c = actionToCommand(a); send(c.command, c.payload); }}>{nameOf(game.players, a.targetPlayerId)}</button>)}</Group>}{intervention.choiceActions}{(reveals.length > 0 || returns.length > 0) && <p className="hint">点击你座位上闪光的标记进行选择。</p>}{skillDecline && <button onClick={() => send("choose-skill", { use: false })}>放弃技能</button>}{skillUse.length > 0 && (curseWindow ? <CurseSkillUse game={game} send={send} /> : <SkillUse actions={skillUse} players={game.players} send={send} />)}{locks.map((a) => <button key={a.type} onClick={() => sendHost(a.type)}>{a.type === "lock" ? "锁定房间" : "解锁房间"}</button>)}</div>;
 }
 export function WaitingRoom({ state, sendHost, spectating }: { state: RoomState; sendHost: (a: string, p?: Record<string, unknown>) => void; spectating: boolean }) {
   const players = state.game?.players ?? []; const canStart = players.length >= 6 && players.length <= 12;
@@ -60,88 +58,6 @@ export function WaitingRoom({ state, sendHost, spectating }: { state: RoomState;
 }
 function Banner({ title, detail, onBack }: { title: string; detail: string; onBack: () => void }) { return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p><button onClick={onBack}>返回大厅</button></section>; }
 const errorText = (code: string, _message: string) => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "game.player-count": "玩家人数必须为 6–12 人。", "player.name-required": "姓名不能为空。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
-
-/** 服务端墙钟锚定 + 本地每秒跳动的倒计时；仅在干涉三段窗口存在时启用。 */
-function useDeadlineSeconds(deadline: number | null | undefined, serverTime: number | undefined) {
-  const offsetRef = useRef(0);
-  const [remaining, setRemaining] = useState<number | null>(null);
-  useEffect(() => { if (typeof serverTime === "number") offsetRef.current = serverTime - Date.now() / 1000; }, [serverTime]);
-  useEffect(() => {
-    if (deadline == null) { setRemaining(null); return; }
-    const tick = () => setRemaining(Math.max(0, Math.round(deadline - (Date.now() / 1000 + offsetRef.current))));
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, [deadline]);
-  return remaining;
-}
-
-// 挡刀请求门控层（ADR 0012）：门控窗只属于被攻击者本人——他持有
-// answer-intervention-request 动作时弹确认窗（「默认不让他人挡刀」开启时由
-// 上层自动代发、不弹窗），攻击者、有资格玩家与旁观者只看等待横幅。
-// 攻击者名优先取 pending.attackerPlayerId（公开信息，重连无事件回放也在）；
-// 兜底取最近一条指向该目标的 AttackDeclared 公开事件。不能取
-// daggerHolderId——引擎在攻击瞬间就把匕首抵押给目标，门控期内匕首在目标手里。
-export function InterventionGateLayer({ game, events, serverTime, noAssist, send }: { game: GameState; events?: GameEvent[]; serverTime: number | undefined; noAssist: boolean; send: (c: string, p?: Record<string, unknown>) => void }) {
-  const pending = game.pending;
-  const isGate = pending?.kind === "intervention" && pending.stage === "gate";
-  const answerAction = game.legalActions.find((a) => a.type === "answer-intervention-request");
-  const remaining = useDeadlineSeconds(isGate ? pending.deadline : null, serverTime);
-  const countdown = remaining == null ? "" : `（剩 ${remaining} 秒）`;
-  if (pending?.kind !== "intervention" || pending.stage !== "gate") return null;
-  if (answerAction && !noAssist) {
-    const roster = pending.eligiblePlayerIds.map((id) => nameOf(game.players, id)).join("、");
-    const attack = [...(events ?? [])].reverse().find((e) => e.eventType === "AttackDeclared" && (e.payload as { targetPlayerId?: string } | undefined)?.targetPlayerId === pending.targetPlayerId);
-    const attackerId = pending.attackerPlayerId ?? (attack ? (attack.payload as { attackerPlayerId?: string }).attackerPlayerId : undefined);
-    const attackerName = attackerId ? nameOf(game.players, attackerId) : null;
-    return <ConfirmDialog
-      title="是否需要他人为你挡刀？"
-      body={<>{attackerName ? <>{attackerName} 对你发起攻击。</> : <>一次攻击对你发起。</>}请求挡刀将向所有有资格的玩家发起询问；若不需要或超时，你将承受这次攻击。<br />可为你挡刀的玩家：{roster}{countdown}</>}
-      confirmText="请求挡刀"
-      cancelText="自己承受"
-      onConfirm={() => send("answer-intervention-request", { need: true })}
-      onCancel={() => send("answer-intervention-request", { need: false })}
-    />;
-  }
-  if (!answerAction) {
-    return <div className="waiting-banner" role="status" aria-live="polite">等待 {nameOf(game.players, pending.targetPlayerId)} 确认是否需要他人挡刀…{countdown}</div>;
-  }
-  return null;
-}
-
-function InterventionPollLayer({ game, serverTime, noBlock, send }: { game: GameState; serverTime: number | undefined; noBlock: boolean; send: (c: string, p?: Record<string, unknown>) => void }) {
-  const pending = game.pending;
-  const isIntervention = pending?.kind === "intervention";
-  const respondAction = game.legalActions.find((a) => a.type === "respond-intervention");
-  const remaining = useDeadlineSeconds(isIntervention ? pending.deadline : null, serverTime);
-  const countdown = remaining == null ? "" : `（剩 ${remaining} 秒）`;
-  const names = (ids: string[]) => ids.map((id) => nameOf(game.players, id)).join("、");
-  // 未表态者列表：有资格但还没答的人
-  const waitingIds = isIntervention && pending.stage === "poll"
-    ? pending.eligiblePlayerIds.filter((id) => pending.responses?.[id] === undefined)
-    : [];
-  // 表态确认弹窗：本人有表态权且未开"默认不挡刀"时弹出（开关开启时由上层自动代发）
-  if (isIntervention && pending.stage === "poll" && respondAction && !noBlock) {
-    return <ConfirmDialog
-      title={`是否为 ${nameOf(game.players, pending.targetPlayerId)} 挡刀？`}
-      body={<>为其挡刀将承受 1 点伤害并强制展示等级标记，匕首交到你手中。{countdown}</>}
-      confirmText="挡刀"
-      cancelText="不干涉"
-      onConfirm={() => send("respond-intervention", { volunteer: true })}
-      onCancel={() => send("respond-intervention", { volunteer: false })}
-    />;
-  }
-  // 等待横幅：投票阶段等未表态者，三选一阶段等被攻击者
-  if (isIntervention && !respondAction) {
-    if (pending.stage === "poll" && waitingIds.length > 0) {
-      return <div className="waiting-banner" role="status" aria-live="polite">等待 {names(waitingIds)} 表态{countdown}</div>;
-    }
-    if (pending.stage === "choice") {
-      return <div className="waiting-banner" role="status" aria-live="polite">{names(pending.volunteerPlayerIds ?? [])} 愿意挡刀，等待 {nameOf(game.players, pending.targetPlayerId)} 选择{countdown}</div>;
-    }
-  }
-  return null;
-}
 
 // 单人窗口（亮牌/技能/退牌）等待横幅（ADR 0011）：带服务端倒计时，
 // 并直接告知"超时会替你做什么"，当事人与旁观者看到同一句话。
@@ -166,42 +82,8 @@ export function SingleWindowLayer({ game, serverTime }: { game: GameState; serve
 
 export function GameScreen({ credentials, onLeave }: { credentials: RoomCredentials; onLeave: () => void }) {
   const { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost } = useGameSocket(credentials.code, credentials.name, credentials.token);
-  const [noBlock, setNoBlock] = useState(() => localStorage.getItem(NO_BLOCK_KEY) === "1");
-  // 「默认不让他人挡刀」（Q7/Q10:A）：与「默认不挡刀」相互独立的两个开关，
-  // 一个管"我不为别人挡"、一个管"我被攻击时不求人"。
-  const [noAssist, setNoAssist] = useState(() => localStorage.getItem(NO_ASSIST_KEY) === "1");
-  // 规则与图例浮层（ui-help-legend）：等待房 / 对局中 / 旁观共用页头"？"入口；
-  // 状态声明必须位于条件 return 之前。
+  const intervention = useIntervention({ game: state?.game, events, serverTime: state?.serverTime, send });
   const [rulesOpen, setRulesOpen] = useState(false);
-  const lastAutoPollKey = useRef<string | null>(null);
-  const lastAutoGateKey = useRef<string | null>(null);
-  const pending = state?.game?.pending ?? null;
-  const respondAction = state?.game?.legalActions.find((a) => a.type === "respond-intervention");
-  const answerAction = state?.game?.legalActions.find((a) => a.type === "answer-intervention-request");
-  const pollKey = state?.game && pending?.kind === "intervention" && pending.deadline != null ? `${state.game.revision}:${pending.deadline}` : null;
-  // 门控代发键带 stage 前缀且仅限 gate 阶段：与 no-block 的 poll 键格式不同，
-  // 跨阶段永不撞键（探索笔记标记的风险点）。
-  const gateKey = state?.game && pending?.kind === "intervention" && pending.stage === "gate" && pending.deadline != null ? `gate:${state.game.revision}:${pending.deadline}` : null;
-
-  // "默认不挡刀"：开关开启时收到表态权即自动代发"不干涉"；对局中随时可改，
-  // 已表态不受影响（代发只对当前未表态的投票生效，每个投票只代发一次）。
-  // 必须位于所有条件 return 之前，保证 Hook 顺序稳定。
-  useEffect(() => {
-    if (!noBlock || !respondAction || !pollKey) return;
-    if (lastAutoPollKey.current === pollKey) return;
-    lastAutoPollKey.current = pollKey;
-    send("respond-intervention", { volunteer: false });
-  }, [noBlock, respondAction, pollKey, send]);
-
-  // 「默认不让他人挡刀」：开关开启时门控窗不弹，收到应答权即自动代发
-  // "自己承受"；每个门控窗口只代发一次。纯客户端偏好，不进对局事件历史
-  // （沿用 0002 偏好哲学）。同样必须位于所有条件 return 之前。
-  useEffect(() => {
-    if (!noAssist || !answerAction || !gateKey) return;
-    if (lastAutoGateKey.current === gateKey) return;
-    lastAutoGateKey.current = gateKey;
-    send("answer-intervention-request", { need: false });
-  }, [noAssist, answerAction, gateKey, send]);
 
   // 备忘标记（ADR 0004）：纯本机私有状态，Hook 必须位于所有条件 return 之前。
   const memos = useMemoMarkers(credentials.code, state?.game);
@@ -227,21 +109,11 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
   const showTable = state.roomStatus === "playing" || state.roomStatus === "ended";
   const game = state.game;
 
-  const toggleNoBlock = (value: boolean) => {
-    setNoBlock(value);
-    localStorage.setItem(NO_BLOCK_KEY, value ? "1" : "0");
-  };
-
-  const toggleNoAssist = (value: boolean) => {
-    setNoAssist(value);
-    localStorage.setItem(NO_ASSIST_KEY, value ? "1" : "0");
-  };
-
   // 槽位点击入口：Board 把可点槽位映射回 choose-reveal / choose-return 动作，这里统一转成命令发送。
   const sendSlotAction = (action: Action) => {
     const c = actionToCommand(action);
     send(c.command, c.payload);
   };
 
-  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && <><label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => toggleNoBlock(e.target.checked)} />默认不挡刀</label><label className="pref-toggle" title="开启后被攻击时不再弹出挡刀请求确认，自动视为不需要他人挡刀"><input type="checkbox" checked={noAssist} onChange={(e) => toggleNoAssist(e.target.checked)} />默认不让他人挡刀</label></>}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{pending?.kind === "intervention" && pending.stage === "gate" && <InterventionGateLayer game={game} events={events} serverTime={state.serverTime} noAssist={noAssist} send={send} />}{pending?.kind === "intervention" && pending.stage !== "gate" && <InterventionPollLayer game={game} serverTime={state.serverTime} noBlock={noBlock} send={send} />}{pending && pending.kind !== "intervention" && <SingleWindowLayer game={game} serverTime={state.serverTime} />}<ActionsPanel game={game} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
+  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && intervention.preferences}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{intervention.prompt}<SingleWindowLayer game={game} serverTime={state.serverTime} /><ActionsPanel game={game} intervention={intervention} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
 }

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import { Icon, type IconName } from "./icons";
+import { InterventionSummary } from "./intervention";
 import type { MemoApi, MemoColor, MemoEntry, MemoMark, MemoPatch } from "./memoMarkers";
 import { memoColorOf } from "./memoMarkers";
 import { seatPosition, seatTier, tableShape, type SeatTier } from "./tableSeats";
@@ -379,36 +380,7 @@ const Seat = memo(function Seat({
 });
 
 function PendingBanner({ pending, players }: { pending: PendingView; players: PlayerView[] }) {
-  if (pending.kind === "intervention") {
-    const target = nameOf(players, pending.targetPlayerId);
-    const responses = pending.responses ?? {};
-    if (pending.stage === "choice") {
-      const volunteers = (pending.volunteerPlayerIds ?? []).map((id) => nameOf(players, id)).join("、");
-      return (
-        <div className="pending">
-          <strong>{target}</strong> 被攻击，{volunteers} 愿意挡刀，等待其选择其一或全部拒绝。
-        </div>
-      );
-    }
-    if (pending.stage === "gate") {
-      return (
-        <div className="pending">
-          <strong>{target}</strong> 被攻击，正在确认是否需要他人挡刀…
-        </div>
-      );
-    }
-    const answered = pending.eligiblePlayerIds.filter((id) => responses[id] !== undefined);
-    const waiting = pending.eligiblePlayerIds.filter((id) => responses[id] === undefined);
-    const summary = answered.length
-      ? answered.map((id) => `${nameOf(players, id)}（${responses[id] ? "挡刀" : "不干涉"}）`).join("、")
-      : "暂无表态";
-    return (
-      <div className="pending">
-        <strong>{target}</strong> 被攻击，干涉投票进行中：{summary}
-        {waiting.length > 0 ? `；等待 ${waiting.map((id) => nameOf(players, id)).join("、")} 表态。` : "。"}
-      </div>
-    );
-  }
+  if (pending.kind === "intervention") return <InterventionSummary pending={pending} players={players} />;
   if (pending.kind === "skill") {
     return (
       <div className="pending">
