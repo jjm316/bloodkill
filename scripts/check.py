@@ -59,7 +59,90 @@ def python_tests(start_dir: Path = ROOT / "tests") -> int:
     return 0 if result.wasSuccessful() else 1
 
 
+# 废弃术语词表：CONTEXT.md 的 _Avoid_ 段是术语权威，这里只内嵌机读无歧义的子集，
+# 收录标准是零假阳性；新增 _Avoid_ 词时人工同步（流程见 docs/agents/quality-checks.md）。
+DEPRECATED_TERMS = (
+    ("干涉窗口", "干涉三段窗口"),
+    ("点名请求", "干涉请求"),
+    ("伤害格", "线索槽"),
+    ("血条", "线索槽"),
+    ("座位色", "真实阵营色"),
+)
+
+# 扫描范围覆盖用户文案面与承载领域语言的代码面（协议文档 server/PROTOCOL.md 随服务端包）；
+# CONTEXT.md 自身、docs 与 ADR 的历史引文、议题空间刻意排除。
+DEPRECATED_TERM_SCOPE = ("blood_bound", "client/src", "server", "tests")
+
+
+def in_term_scope(relative_path: str) -> bool:
+    return any(
+        relative_path == root or relative_path.startswith(f"{root}/")
+        for root in DEPRECATED_TERM_SCOPE
+    )
+
+
+def term_violations(contents, terms=DEPRECATED_TERMS):
+    """纯扫描：对（相对路径, 文本）序列逐行检索废弃术语，返回 (路径, 行号, 废弃术语, 规范名) 列表。"""
+    violations = []
+    for relative_path, text in contents:
+        for number, line in enumerate(text.splitlines(), start=1):
+            for deprecated, canonical in terms:
+                if deprecated in line:
+                    violations.append((relative_path, number, deprecated, canonical))
+    return violations
+
+
+def workspace_term_contents():
+    """全量枚举：范围内工作区文件按 UTF-8 读取，缺失的范围根与解码失败的文件（二进制等）跳过。"""
+    for relative_root in DEPRECATED_TERM_SCOPE:
+        base = ROOT / relative_root
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            yield path.relative_to(ROOT).as_posix(), text
+
+
+def staged_term_contents():
+    """暂存枚举：读取范围内暂存文件（排除删除）的索引内容，判定的是真正提交的内容而非工作区。"""
+    listing = subprocess.check_output(
+        ["git", "diff", "--cached", "--name-only", "--no-renames", "--diff-filter=d", "-z"],
+        cwd=ROOT,
+    ).decode("utf-8")
+    for relative_path in filter(None, listing.split("\0")):
+        if not in_term_scope(relative_path):
+            continue
+        try:
+            text = subprocess.check_output(["git", "show", f":{relative_path}"], cwd=ROOT).decode("utf-8")
+        except (subprocess.CalledProcessError, UnicodeDecodeError):
+            continue
+        yield relative_path, text
+
+
+def report_deprecated_terms(contents) -> int:
+    """逐条打印 文件:行号 与规范替代名；有命中返回 1。"""
+    violations = term_violations(contents)
+    for relative_path, number, deprecated, canonical in violations:
+        print(f"{relative_path}:{number} 废弃「{deprecated}」→ 规范「{canonical}」")
+    if violations:
+        print(f"检查失败：废弃术语共 {len(violations)} 处，请用规范名替换。", file=sys.stderr)
+    return 1 if violations else 0
+
+
+def deprecated_term_step(label: str, contents) -> int:
+    print(f"\n检查：{label}", flush=True)
+    return report_deprecated_terms(contents)
+
+
 def all_checks(base: str | None = None, default_branch: str | None = None) -> int:
+    # 最便宜的检查先跑：术语扫描在进程内完成，先于环境守卫与任何子进程步骤。
+    if deprecated_term_step("废弃术语", workspace_term_contents()):
+        return 1
     npm = shutil.which("npm")
     if not npm:
         print("检查失败：找不到 npm，请安装 Node.js 并运行 npm ci --prefix client。", file=sys.stderr)
@@ -129,13 +212,20 @@ def install_hooks() -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", nargs="?", default="all", choices=("all", "staged", "pre-push", "python-tests", "install-hooks"))
+    parser.add_argument("command", nargs="?", default="all", choices=("all", "staged", "terms", "pre-push", "python-tests", "install-hooks"))
     parser.add_argument("--base", help="CI 比较基准提交；全零时比较与远端默认分支的共同祖先")
     parser.add_argument("--default-branch", help="新分支检查使用的远端默认分支名称")
     args = parser.parse_args(argv)
     try:
         if args.command == "staged":
+            if deprecated_term_step("废弃术语（暂存区）", staged_term_contents()):
+                return 1
             return run_steps([("暂存区差异空白", ["git", "diff", "--cached", "--check"], ROOT)])
+        if args.command == "terms":
+            result = deprecated_term_step("废弃术语", workspace_term_contents())
+            if not result:
+                print("未发现废弃术语。", flush=True)
+            return result
         if args.command == "pre-push":
             return pre_push(sys.stdin)
         if args.command == "python-tests":

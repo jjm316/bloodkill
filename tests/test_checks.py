@@ -53,6 +53,54 @@ class CheckFailureTests(unittest.TestCase):
                         self.assertEqual(check.python_tests(), expected)
 
 
+class TerminologyScanTests(unittest.TestCase):
+    def test_violation_keeps_path_line_term_and_canonical_name(self):
+        contents = [("client/src/a.tsx", "第一行\n这里用了旧词\n")]
+        self.assertEqual(
+            check.term_violations(contents, (("旧词", "新词"),)),
+            [("client/src/a.tsx", 2, "旧词", "新词")],
+        )
+
+    def test_clean_and_empty_text_have_no_violation(self):
+        contents = [("a.py", ""), ("b.py", "全部使用新词\n没有问题\n")]
+        self.assertEqual(check.term_violations(contents, (("旧词", "新词"),)), [])
+
+    def test_canonical_names_do_not_trigger_their_own_deprecation_terms(self):
+        # 规范写法（如三段窗口命名）不得被自己的废弃术语子串误报。
+        contents = [(f"canonical-{index}.txt", canonical) for index, (_, canonical) in enumerate(check.DEPRECATED_TERMS)]
+        self.assertEqual(check.term_violations(contents), [])
+
+    def test_multiple_terms_on_one_line_are_all_reported(self):
+        contents = [("f.md", "甲词和乙词同现\n")]
+        self.assertEqual(
+            check.term_violations(contents, (("甲词", "规范甲"), ("乙词", "规范乙"))),
+            [("f.md", 1, "甲词", "规范甲"), ("f.md", 1, "乙词", "规范乙")],
+        )
+
+
+class TerminologyScopeTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        patcher = mock.patch.object(check, "ROOT", self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_workspace_scan_reports_only_in_scope_utf8_files(self):
+        deprecated, canonical = check.DEPRECATED_TERMS[0]
+        hit = self.root / "client" / "src" / "Board.tsx"
+        hit.parent.mkdir(parents=True)
+        hit.write_text(f"打开{deprecated}\n", encoding="utf-8")
+        for out_of_scope in ("docs/adr/0001.md", "CONTEXT.md", ".scratch/issue.md", "client/vite.config.ts"):
+            path = self.root / out_of_scope
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"{deprecated}\n", encoding="utf-8")
+        (self.root / "client" / "src" / "logo.png").write_bytes(b"\xff\xd8\xff\xe0\x00binary")
+        contents = list(check.workspace_term_contents())
+        self.assertEqual(check.term_violations(contents), [("client/src/Board.tsx", 1, deprecated, canonical)])
+
+
 class GitGateTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -87,6 +135,64 @@ class GitGateTests(unittest.TestCase):
         path.write_text("fixed\n", encoding="utf-8")
         with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             self.assertNotEqual(check.main(["staged"]), 0)
+
+    def test_staged_term_is_rejected_even_if_worktree_is_fixed(self):
+        deprecated, canonical = check.DEPRECATED_TERMS[0]
+        script = self.root / "client" / "src" / "Board.tsx"
+        script.parent.mkdir(parents=True)
+        script.write_text(f"打开{deprecated}\n", encoding="utf-8", newline="\n")
+        self.git("add", "client/src/Board.tsx")
+        script.write_text("已修复\n", encoding="utf-8", newline="\n")
+        output = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(io.StringIO()):
+            self.assertNotEqual(check.main(["staged"]), 0)
+        self.assertIn(f"client/src/Board.tsx:1 废弃「{deprecated}」→ 规范「{canonical}」", output.getvalue())
+
+    def test_term_only_in_unstaged_content_does_not_block_commit(self):
+        script = self.root / "client" / "src" / "Board.tsx"
+        script.parent.mkdir(parents=True)
+        script.write_text("干净内容\n", encoding="utf-8", newline="\n")
+        self.git("add", "client/src/Board.tsx")
+        deprecated, _ = check.DEPRECATED_TERMS[0]
+        script.write_text(f"未暂存的{deprecated}\n", encoding="utf-8", newline="\n")
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(check.main(["staged"]), 0)
+
+    def test_staged_deletion_of_scope_file_is_skipped(self):
+        script = self.root / "client" / "src" / "old.tsx"
+        script.parent.mkdir(parents=True)
+        script.write_text("历史内容\n", encoding="utf-8", newline="\n")
+        self.git("add", "client/src/old.tsx")
+        self.git("-c", "core.hooksPath=disabled-test-hooks", "commit", "--quiet", "-m", "legacy")
+        self.git("rm", "--quiet", "client/src/old.tsx")
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(check.main(["staged"]), 0)
+
+    def test_terms_subcommand_reports_replacement_and_fails(self):
+        deprecated, canonical = check.DEPRECATED_TERMS[1]
+        document = self.root / "server" / "PROTOCOL.md"
+        document.parent.mkdir(parents=True)
+        document.write_text(f"# 协议\n{deprecated} 已废弃\n", encoding="utf-8", newline="\n")
+        output = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(io.StringIO()):
+            self.assertEqual(check.main(["terms"]), 1)
+        self.assertIn(f"server/PROTOCOL.md:2 废弃「{deprecated}」→ 规范「{canonical}」", output.getvalue())
+
+    def test_terms_subcommand_passes_when_workspace_is_clean(self):
+        output = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(io.StringIO()):
+            self.assertEqual(check.main(["terms"]), 0)
+        self.assertIn("未发现废弃术语", output.getvalue())
+
+    def test_all_checks_reports_terms_before_running_any_step(self):
+        deprecated, _ = check.DEPRECATED_TERMS[0]
+        script = self.root / "client" / "src" / "Board.tsx"
+        script.parent.mkdir(parents=True)
+        script.write_text(f"{deprecated}\n", encoding="utf-8", newline="\n")
+        with mock.patch.object(check.shutil, "which", return_value="npm"), mock.patch.object(check, "run_steps") as steps:
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(check.all_checks(), 1)
+            steps.assert_not_called()
 
     def test_dirty_worktree_cannot_validate_a_push(self):
         (self.root / "file.txt").write_text("uncommitted\n", encoding="utf-8")
