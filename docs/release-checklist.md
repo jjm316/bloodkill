@@ -4,11 +4,14 @@
 
 - [ ] 使用 Python 3.11+，运行 `python -m unittest discover -v`。
 - [ ] 在 `client/` 运行 `npm ci` 和 `npm run build`，确认生成 `client/dist/`。
-- [ ] 启动服务后运行 `python scripts/release_smoke.py --base-url http://127.0.0.1:8000`（需安装服务端 requirements）。
+- [ ] 启动服务后运行 `.venv/Scripts/python.exe scripts/release_smoke.py --base-url http://127.0.0.1:8000`（需安装服务端 requirements）。脚本验收 v3 首次握手、6 人建局、命令 ack、同名重连、合法捕获终局和 HTTP 公开回放；逐步检查隐私，回放末尾必须与旁观者终局一致，未结束房间仍应返回 409。
+- [ ] 运行 `.venv/Scripts/python.exe -m unittest tests.test_release_smoke -v`，验证真实服务流程及连接失败、协议拒绝、消息等待超时的有限退出。测试使用独立本地端口、临时存档，并清理自己创建的服务进程。
 - [ ] 浏览器完成创建房间、加入、开始对局、操作、断线重连和回放 smoke 流程。
 - [ ] 用键盘完成首屏、房间操作和回放控制；焦点始终可见，错误可被读屏播报。
 
 ## 性能预算
+
+发布脚本默认单次 HTTP/连接/消息等待上限 5 秒，WebSocket 完整流程总时限 60 秒，最多 100 条命令；可用 `--timeout`、`--game-timeout`、`--max-commands` 调整。遇到错误帧、被拒绝的 ack、连接关闭、超时或回放不一致均返回退出码 1；全部通过返回 0。每次验收会创建并保留一个已结束房间，实测请指向使用临时存档目录的独立服务。
 
 - 首屏静态资源（压缩后）不超过 350 KiB。
 - 桌面端首屏加载不超过 2 秒，移动端在本地局域网不超过 4 秒。
