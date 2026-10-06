@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>图标对照：emoji 现状 → 内联 SVG 改版</title>
+<style>
+  body {
+    margin: 0; padding: 20px 24px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #f2e7ea;
+    background:
+      radial-gradient(120% 120% at 50% 30%, rgba(142, 31, 47, 0.12), transparent 62%),
+      radial-gradient(140% 140% at 50% 40%, #1d0f15 0%, #120a0e 55%, #080406 100%);
+    background-color: #0e0709;
+  }
+  .row { display: flex; align-items: flex-start; gap: 18px; margin-bottom: 18px; }
+  .tag { flex: none; width: 118px; padding-top: 10px; font-size: 13px; color: #b9a3ac; text-align: right; }
+  .cells { display: flex; gap: 10px; }
+  .cell {
+    width: 78px; padding: 10px 0 8px;
+    border: 1px solid #4b2e3a; border-radius: 10px; background: #1f1219;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .cell .glyph { font-size: 22px; line-height: 28px; height: 28px; }
+  .cell .glyph svg { width: 26px; height: 26px; color: #f0c060; }
+  .cell .name { font-size: 11px; color: #b9a3ac; }
+  h2 { font-family: "Noto Serif SC", "Source Han Serif SC", STZhongsong, KaiTi, serif; font-size: 16px; margin: 0 0 14px; color: #f0c060; }
+</style>
+</head>
+<body>
+  <h2>图标对照（7 处：5 资源 + 匕首 + 房间锁）</h2>
+  <div class="row">
+    <div class="tag">现状 emoji</div>
+    <div class="cells">
+      <div class="cell"><div class="glyph">🗡️</div><div class="name">匕首</div></div>
+      <div class="cell"><div class="glyph">🛡</div><div class="name">盾牌</div></div>
+      <div class="cell"><div class="glyph">⚔</div><div class="name">剑</div></div>
+      <div class="cell"><div class="glyph">🪄</div><div class="name">法杖</div></div>
+      <div class="cell"><div class="glyph">🌀</div><div class="name">扇子</div></div>
+      <div class="cell"><div class="glyph">🔒</div><div class="name">房间锁</div></div>
+      <div class="cell"><div class="glyph">🪶</div><div class="name">羽毛笔</div></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="tag">改版 内联SVG<br>（线性 stroke · currentColor）</div>
+    <div class="cells">
+      <div class="cell"><div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 L14.5 8 L12 15 L9.5 8 Z"/><line x1="8.5" y1="15.5" x2="15.5" y2="15.5"/><line x1="12" y1="15.5" x2="12" y2="19"/><circle cx="12" cy="20.6" r="1.1"/></svg></div><div class="name">匕首</div></div>
+      <div class="cell"><div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L19 6 V11 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11 V6 Z"/></svg></div><div class="name">盾牌</div></div>
+      <div class="cell"><div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg></div><div class="name">剑</div></div>
+      <div class="cell"><div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="21" x2="15.5" y2="9.5"/><circle cx="17.5" cy="6.5" r="2.6"/></svg></div><div class="name">法杖</div></div>
+      <div class="cell"><div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 10.2 A 8.6 8.6 0 0 1 19.4 10.2"/><line x1="12" y1="18" x2="12" y2="4.6"/><line x1="12" y1="18" x2="5.6" y2="7.4"/><line x1="12" y1="18" x2="18.4" y2="7.4"/><path d="M8.6 13.6 A 5 5 0 0 1 15.4 13.6"/></svg></div><div class="name">扇子</div></div>
+      <div class="cell"><div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11 V7 a4 4 0 0 1 8 0 V11"/><line x1="12" y1="15" x2="12" y2="16.5"/></svg></div><div class="name">房间锁</div></div>
+      <div class="cell"><div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 C13 4.5 7.5 9 5.8 15.5 L4 20 L8.5 18.2 C15 16.5 19.5 11 20 4 Z"/><path d="M5.8 15.5 C9.5 12.5 13.5 9.5 17.5 6.5"/></svg></div><div class="name">羽毛笔</div></div>
+    </div>
+  </div>
+</body>
+</html>

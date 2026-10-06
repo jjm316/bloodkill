@@ -1,0 +1,44 @@
+[
+  {
+    "viewport": 375,
+    "tag": "mobile-375",
+    "enteredRoom": true,
+    "overlayOpened": true,
+    "head": {
+      "btnPresent": true,
+      "ariaLabel": "关闭",
+      "title": "关闭",
+      "w": 36,
+      "h": 36,
+      "rightGap": 14,
+      "overlapsTitle": false,
+      "svgW": 18,
+      "svgH": 18,
+      "hasHint": false,
+      "color": "rgb(185, 163, 172)"
+    },
+    "hoverColor": "rgb(240, 192, 96)",
+    "closeByX": true
+  },
+  {
+    "viewport": 1024,
+    "tag": "desktop-1024",
+    "enteredRoom": true,
+    "overlayOpened": true,
+    "head": {
+      "btnPresent": true,
+      "ariaLabel": "关闭",
+      "title": "关闭",
+      "w": 36,
+      "h": 36,
+      "rightGap": 18,
+      "overlapsTitle": false,
+      "svgW": 18,
+      "svgH": 18,
+      "hasHint": false,
+      "color": "rgb(185, 163, 172)"
+    },
+    "hoverColor": "rgb(240, 192, 96)",
+    "closeByX": true
+  }
+]

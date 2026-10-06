@@ -1,0 +1,251 @@
+[
+  {
+    "target": "rose",
+    "metrics": {
+      "identityText": "(玫瑰家族 · 等级7)",
+      "clueText": "你的徽记：玫瑰 · 已看到 老K 的：玫瑰",
+      "hasBadge": true,
+      "bg": "rgb(142, 39, 35)",
+      "border": "rgb(245, 197, 24)",
+      "pos": "absolute",
+      "top": "-8px",
+      "right": "-8px",
+      "rect": {
+        "x": 815,
+        "y": 522.3,
+        "w": 16,
+        "h": 16
+      },
+      "title": "你的真实阵营：玫瑰家族",
+      "aria": "你的真实阵营：玫瑰家族",
+      "badgesOnOthers": 0,
+      "selfTagText": "你",
+      "selfTagsOnOthers": 0,
+      "seatRect": {
+        "x": 616,
+        "y": 529.25,
+        "width": 208,
+        "height": 102
+      },
+      "factionTextOk": true,
+      "toneOk": true,
+      "ringOk": true,
+      "cornerOk": true,
+      "ariaOk": true,
+      "onlySelfOk": true,
+      "dotOk": true,
+      "tagOk": true
+    },
+    "pass": true,
+    "overlay": true,
+    "legend": {
+      "found": true,
+      "dots": [
+        "rgb(142, 39, 35)",
+        "rgb(51, 96, 143)",
+        "rgb(138, 95, 192)"
+      ],
+      "text": true,
+      "rect": {
+        "x": 399,
+        "y": 819.109375,
+        "width": 627,
+        "height": 95.5
+      }
+    },
+    "mobile": {
+      "identityText": "(玫瑰家族 · 等级7)",
+      "clueText": "你的徽记：玫瑰 · 已看到 老K 的：玫瑰",
+      "hasBadge": true,
+      "bg": "rgb(142, 39, 35)",
+      "border": "rgb(245, 197, 24)",
+      "pos": "absolute",
+      "top": "-8px",
+      "right": "-8px",
+      "rect": {
+        "x": 373,
+        "y": 133,
+        "w": 16,
+        "h": 16
+      },
+      "title": "你的真实阵营：玫瑰家族",
+      "aria": "你的真实阵营：玫瑰家族",
+      "badgesOnOthers": 0,
+      "selfTagText": "你",
+      "selfTagsOnOthers": 0,
+      "seatRect": {
+        "x": 199,
+        "y": 140,
+        "width": 183,
+        "height": 122
+      }
+    },
+    "mobileOk": true
+  },
+  {
+    "target": "beast",
+    "metrics": {
+      "identityText": "(野兽家族 · 等级8)",
+      "clueText": "你的徽记：野兽 · 已看到 老K 的：野兽",
+      "hasBadge": true,
+      "bg": "rgb(51, 96, 143)",
+      "border": "rgb(245, 197, 24)",
+      "pos": "absolute",
+      "top": "-8px",
+      "right": "-8px",
+      "rect": {
+        "x": 815,
+        "y": 522.3,
+        "w": 16,
+        "h": 16
+      },
+      "title": "你的真实阵营：野兽家族",
+      "aria": "你的真实阵营：野兽家族",
+      "badgesOnOthers": 0,
+      "selfTagText": "你",
+      "selfTagsOnOthers": 0,
+      "seatRect": {
+        "x": 616,
+        "y": 529.25,
+        "width": 208,
+        "height": 102
+      },
+      "factionTextOk": true,
+      "toneOk": true,
+      "ringOk": true,
+      "cornerOk": true,
+      "ariaOk": true,
+      "onlySelfOk": true,
+      "dotOk": true,
+      "tagOk": true
+    },
+    "pass": true,
+    "overlay": true,
+    "legend": {
+      "found": true,
+      "dots": [
+        "rgb(142, 39, 35)",
+        "rgb(51, 96, 143)",
+        "rgb(138, 95, 192)"
+      ],
+      "text": true,
+      "rect": {
+        "x": 399,
+        "y": 819.109375,
+        "width": 627,
+        "height": 95.5
+      }
+    },
+    "mobile": {
+      "identityText": "(野兽家族 · 等级8)",
+      "clueText": "你的徽记：野兽 · 已看到 老K 的：野兽",
+      "hasBadge": true,
+      "bg": "rgb(51, 96, 143)",
+      "border": "rgb(245, 197, 24)",
+      "pos": "absolute",
+      "top": "-8px",
+      "right": "-8px",
+      "rect": {
+        "x": 373,
+        "y": 133,
+        "w": 16,
+        "h": 16
+      },
+      "title": "你的真实阵营：野兽家族",
+      "aria": "你的真实阵营：野兽家族",
+      "badgesOnOthers": 0,
+      "selfTagText": "你",
+      "selfTagsOnOthers": 0,
+      "seatRect": {
+        "x": 199,
+        "y": 140,
+        "width": 183,
+        "height": 122
+      }
+    },
+    "mobileOk": true
+  },
+  {
+    "target": "secret-order",
+    "metrics": {
+      "identityText": "(审判者 · 审判者)",
+      "clueText": "你的徽记：玫瑰 · 已看到 老K 的：野兽",
+      "hasBadge": true,
+      "bg": "rgb(138, 95, 192)",
+      "border": "rgb(245, 197, 24)",
+      "pos": "absolute",
+      "top": "-8px",
+      "right": "-8px",
+      "rect": {
+        "x": 815,
+        "y": 522.3,
+        "w": 16,
+        "h": 16
+      },
+      "title": "你的真实阵营：审判者",
+      "aria": "你的真实阵营：审判者",
+      "badgesOnOthers": 0,
+      "selfTagText": "你",
+      "selfTagsOnOthers": 0,
+      "seatRect": {
+        "x": 616,
+        "y": 529.25,
+        "width": 208,
+        "height": 102
+      },
+      "factionTextOk": true,
+      "toneOk": true,
+      "ringOk": true,
+      "cornerOk": true,
+      "ariaOk": true,
+      "onlySelfOk": true,
+      "dotOk": true,
+      "tagOk": true
+    },
+    "pass": true,
+    "overlay": true,
+    "legend": {
+      "found": true,
+      "dots": [
+        "rgb(142, 39, 35)",
+        "rgb(51, 96, 143)",
+        "rgb(138, 95, 192)"
+      ],
+      "text": true,
+      "rect": {
+        "x": 399,
+        "y": 819.109375,
+        "width": 627,
+        "height": 95.5
+      }
+    },
+    "mobile": {
+      "identityText": "(审判者 · 审判者)",
+      "clueText": "你的徽记：玫瑰 · 已看到 老K 的：野兽",
+      "hasBadge": true,
+      "bg": "rgb(138, 95, 192)",
+      "border": "rgb(245, 197, 24)",
+      "pos": "absolute",
+      "top": "-8px",
+      "right": "-8px",
+      "rect": {
+        "x": 373,
+        "y": 133,
+        "w": 16,
+        "h": 16
+      },
+      "title": "你的真实阵营：审判者",
+      "aria": "你的真实阵营：审判者",
+      "badgesOnOthers": 0,
+      "selfTagText": "你",
+      "selfTagsOnOthers": 0,
+      "seatRect": {
+        "x": 199,
+        "y": 140,
+        "width": 183,
+        "height": 122
+      }
+    },
+    "mobileOk": true
+  }
+]

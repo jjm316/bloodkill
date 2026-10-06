@@ -1,0 +1,536 @@
+[
+  {
+    "viewport": 1024,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 1024,
+      "vh": 800,
+      "btn": {
+        "w": 36,
+        "h": 36,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": true,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 926,
+        "y": 32
+      },
+      "textCenter": {
+        "x": 926,
+        "y": 31.12
+      },
+      "dx": 0,
+      "dy": -0.88,
+      "svgSize": {
+        "w": 36,
+        "h": 36
+      },
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "fontSize": "10.7px",
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 1024,
+      "clientW": 1024,
+      "overflowX": false,
+      "headerW": 1000,
+      "headerRight": 1012,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 466519 （房主）",
+          "w": 164.7,
+          "right": 176.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 235.6
+        },
+        {
+          "cls": "help-button",
+          "text": "？",
+          "w": 36,
+          "right": 944
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 1012
+        }
+      ]
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 191,
+      "y": 31.5,
+      "text": "？",
+      "border": "1px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 192, 96)",
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "display": "flex"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 768,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 768,
+      "vh": 800,
+      "btn": {
+        "w": 36,
+        "h": 36,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": true,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 670,
+        "y": 32
+      },
+      "textCenter": {
+        "x": 670,
+        "y": 31.12
+      },
+      "dx": 0,
+      "dy": -0.88,
+      "svgSize": {
+        "w": 36,
+        "h": 36
+      },
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "fontSize": "10.7px",
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 768,
+      "clientW": 768,
+      "overflowX": false,
+      "headerW": 744,
+      "headerRight": 756,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 744806 （房主）",
+          "w": 164.7,
+          "right": 176.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 235.6
+        },
+        {
+          "cls": "help-button",
+          "text": "？",
+          "w": 36,
+          "right": 688
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 756
+        }
+      ]
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 63,
+      "y": 31.5,
+      "text": "？",
+      "border": "1px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 192, 96)",
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "display": "flex"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 640,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 640,
+      "vh": 800,
+      "btn": {
+        "w": 32,
+        "h": 32,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": true,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 544,
+        "y": 32
+      },
+      "textCenter": {
+        "x": 544,
+        "y": 30.99
+      },
+      "dx": 0,
+      "dy": -1.01,
+      "svgSize": {
+        "w": 32,
+        "h": 32
+      },
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "fontSize": "10.7px",
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 640,
+      "clientW": 640,
+      "overflowX": false,
+      "headerW": 616,
+      "headerRight": 628,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 294854 （房主）",
+          "w": 164.7,
+          "right": 176.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 235.6
+        },
+        {
+          "cls": "help-button",
+          "text": "？",
+          "w": 32,
+          "right": 560
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 628
+        }
+      ]
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 35,
+      "y": 31.5,
+      "text": "？",
+      "border": "1px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 192, 96)",
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "display": "flex"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 480,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 480,
+      "vh": 800,
+      "btn": {
+        "w": 28,
+        "h": 28,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": true,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 390,
+        "y": 28
+      },
+      "textCenter": {
+        "x": 390,
+        "y": 27.37
+      },
+      "dx": 0,
+      "dy": -0.63,
+      "svgSize": {
+        "w": 28,
+        "h": 28
+      },
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "fontSize": "10.7px",
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 480,
+      "clientW": 480,
+      "overflowX": false,
+      "headerW": 464,
+      "headerRight": 472,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 372494 （房主）",
+          "w": 164.7,
+          "right": 172.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 231.6
+        },
+        {
+          "cls": "help-button",
+          "text": "？",
+          "w": 28,
+          "right": 404
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 472
+        }
+      ]
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 23,
+      "y": 21.5,
+      "text": "？",
+      "border": "1px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 192, 96)",
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "display": "flex"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 360,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 360,
+      "vh": 800,
+      "btn": {
+        "w": 28,
+        "h": 28,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": true,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 270,
+        "y": 28
+      },
+      "textCenter": {
+        "x": 270,
+        "y": 27.37
+      },
+      "dx": 0,
+      "dy": -0.63,
+      "svgSize": {
+        "w": 28,
+        "h": 28
+      },
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "fontSize": "10.7px",
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 360,
+      "clientW": 360,
+      "overflowX": false,
+      "headerW": 344,
+      "headerRight": 352,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 039036 （房主）",
+          "w": 164.7,
+          "right": 172.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 231.6
+        },
+        {
+          "cls": "help-button",
+          "text": "？",
+          "w": 28,
+          "right": 284
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 352
+        }
+      ]
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 23,
+      "y": 21.5,
+      "text": "？",
+      "border": "1px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 192, 96)",
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "display": "flex"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 320,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 320,
+      "vh": 800,
+      "btn": {
+        "w": 28,
+        "h": 28,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": true,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 298,
+        "y": 22
+      },
+      "textCenter": {
+        "x": 298,
+        "y": 21.37
+      },
+      "dx": 0,
+      "dy": -0.63,
+      "svgSize": {
+        "w": 28,
+        "h": 28
+      },
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "fontSize": "10.7px",
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 320,
+      "clientW": 320,
+      "overflowX": false,
+      "headerW": 304,
+      "headerRight": 312,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 179102 （房主）",
+          "w": 164.7,
+          "right": 172.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 231.6
+        },
+        {
+          "cls": "help-button",
+          "text": "？",
+          "w": 28,
+          "right": 312
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 68
+        }
+      ]
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 23,
+      "y": 21.5,
+      "text": "？",
+      "border": "1px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 192, 96)",
+      "fontFamily": "\"Noto Serif SC\", \"Source Han Serif SC\", STZhongsong, KaiTi, serif",
+      "display": "flex"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  }
+]

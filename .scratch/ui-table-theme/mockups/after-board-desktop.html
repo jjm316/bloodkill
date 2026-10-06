@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>改版参考：桌面端圆桌对局 1440×900</title>
+<style>
+  /* ===== 主题变量提案（spec Implementation Decisions）===== */
+  :root {
+    --bg: #0e0709;
+    --card: #1f1219;
+    --card-hover: #2a1a23;
+    --border: #4b2e3a;
+    --text: #f2e7ea;
+    --muted: #b9a3ac;
+    --accent-gold: #f5c518;
+    --gold-text: #f0c060;
+    --gold-dim-bg: #2a1c0d;
+    --accent-crimson: #8e1f2f;
+    --danger: #ff8a80;
+    --font-display: "Noto Serif SC", "Source Han Serif SC", STZhongsong, KaiTi, serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text);
+    /* 烛光渐晕：中央微亮偏暖，四角压暗，叠一层极淡绯红光 */
+    background:
+      radial-gradient(120% 90% at 50% 32%, rgba(142, 31, 47, 0.12), transparent 62%),
+      radial-gradient(140% 120% at 50% 42%, #1d0f15 0%, #120a0e 55%, #080406 100%);
+    background-color: var(--bg);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  #root { max-width: 1220px; margin: 0 auto; padding: 12px; }
+
+  button {
+    min-height: 40px; padding: 6px 14px; font-size: 15px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); color: inherit; cursor: pointer;
+  }
+  button:hover { background: var(--card-hover); }
+
+  .room { display: flex; flex-direction: column; gap: 12px; }
+  .room-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .status { text-transform: uppercase; letter-spacing: 0.06em; font-size: 12px; color: var(--muted); }
+  .pref-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+
+  /* ===== 圆桌容器：桌面端 ≥720px ===== */
+  .table-wrap { position: relative; width: 1180px; height: 620px; margin: 0 auto; }
+  .table-oval {
+    position: absolute; left: 590px; top: 310px;
+    width: 1010px; height: 500px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 38%, #4d141d 0%, #33101a 55%, #200a11 100%);
+    border: 2px solid rgba(240, 192, 96, 0.45);
+    box-shadow:
+      0 0 60px rgba(0, 0, 0, 0.65),
+      inset 0 0 80px rgba(0, 0, 0, 0.55),
+      inset 0 0 24px rgba(142, 31, 47, 0.35);
+  }
+  /* 待办横幅：桌面中心（绝对定位居中），人名用衬线加强 */
+  .pending {
+    position: absolute; left: 590px; top: 310px; transform: translate(-50%, -50%);
+    z-index: 5;
+    max-width: 430px;
+    border: 1px solid var(--accent-gold);
+    border-radius: 10px;
+    padding: 12px 16px;
+    background: var(--gold-dim-bg);
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.55);
+    font-size: 14px;
+  }
+  .pending strong { font-family: var(--font-display); font-size: 17px; color: var(--gold-text); }
+
+  .seat {
+    position: absolute;
+    width: 208px;
+    transform: translate(-50%, -50%);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: linear-gradient(180deg, rgba(255, 240, 235, 0.03), transparent 40%), var(--card);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .seat.self { border-color: rgba(240, 192, 96, 0.5); }
+  .seat.dagger { border-color: var(--accent-gold); box-shadow: 0 0 0 1px var(--accent-gold) inset, 0 4px 16px rgba(0,0,0,0.45); }
+  .seat-name { font-weight: 600; word-break: break-word; display: flex; align-items: center; gap: 5px; }
+  .dagger-icon { color: var(--accent-gold); display: inline-flex; }
+  .dagger-icon svg { width: 15px; height: 15px; }
+  .own-identity { font-weight: 400; color: var(--muted); }
+  .own-clue-icon { font-size: 13px; color: var(--muted); word-break: break-word; }
+
+  .clue-slots { display: flex; gap: 6px; align-items: center; }
+  .slot {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; line-height: 1; font-weight: 700;
+    border: 1.5px dashed #5d414d; color: transparent; background: transparent; flex: none;
+  }
+  .slot.tile { border-radius: 6px; }
+  .slot.filled { border-style: solid; }
+  .slot.tile.filled { background: var(--gold-dim-bg); border-color: var(--gold-text); color: var(--gold-text); }
+  .slot.dot.filled.rose { background: #8e2723; border-color: #c0453c; color: #fff; }
+  .slot.dot.filled.beast { background: #33608f; border-color: #4f83b5; color: #fff; }
+  .slot.dot.filled.unknown { background: #46303a; border-color: #5f4652; color: var(--text); }
+  .slot.empty.dim { color: #937f88; }
+
+  .memo-badge {
+    position: absolute; top: -8px; right: -8px;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    border: 2px solid var(--card); background: #8e2723; color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+
+  .resources { display: flex; gap: 8px; font-size: 13px; color: var(--muted); }
+  .resources span { display: inline-flex; align-items: center; gap: 3px; }
+  .resources svg { width: 14px; height: 14px; color: var(--gold-text); }
+
+  .waiting-banner {
+    border: 1px solid var(--border); border-left: 3px solid var(--accent-gold);
+    border-radius: 8px; background: var(--card); padding: 8px 12px; color: var(--text);
+  }
+  .hint { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="room">
+    <header class="room-header">
+      <span>房间 <strong>706432</strong></span>
+      <span class="status">进行中</span>
+      <label class="pref-toggle"><input type="checkbox">默认不挡刀</label>
+      <button>离开</button>
+    </header>
+
+    <div class="table-wrap" aria-label="对局桌面">
+      <div class="table-oval"></div>
+
+      <div class="pending"><strong>老K</strong> 被攻击，干涉投票进行中：暂无表态；等待 阿玫、小兽、大猫、阿飞、咪咪、团子 表态。</div>
+
+      <!-- 座位由 seatPosition(序号,人数) 绝对定位；自己（阿紫）在正下方 6 点位，左邻（老K）在其左手侧，顺时针为数组后继 -->
+      <article class="seat self" style="left:590px; top:510px;">
+        <div class="seat-name">阿紫 <span class="own-identity">(野兽家族 · 等级8)</span></div>
+        <div class="own-clue-icon">你的徽记：野兽 · 已看到 老K 的：玫瑰</div>
+        <div class="clue-slots">
+          <span class="slot tile filled" title="等级8">8</span>
+          <span class="slot dot filled beast" title="野兽家族标记">兽</span>
+          <span class="slot dot empty dim" title="未亮出的未知标记">？</span>
+        </div>
+      </article>
+
+      <article class="seat dagger" style="left:279px; top:451px;">
+        <div class="seat-name"><span class="dagger-icon" title="持有匕首"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L14.5 8 L12 15 L9.5 8 Z"/><line x1="8.5" y1="15.5" x2="15.5" y2="15.5"/><line x1="12" y1="15.5" x2="12" y2="19"/><circle cx="12" cy="20.6" r="1.1"/></svg></span>老K</div>
+        <div class="clue-slots"><span class="slot dot"></span><span class="slot dot"></span><span class="slot dot"></span></div>
+        <span class="memo-badge">3</span>
+      </article>
+
+      <article class="seat" style="left:150px; top:310px;">
+        <div class="seat-name">小兽</div>
+        <div class="clue-slots"><span class="slot dot"></span><span class="slot dot filled beast">兽</span><span class="slot dot"></span></div>
+      </article>
+
+      <article class="seat" style="left:279px; top:169px;">
+        <div class="seat-name">阿玫</div>
+        <div class="clue-slots"><span class="slot dot"></span><span class="slot dot"></span><span class="slot dot filled unknown">？</span></div>
+      </article>
+
+      <article class="seat" style="left:590px; top:110px;">
+        <div class="seat-name">团子</div>
+        <div class="clue-slots"><span class="slot dot"></span><span class="slot dot"></span><span class="slot dot"></span></div>
+        <span class="memo-badge">1</span>
+      </article>
+
+      <article class="seat" style="left:901px; top:169px;">
+        <div class="seat-name">咪咪</div>
+        <div class="clue-slots"><span class="slot dot"></span><span class="slot dot"></span><span class="slot dot"></span></div>
+      </article>
+
+      <article class="seat" style="left:1030px; top:310px;">
+        <div class="seat-name">阿飞</div>
+        <div class="clue-slots"><span class="slot dot"></span><span class="slot dot"></span><span class="slot dot"></span></div>
+        <div class="resources"><span title="剑"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg>×2</span></div>
+      </article>
+
+      <article class="seat" style="left:901px; top:451px;">
+        <div class="seat-name">大猫</div>
+        <div class="clue-slots"><span class="slot dot"></span><span class="slot dot"></span><span class="slot dot"></span></div>
+        <div class="resources"><span title="盾牌"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L19 6 V11 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11 V6 Z"/></svg>×1</span></div>
+      </article>
+    </div>
+
+    <div class="waiting-banner" role="status">等待 阿玫、小兽、大猫、阿飞、咪咪、团子 表态（剩 37 秒）</div>
+    <p class="hint">等待其他玩家行动。</p>
+  </div>
+</div>
+</body>
+</html>

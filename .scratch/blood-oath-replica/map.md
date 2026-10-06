@@ -2,17 +2,30 @@
 
 Effort: `blood-oath-replica`
 
+## 当前状态（2026-10-06）
+
+核对基线：`94c0c00`。以下是票据状态与当前代码的摘要；各批次的测试数字引用其完成记录，本次文档清理未重跑应用测试。
+
+- 正式子票按 `.scratch/*/issues/*.md` 计，共 **42 张，全部 `resolved`**：本路线图 01–26 共 26 张、规则耦合 7 张、干涉请求门控 5 张，另有前端测试基建、备忘标记、审判者诅咒技能、帮助按钮各 1 张。主路线图当前没有未关闭的 frontier。
+- `spec.md` 另计，共 14 份：9 份 `resolved`、1 份 `ready-for-agent`（重复测试 spec）、1 份 `wontfix`；主产品、前端测试基建、规则耦合这 3 份无 `Status:`，是规格/实施索引，不作为开放子票计数。各入口见下方「其他批次入口」。
+- 6–12 人多人对局、rank 1–9 能力、资源经济、审判者诅咒技能、存档/回放与联机恢复均已实现；15/16 已由 17 修复，14 伞票与 17–20 子票均已关闭。当前 schema 为 2、ruleset 为 `0.6`、WebSocket 协议为 `v3`，见[引擎](../../blood_bound/engine.py)与[协议](../../server/PROTOCOL.md)。
+- 最近完成的是[干涉请求门控批次](../intervention-request-gate/spec.md)：01–05 全部关闭，提交映射及集成证据见该 spec 的 Comments（状态收口提交 `94c0c00`）。其完成记录为后端 213、前端 101 项通过、构建通过，含四条 E2E 路径与服务端重启后的门控重连验收。
+- 当前收尾重点是发布 smoke 修复/验证与重复 spec 收口；法师抹除、守护者归还的 golden 分支锁仍延期。详见「Fog」；票据关闭不代表这些收尾已完成，也不代表获准对外公开发布。
+
 ## Goal
 
-交付一个可运行、可测试、可回放的浏览器多人联机桌游实现，覆盖目标版本的完整一局：建局、准备、轮次/阶段、玩家行动、冲突结算、资源与能力、终局计分、重放与断线恢复。服务端由用户本地启动，并可通过内网穿透供他人访问；单人 AI 只有在规则引擎稳定后进入第二阶段。
+交付一个可运行、可测试、可回放的 `Blood Bound` 基础完整版浏览器多人联机实现，覆盖 6–12 人的完整一局：建局、准备、行动、冲突结算、资源与能力、终局计分、回放与断线恢复。服务端由用户家用机自托管，通过内网穿透供朋友访问；仅个人学习/非商业使用，不对外公开发布。单人 AI 属后续计划，当前没有实施票据。
 
 ## Scope and guardrails
 
-- 先确认“鲜血盟约”对应的具体出版版本、语言版本和扩展范围；未取得授权时不复制规则书原文、卡牌文案、插画、Logo、版图和商用素材。
-- 复刻目标是规则行为兼容，不承诺复制美术或原作 UI；所有未授权内容使用占位数据和原创表现。
-- 目标质量门槛：核心规则有可执行规范；状态转换可序列化；同一 seed 可复现；关键规则有性质测试和整局回放测试；UI 不允许产生规则引擎之外的隐藏状态。
+- 产品范围按[主规格「产品决策」](spec.md)：用户提供图片对应的基础完整版，不含扩展；桌面优先，手机/平板全面支持为后续计划，现有手机布局与交互修复见各 UI 批次。
+- 素材按 2026-08-29 用户裁决，允许在个人学习用途下使用官方素材；可下载来源仍待调研。出版印次及权利方授权未核验，旧 01 票据的调查结论保留为历史依据；当前产品口径以主规格为准。
+- 部署按[主规格](spec.md)、[穿透调研](research-02-public-access-tunnel.md)与[部署指引](../../docs/deployment-lan.md)：默认 cloudflared 快速隧道，frp + 国内 VPS 为备选；TLS 已由强制降为建议优先，保留 2026-08-29 的用户取舍。
+- 目标质量门槛：核心规则有可执行规范；状态转换可序列化；同一 seed 可复现；关键规则有性质测试和整局回放测试。对局事实由权威引擎裁决；备忘标记、日志筛选与默认应答偏好按各自规格保留为客户端私有状态。
 
 ## Route
+
+以下保留初始依赖路线，相关票据现均已关闭；当前收尾以「Fog」为准。
 
 ```text
 01 身份/版本/IP边界
@@ -32,16 +45,23 @@ Effort: `blood-oath-replica`
 
 1. **M0 定义目标**：完成 01，锁定版本、玩家人数、网页/自托管部署边界和授权边界。
 2. **M1 可验证规则**：完成 02-04；能用 seed 跑通无 UI 的最小回合。
-3. **M2 可玩的 MVP**：完成 05-08；桌面浏览器中 2 人以上可完成一局并保存/回放，UI 从一开始只依赖权威服务端接口。
-4. **M3 可交付版本**：完成 09-11；多人联机、自托管服务、内网穿透部署指引、测试、性能、可访问性和网页发布达标。
+3. **M2 可玩的 MVP**：完成 05–08 及后续能力/交互补齐；桌面浏览器中 6–12 人可完成一局并保存/回放，UI 依赖权威服务端接口。
+4. **M3 个人自托管交付**：完成 09–11；联机恢复、自托管服务、内网穿透部署指引、测试与基础可访问性具备交付记录，发布验证仍须按[检查表](../../docs/release-checklist.md)收尾。
+
+M0–M3 的关联票据均为 `resolved`；M3 的发布 smoke 缺口仍列在「Fog」。这里的“发布”指个人自托管交付，不改变“不对外公开发布”的产品边界。
 
 ## Notes
 
-- 当前仓库没有实现代码、`CONTEXT.md` 或 ADR；技术栈先不预设，待 01/03 的产出决定。
-- 所有规则计算放在纯领域层；输入、随机源、时钟和网络适配器通过接口注入。
-- 先记录事件，再投影 UI/存档；这样可以复用同一套事件做回放、断线恢复和测试诊断。
+- 阅读入口：[主规格](spec.md)定义产品边界，[CONTEXT.md](../../CONTEXT.md)定义领域术语；规则争议以[规则语料及其产品方裁决](rules-corpus-user-extract.md)与[ADR](../../docs/adr/)为准，早期票据中的规则描述需结合后续裁决阅读。
+- 已采用 Python 3.11+ 纯领域引擎、FastAPI/uvicorn 权威服务与 React/TypeScript/Vite 客户端；实现入口见[引擎说明](../../blood_bound/README.md)、[服务端说明](../../server/README.md)与[客户端目录](../../client/)。
+- 权威事件日志支撑回放、恢复和测试诊断，见[ADR-0001](../../docs/adr/0001-authoritative-event-log.md)。引擎不存墙钟；窗口时限由服务端调度，见[ADR-0011](../../docs/adr/0011-single-window-timeouts.md)。
+- 当前干涉流程为请求确认 → 全员公开自愿投票 → 多人自愿时目标选择；[ADR-0012](../../docs/adr/0012-intervention-request-gate.md)仅取代 [ADR-0002](../../docs/adr/0002-intervention-volunteer-poll.md) 的“自动开启投票”。技能开窗/封印按 [ADR-0009](../../docs/adr/0009-skill-window-general-rule-and-mentalists-seal.md)，审判者被捕独赢按 [ADR-0007](../../docs/adr/0007-inquisitor-captured-solo-win.md)。
 
 ## Decisions-so-far
+
+以下保留带日期的历史记录，其中“待实现”“frontier”“门禁失败”等均指当时状态；当前状态见文首。旧技能开窗、干涉、诅咒卡数量及部署表述以最新规则语料、ADR 和主规格的裁决为准。
+
+- 2026-10-06：核对 `94c0c00` 的票据与代码，更新当前摘要、人数/交付边界、收尾清单和批次索引，补齐 22/23/25/26 入口。此次只清理路线图；其余任务状态及原有历史记录保留。
 
 - 2026-08-30：22 已解决：攻击无人干涉结算后匕首归受伤目标（此前 `_after_damage` 把 `attack` 来源判回攻击者，与语料 `combat/attack-handoff`/`intervention/refused` 相反；开技能窗分支恰好正确、行为分裂）。`skill`/`reaction` 来源判定不动（rank 4/7 联动属 20）；golden fixtures 漂移后重新生成，全量 113 通过。详见 [22 票据](issues/22-attack-dagger-to-wounded-target.md)。
 
@@ -94,12 +114,15 @@ Effort: `blood-oath-replica`
 
 ## Fog
 
-- 目标已识别为 `Blood Bound` 基础 1–9 身份集合；出版方、印次、扩展和授权尚未确认。
-- 规则书正文确定首版实现 6–12 人；桌面优先 UI 必须支持 12 人房间的响应窗口与信息布局。
-- 02、03、04、05、06、07、08、10、12、13 已解决；14 已拆分为 17 → 18 → 19 → 20 四张子票（见 14 票面「拆分」），frontier 推进到 17；14 全部子票关闭后回到 09「联机同步与恢复硬化」。15（rank 2 技能捕获后相位/匕首残留）与 16（干涉响应者未接过匕首）将由 17 的地基重构顺带修复并摘除 expectedFailure 标记。
-- rank 3–9 能力语义已由来源 C 提供但引擎未实现；shield/sword/staff/fan 资源经济同样未实现，二者由 14 统一补齐。14 已锁定能力语义与身份标记模型（见票面「已裁决」），实现延后；15/16 缺陷仍待修。
-- 是否有权使用官方卡牌/插画/文字未知。
-- 已引入 FastAPI/uvicorn + React/TypeScript/Vite 与单服务器构建模式；尚无浏览器端多窗口自动化测试基线（后置 09）。服务端运行需 Python 3.11+，已用本机 3.11.4 venv（`.venv`）解决。
+截至文首基线，以下事项仍未收口；后续应以各项落库记录更新状态。
+
+- **待处理：发布 smoke 修复与验收（交接 1）**。[脚本](../../scripts/release_smoke.py) 的两处 hello 仍发送 `protocolVersion: "1"`，与当前 v3 不符；只验证开局、传刀、重连和未终局回放的 409，没有终局后成功回放验证。[11 的 Comments](issues/11-accessibility-performance-release.md)记录用户已关闭该票，但未消除此缺口。修复与运行证据应进入发布专用记录，入口为[发布检查表](../../docs/release-checklist.md)；本路线图尚无其完成证据。
+- **待处理：重复 spec 收口（交接 2）**。[coupling-test-hardening](../coupling-test-hardening/spec.md)仍标 `ready-for-agent`；B7/B9/C2 的主要补强已由[skill-coupling-test-hardening](../skill-coupling-test-hardening/spec.md)在 `b19e59e` 完成。按交接 2 核对重复 spec 的逐项覆盖并收口；当前不能把重复需求当作全新实现票，也不能在此代改其状态。
+- **延期：golden 分支锁补全**。当前七份 6–12 人 fixtures 未包含法师抹除 `IdentityMarkersObscured`、守护者归还 `ResourceReturned`；两者已有专项行为测试，但 golden 锁仍缺。以[已完成补强 spec 的 Comments](../skill-coupling-test-hardening/spec.md)与[重复 spec 的延期说明](../coupling-test-hardening/spec.md)为入口，后者将 B9 锁挂起到后续 ruleset bump；当前 0.6 fixtures 仍未走到这两分支。本次不重生成基准，也不扩大 runner 范围。
+- **既有产品后续项**：[主规格 Open questions](spec.md)仍列官方素材下载来源与穿透人工验证（WAN IP、手机侧抽查、frp+VPS 购前实测）；手机/平板全面支持、可选 AI 是后续计划。[门控 spec Further Notes](../intervention-request-gate/spec.md)另登记技能产物公开性的存量核查待办，尚非已完成批次；规则落盘与具体工作范围沿该入口收口。
+- **已取消的范围**：[ui-polish](../ui-polish/spec.md)整份保持 `wontfix`，其中教学/图例已单独拆出并完成；横幅合并与紧迫态、复制分享、名册卡片化仍取消。[ui-fix-usability 的 2026-10-04 Comments](../ui-fix-usability/spec.md)同时取消第三批动效等事项；这些不是当前 frontier。
+
+前端 vitest/RTL 基建与门控批次多视角 E2E 验收均已存在（见下方入口）；它们不等于持续运行的浏览器 E2E 框架。当前仍无测试 CI 门禁，参见重复测试 spec 的 Further Notes；是否另立自动化任务由后续范围决定。
 
 ## Tickets
 
@@ -124,4 +147,23 @@ Effort: `blood-oath-replica`
 - [19 目标选择型能力：rank 3/5/6/8/9（14 子票）](issues/19-targeted-abilities.md)
 - [20 干涉耦合型能力：rank 4 alchemist / rank 7 berserker（14 子票）](issues/20-intervention-coupled-abilities.md)
 - [21 设置环节：阵营徽记定向展示（setup.clue-icon）](issues/21-clue-icon-neighbour-reveal.md)
+- [22 攻击无人干涉后匕首归受伤目标](issues/22-attack-dagger-to-wounded-target.md)
+- [23 全员公开自愿干涉投票](issues/23-intervention-volunteer-poll.md)
 - [24 座位卡三格线索槽与伤害显示（fe_iconchange）](issues/24-clue-slots-damage-display.md)
+- [25 点击闪光槽位亮牌/归还](issues/25-slot-click-reveal.md)
+- [26 审判者万能标记色选增加问号](issues/26-wild-color-question-option.md)
+
+## 其他批次入口
+
+以下引用各自主 spec；实现、验收与提交记录留在各批次。本路线图只汇总状态。
+
+- [前端测试基建](../frontend-test-infra/spec.md)：索引无 Status，唯一子票 `resolved`；vitest + RTL + jsdom 已落地，见[01 完成记录](../frontend-test-infra/issues/01-vitest-rtl-waiting-room-tests.md)。
+- [备忘标记](../memo-markers/spec.md)：spec 与唯一子票 `resolved`（`6c5ce08`）；客户端私有猜测标记，见 [ADR-0004](../../docs/adr/0004-memo-markers-client-only.md)。
+- [审判者诅咒技能](../inquisitor-curse-skill/spec.md)：spec 与唯一子票 `resolved`（`f80018d`）；亮等级后发动/放弃分发，见 [ADR-0003](../../docs/adr/0003-inquisitor-curse-as-reveal-triggered-skill.md)。
+- [事件日志类别](../event-log-categories/spec.md)：`resolved`（`668471c`）；六类日志与本机筛选偏好。
+- [手机可用性修复](../ui-fix-usability/spec.md)与[圆桌主题](../ui-table-theme/spec.md)：均 `resolved`；窄屏、进房失败态、中文元数据与主题已完成，第三批取消记录在可用性 spec。
+- [教学/图例](../ui-help-legend/spec.md)：spec 与帮助按钮子票 `resolved`；大厅简介、技能表和图例已完成，角色名范围见 [ADR-0005](../../docs/adr/0005-help-overlay-official-character-names.md)。[浮层关闭按钮](../ui-help-close/spec.md)也已 `resolved`。
+- [规则耦合共识](../rule-coupling-review/spec.md)：索引无 Status，01–07 全部 `resolved`；2026-10-03 裁决实施与 ruleset 0.5 收尾，见 [07 完成记录](../rule-coupling-review/issues/07-ruleset-bump-coverage-golden-helpcontent.md)及 ADR 0006–0011。
+- [技能耦合测试补强](../skill-coupling-test-hardening/spec.md)：`resolved`（`b19e59e`），B7/B9/C2 行为测试与断血验证完成；[同题重复 spec](../coupling-test-hardening/spec.md)仍 `ready-for-agent`，待交接 2 收口。
+- [干涉请求门控](../intervention-request-gate/spec.md)：spec 与 01–05 全部 `resolved`；ruleset 0.6 / 协议 v3，提交映射在主 spec，测试/golden/E2E 在[05 完成记录](../intervention-request-gate/issues/05-tests-golden-docs.md)。
+- [体验打磨旧 spec](../ui-polish/spec.md)：`wontfix`；教学范围已拆出，其余取消项见「Fog」。

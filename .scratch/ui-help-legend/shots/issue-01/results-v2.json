@@ -1,0 +1,602 @@
+[
+  {
+    "viewport": 1024,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 1024,
+      "vh": 800,
+      "btn": {
+        "w": 36,
+        "h": 36,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": false,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 926,
+        "y": 32
+      },
+      "textCenter": null,
+      "dx": null,
+      "dy": null,
+      "svgSize": {
+        "w": 36,
+        "h": 36
+      },
+      "fontFamily": null,
+      "fontSize": null,
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 1024,
+      "clientW": 1024,
+      "overflowX": false,
+      "headerW": 1000,
+      "headerRight": 1012,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 045664 （房主）",
+          "w": 164.7,
+          "right": 176.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 235.6
+        },
+        {
+          "cls": "help-button",
+          "text": "",
+          "w": 36,
+          "right": 944
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 1012
+        }
+      ]
+    },
+    "structure": {
+      "circles": 2,
+      "paths": 1,
+      "texts": 0,
+      "circleR": "11",
+      "dotR": "1.05",
+      "pathD": "M 8.9 8.9 C 8.9 7.0 10.2 5.7 12 5.7 C 13.8 5.7 15.1 6.9 15.1 8.6 C 15.1 10.0 14.2 10.7 13.2 11.4 C 12.4 11.9 12 12.5 12 13.6 L 12 14.2",
+      "ringStroke": "1px",
+      "pathStroke": "1.5px",
+      "strokeColor": "rgb(240, 192, 96)"
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 191,
+      "y": 31.5,
+      "text": "",
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasPath": true,
+      "hasText": false,
+      "bareText": false,
+      "circleCount": 2,
+      "border": "0px",
+      "color": "rgb(240, 192, 96)"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 768,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 768,
+      "vh": 800,
+      "btn": {
+        "w": 36,
+        "h": 36,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": false,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 670,
+        "y": 32
+      },
+      "textCenter": null,
+      "dx": null,
+      "dy": null,
+      "svgSize": {
+        "w": 36,
+        "h": 36
+      },
+      "fontFamily": null,
+      "fontSize": null,
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 768,
+      "clientW": 768,
+      "overflowX": false,
+      "headerW": 744,
+      "headerRight": 756,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 702234 （房主）",
+          "w": 164.7,
+          "right": 176.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 235.6
+        },
+        {
+          "cls": "help-button",
+          "text": "",
+          "w": 36,
+          "right": 688
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 756
+        }
+      ]
+    },
+    "structure": {
+      "circles": 2,
+      "paths": 1,
+      "texts": 0,
+      "circleR": "11",
+      "dotR": "1.05",
+      "pathD": "M 8.9 8.9 C 8.9 7.0 10.2 5.7 12 5.7 C 13.8 5.7 15.1 6.9 15.1 8.6 C 15.1 10.0 14.2 10.7 13.2 11.4 C 12.4 11.9 12 12.5 12 13.6 L 12 14.2",
+      "ringStroke": "1px",
+      "pathStroke": "1.5px",
+      "strokeColor": "rgb(240, 192, 96)"
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 63,
+      "y": 31.5,
+      "text": "",
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasPath": true,
+      "hasText": false,
+      "bareText": false,
+      "circleCount": 2,
+      "border": "0px",
+      "color": "rgb(240, 192, 96)"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 640,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 640,
+      "vh": 800,
+      "btn": {
+        "w": 32,
+        "h": 32,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": false,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 544,
+        "y": 32
+      },
+      "textCenter": null,
+      "dx": null,
+      "dy": null,
+      "svgSize": {
+        "w": 32,
+        "h": 32
+      },
+      "fontFamily": null,
+      "fontSize": null,
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 640,
+      "clientW": 640,
+      "overflowX": false,
+      "headerW": 616,
+      "headerRight": 628,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 003115 （房主）",
+          "w": 164.7,
+          "right": 176.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 235.6
+        },
+        {
+          "cls": "help-button",
+          "text": "",
+          "w": 32,
+          "right": 560
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 628
+        }
+      ]
+    },
+    "structure": {
+      "circles": 2,
+      "paths": 1,
+      "texts": 0,
+      "circleR": "11",
+      "dotR": "1.05",
+      "pathD": "M 8.9 8.9 C 8.9 7.0 10.2 5.7 12 5.7 C 13.8 5.7 15.1 6.9 15.1 8.6 C 15.1 10.0 14.2 10.7 13.2 11.4 C 12.4 11.9 12 12.5 12 13.6 L 12 14.2",
+      "ringStroke": "1px",
+      "pathStroke": "1.5px",
+      "strokeColor": "rgb(240, 192, 96)"
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 35,
+      "y": 31.5,
+      "text": "",
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasPath": true,
+      "hasText": false,
+      "bareText": false,
+      "circleCount": 2,
+      "border": "0px",
+      "color": "rgb(240, 192, 96)"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 480,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 480,
+      "vh": 800,
+      "btn": {
+        "w": 28,
+        "h": 28,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": false,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 390,
+        "y": 28
+      },
+      "textCenter": null,
+      "dx": null,
+      "dy": null,
+      "svgSize": {
+        "w": 28,
+        "h": 28
+      },
+      "fontFamily": null,
+      "fontSize": null,
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 480,
+      "clientW": 480,
+      "overflowX": false,
+      "headerW": 464,
+      "headerRight": 472,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 359882 （房主）",
+          "w": 164.7,
+          "right": 172.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 231.6
+        },
+        {
+          "cls": "help-button",
+          "text": "",
+          "w": 28,
+          "right": 404
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 472
+        }
+      ]
+    },
+    "structure": {
+      "circles": 2,
+      "paths": 1,
+      "texts": 0,
+      "circleR": "11",
+      "dotR": "1.05",
+      "pathD": "M 8.9 8.9 C 8.9 7.0 10.2 5.7 12 5.7 C 13.8 5.7 15.1 6.9 15.1 8.6 C 15.1 10.0 14.2 10.7 13.2 11.4 C 12.4 11.9 12 12.5 12 13.6 L 12 14.2",
+      "ringStroke": "1px",
+      "pathStroke": "1.5px",
+      "strokeColor": "rgb(240, 192, 96)"
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 23,
+      "y": 21.5,
+      "text": "",
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasPath": true,
+      "hasText": false,
+      "bareText": false,
+      "circleCount": 2,
+      "border": "0px",
+      "color": "rgb(240, 192, 96)"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 360,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 360,
+      "vh": 800,
+      "btn": {
+        "w": 28,
+        "h": 28,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": false,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 270,
+        "y": 28
+      },
+      "textCenter": null,
+      "dx": null,
+      "dy": null,
+      "svgSize": {
+        "w": 28,
+        "h": 28
+      },
+      "fontFamily": null,
+      "fontSize": null,
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 360,
+      "clientW": 360,
+      "overflowX": false,
+      "headerW": 344,
+      "headerRight": 352,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 927273 （房主）",
+          "w": 164.7,
+          "right": 172.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 231.6
+        },
+        {
+          "cls": "help-button",
+          "text": "",
+          "w": 28,
+          "right": 284
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 352
+        }
+      ]
+    },
+    "structure": {
+      "circles": 2,
+      "paths": 1,
+      "texts": 0,
+      "circleR": "11",
+      "dotR": "1.05",
+      "pathD": "M 8.9 8.9 C 8.9 7.0 10.2 5.7 12 5.7 C 13.8 5.7 15.1 6.9 15.1 8.6 C 15.1 10.0 14.2 10.7 13.2 11.4 C 12.4 11.9 12 12.5 12 13.6 L 12 14.2",
+      "ringStroke": "1px",
+      "pathStroke": "1.5px",
+      "strokeColor": "rgb(240, 192, 96)"
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 23,
+      "y": 21.5,
+      "text": "",
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasPath": true,
+      "hasText": false,
+      "bareText": false,
+      "circleCount": 2,
+      "border": "0px",
+      "color": "rgb(240, 192, 96)"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  },
+  {
+    "viewport": 320,
+    "height": 800,
+    "filledName": "验收专员",
+    "enteredRoom": true,
+    "metrics": {
+      "vw": 320,
+      "vh": 800,
+      "btn": {
+        "w": 28,
+        "h": 28,
+        "diff": 0
+      },
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasText": false,
+      "bareText": false,
+      "viewBox": "0 0 24 24",
+      "circleR": "11",
+      "circleCenter": {
+        "x": 298,
+        "y": 22
+      },
+      "textCenter": null,
+      "dx": null,
+      "dy": null,
+      "svgSize": {
+        "w": 28,
+        "h": 28
+      },
+      "fontFamily": null,
+      "fontSize": null,
+      "stroke": "rgb(240, 192, 96)",
+      "bg": "rgb(31, 18, 25)",
+      "color": "rgb(240, 192, 96)",
+      "borderTop": "0px",
+      "borderStyle": "none",
+      "scrollW": 320,
+      "clientW": 320,
+      "overflowX": false,
+      "headerW": 304,
+      "headerRight": 312,
+      "headerItems": [
+        {
+          "cls": "SPAN",
+          "text": "房间 846959 （房主）",
+          "w": 164.7,
+          "right": 172.7
+        },
+        {
+          "cls": "status",
+          "text": "等待开始",
+          "w": 50.9,
+          "right": 231.6
+        },
+        {
+          "cls": "help-button",
+          "text": "",
+          "w": 28,
+          "right": 312
+        },
+        {
+          "cls": "BUTTON",
+          "text": "离开",
+          "w": 60,
+          "right": 68
+        }
+      ]
+    },
+    "structure": {
+      "circles": 2,
+      "paths": 1,
+      "texts": 0,
+      "circleR": "11",
+      "dotR": "1.05",
+      "pathD": "M 8.9 8.9 C 8.9 7.0 10.2 5.7 12 5.7 C 13.8 5.7 15.1 6.9 15.1 8.6 C 15.1 10.0 14.2 10.7 13.2 11.4 C 12.4 11.9 12 12.5 12 13.6 L 12 14.2",
+      "ringStroke": "1px",
+      "pathStroke": "1.5px",
+      "strokeColor": "rgb(240, 192, 96)"
+    },
+    "overlayOpened": true,
+    "rulesQ": {
+      "w": 26,
+      "h": 26,
+      "diff": 0,
+      "x": 23,
+      "y": 21.5,
+      "text": "",
+      "hasSvg": true,
+      "hasCircle": true,
+      "hasPath": true,
+      "hasText": false,
+      "bareText": false,
+      "circleCount": 2,
+      "border": "0px",
+      "color": "rgb(240, 192, 96)"
+    },
+    "escapeMethod": "CDP Input.dispatchKeyEvent",
+    "escapeClosed": true
+  }
+]

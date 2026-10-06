@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Q1 自己/他人区分 · 三方案对比</title>
+<style>
+/* ===== 真实主题 token（client/src/styles.css :root 原样拷贝） ===== */
+:root {
+  --bg: #0e0709;
+  --card: #1f1219;
+  --border: #4b2e3a;
+  --text: #f2e7ea;
+  --muted: #b9a3ac;
+  --accent-gold: #f5c518;
+  --gold-text: #f0c060;
+  --gold-dim-bg: #2a1c0d;
+  --rose-bg: #8e2723;
+  --rose-border: #c0453c;
+  --beast-bg: #33608f;
+  --beast-border: #4f83b5;
+  --mark-gray-bg: #46303a;
+  --mark-gray-border: #5f4652;
+  --slot-dim: #937f88;
+  --slot-dashed: #5d414d;
+  --order-bg: #8a5fc0; /* 提案基线：审判者紫罗兰（Q2 推荐，仍待拍板） */
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px;
+  background: var(--bg); color: var(--text);
+  font-family: system-ui, "Microsoft YaHei", sans-serif;
+  font-size: 14px; line-height: 1.5;
+}
+h1 { font-size: 20px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 18px; max-width: 980px; }
+h2 { font-size: 16px; color: var(--gold-text); margin: 30px 0 4px; }
+h2 .rec { font-size: 12px; color: #9fd49f; border: 1px solid #9fd49f; border-radius: 999px; padding: 0 8px; vertical-align: 2px; margin-left: 8px; }
+.note { color: var(--muted); font-size: 12.5px; margin: 2px 0 10px; max-width: 980px; }
+.note b { color: var(--text); }
+
+.cluster { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; padding: 10px 6px 6px; }
+.scan { zoom: 0.62; height: 150px; overflow: hidden; padding: 10px 6px 0; border-top: 1px dashed var(--border); margin-top: 8px; }
+.scan-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* ===== 座位卡：Board 渲染复刻 ===== */
+.seat {
+  position: relative;
+  width: 208px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--card);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.seat.self { border-color: rgba(240, 192, 96, 0.5); }
+.seat.dagger { border-color: var(--accent-gold); box-shadow: 0 0 0 1px var(--accent-gold) inset; }
+.seat-name { font-weight: 600; word-break: break-word; }
+.own-identity { font-weight: 400; color: var(--muted); }
+.own-clue-icon { font-size: 13px; color: var(--muted); word-break: break-word; }
+.dagger-icon { margin-right: 4px; color: var(--accent-gold); display: inline-flex; vertical-align: -2px; }
+.dagger-icon svg { width: 14px; height: 14px; }
+
+.clue-slots { display: flex; gap: 6px; align-items: center; }
+.slot {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; font-weight: 700;
+  border: 1.5px dashed var(--slot-dashed); color: transparent;
+  background: transparent; flex: none;
+}
+.slot.tile { border-radius: 6px; }
+.slot.dot { border-radius: 50%; }
+.slot.filled { border-style: solid; }
+.slot.tile.filled { background: var(--gold-dim-bg); border-color: var(--gold-text); color: var(--gold-text); }
+.slot.dot.filled.rose { background: var(--rose-bg); border-color: var(--rose-border); color: #fff; }
+.slot.empty.dim { color: var(--slot-dim); }
+
+/* 备忘角标（别人的卡，开局被右邻徽记色初始填充） */
+.memo-badge {
+  position: absolute; top: -8px; right: -8px; z-index: 2;
+  width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; line-height: 1;
+  border: 2px solid var(--card); background: var(--mark-gray-bg); color: var(--text);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.memo-badge.rose { background: var(--rose-bg); color: #fff; }
+.memo-badge.empty { background: transparent; border: 1.5px dashed var(--slot-dashed); color: transparent; box-shadow: none; }
+
+/* 真实阵营色徽：提案基线（金环色芯，16px，Q3 推荐仍待拍板） */
+.true-color-badge {
+  position: absolute; top: -8px; right: -8px; z-index: 2;
+  display: inline-block; width: 16px; height: 16px; flex: none;
+  border-radius: 50%; border: 2px solid var(--accent-gold);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+.true-color-badge.rose { background: var(--rose-bg); }
+
+/* ===== Q1 机制 ===== */
+/* 方案 A：左上「你」字标，金边维持 50% */
+.self-tag {
+  position: absolute; top: -9px; left: -8px; z-index: 2;
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--accent-gold); color: #1f1209;
+  font-size: 10px; font-weight: 700; line-height: 1.5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+.opt-a .seat.self { border-color: rgba(240, 192, 96, 0.5); }
+
+/* 方案 B：金边提到 100% + 外光晕，无字标 */
+.opt-b .seat.self {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 14px rgba(245, 197, 24, 0.4), 0 0 0 1px rgba(245, 197, 24, 0.25);
+}
+
+/* 方案 C：字标 + 金边光晕双管齐下 */
+.opt-c .seat.self {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 14px rgba(245, 197, 24, 0.4), 0 0 0 1px rgba(245, 197, 24, 0.25);
+}
+
+footer { margin-top: 30px; border-top: 1px solid var(--border); padding-top: 12px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Q1 自己/他人区分 · 三方案对比</h1>
+<p class="sub">三节使用同一桌面：你（阿紫，玫红家族）、老K（备忘角标被你的徽记色初始填充）、大猫（<b>匕首持有者，全金边</b>——专供检验方案 B 的撞车）、阿飞与咪咪（普通玩家）。色徽统一为推荐基线「金环色芯」（Q3 待拍板）。每节底部是 62% 缩小的远观模拟，模拟 9–12 人局扫桌找自己。</p>
+
+<!-- ================= 方案 A ================= -->
+<h2>方案 A · 左上「你」字标<span class="rec">推荐</span></h2>
+<p class="note">金底圆角小 chip 压在左上角，右上角留给阵营色徽。<b>找自己＝找金底「你」</b>；不与匕首金边撞语言（对比大猫卡）；色弱友好（有字）；与等待房「（你）」同语言。代价：卡片左上角多一个元素，角部略密。</p>
+<div class="opt-a">
+  <div class="cluster">
+    <div class="seat">
+      <div class="seat-name">老K</div>
+      <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+      <span class="memo-badge rose"></span>
+    </div>
+    <div class="seat self">
+      <span class="self-tag">你</span>
+      <div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div>
+      <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+      <div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+      <span class="true-color-badge rose"></span>
+    </div>
+    <div class="seat dagger">
+      <div class="seat-name"><span class="dagger-icon" title="持有匕首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3l2 2-9.5 9.5-2.5.5.5-2.5L19 3zM7.5 14.5l2 2-3.5 1.5L3 21l3-3 1.5-3.5z" fill="currentColor"/></svg></span>大猫</div>
+      <div class="clue-slots"><span class="slot tile filled">6</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+    </div>
+    <div class="seat">
+      <div class="seat-name">阿飞</div>
+      <div class="clue-slots"><span class="slot tile empty dim">2</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+    </div>
+    <div class="seat">
+      <div class="seat-name">咪咪</div>
+      <div class="clue-slots"><span class="slot tile empty dim">9</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+      <span class="memo-badge empty"></span>
+    </div>
+  </div>
+  <div class="scan">
+    <div class="cluster">
+      <div class="seat"><div class="seat-name">老K</div><div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div><span class="memo-badge rose"></span></div>
+      <div class="seat self"><span class="self-tag">你</span><div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div><div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div><span class="true-color-badge rose"></span></div>
+      <div class="seat dagger"><div class="seat-name"><span class="dagger-icon" title="持有匕首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3l2 2-9.5 9.5-2.5.5.5-2.5L19 3zM7.5 14.5l2 2-3.5 1.5L3 21l3-3 1.5-3.5z" fill="currentColor"/></svg></span>大猫</div><div class="clue-slots"><span class="slot tile filled">6</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div></div>
+      <div class="seat"><div class="seat-name">阿飞</div><div class="clue-slots"><span class="slot tile empty dim">2</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div></div>
+      <div class="seat"><div class="seat-name">咪咪</div><div class="clue-slots"><span class="slot tile empty dim">9</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div><span class="memo-badge empty"></span></div>
+    </div>
+  </div>
+  <p class="scan-label">↑ 远观模拟（62%）：先找自己。</p>
+</div>
+
+<!-- ================= 方案 B ================= -->
+<h2>方案 B · 金边 100% + 外光晕</h2>
+<p class="note">不新增元素，卡片本体即标记：金边拉满 + 一圈金色外光晕。<b>请对比同页大猫（匕首）卡</b>：匕首是「全金边 + 1px 内阴影 + 名字旁匕首图标」，你的卡是「全金边 + 外光晕」——金边本身完全同色，只剩光晕与图标两条差异线索。色弱玩家只剩明度线索。</p>
+<div class="opt-b">
+  <div class="cluster">
+    <div class="seat">
+      <div class="seat-name">老K</div>
+      <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+      <span class="memo-badge rose"></span>
+    </div>
+    <div class="seat self">
+      <div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div>
+      <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+      <div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+      <span class="true-color-badge rose"></span>
+    </div>
+    <div class="seat dagger">
+      <div class="seat-name"><span class="dagger-icon" title="持有匕首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3l2 2-9.5 9.5-2.5.5.5-2.5L19 3zM7.5 14.5l2 2-3.5 1.5L3 21l3-3 1.5-3.5z" fill="currentColor"/></svg></span>大猫</div>
+      <div class="clue-slots"><span class="slot tile filled">6</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+    </div>
+    <div class="seat">
+      <div class="seat-name">阿飞</div>
+      <div class="clue-slots"><span class="slot tile empty dim">2</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+    </div>
+    <div class="seat">
+      <div class="seat-name">咪咪</div>
+      <div class="clue-slots"><span class="slot tile empty dim">9</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+      <span class="memo-badge empty"></span>
+    </div>
+  </div>
+  <div class="scan">
+    <div class="cluster">
+      <div class="seat"><div class="seat-name">老K</div><div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div><span class="memo-badge rose"></span></div>
+      <div class="seat self"><div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div><div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div><span class="true-color-badge rose"></span></div>
+      <div class="seat dagger"><div class="seat-name"><span class="dagger-icon" title="持有匕首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3l2 2-9.5 9.5-2.5.5.5-2.5L19 3zM7.5 14.5l2 2-3.5 1.5L3 21l3-3 1.5-3.5z" fill="currentColor"/></svg></span>大猫</div><div class="clue-slots"><span class="slot tile filled">6</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div></div>
+      <div class="seat"><div class="seat-name">阿飞</div><div class="clue-slots"><span class="slot tile empty dim">2</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div></div>
+      <div class="seat"><div class="seat-name">咪咪</div><div class="clue-slots"><span class="slot tile empty dim">9</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div><span class="memo-badge empty"></span></div>
+    </div>
+  </div>
+  <p class="scan-label">↑ 远观模拟（62%）：先找自己。</p>
+</div>
+
+<!-- ================= 方案 C ================= -->
+<h2>方案 C · 「你」字标 + 金边光晕，双管齐下</h2>
+<p class="note">A 与 B 叠加：远观金边光晕先跳出来，近看「你」字定案。<b>最强区分，也是金元素密度最高的方案</b>（金边+金晕+金字标+金环色徽，同一张卡上四处金），且与匕首金边的撞车问题依然存在（靠字标化解）。</p>
+<div class="opt-c">
+  <div class="cluster">
+    <div class="seat">
+      <div class="seat-name">老K</div>
+      <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+      <span class="memo-badge rose"></span>
+    </div>
+    <div class="seat self">
+      <span class="self-tag">你</span>
+      <div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div>
+      <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+      <div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+      <span class="true-color-badge rose"></span>
+    </div>
+    <div class="seat dagger">
+      <div class="seat-name"><span class="dagger-icon" title="持有匕首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3l2 2-9.5 9.5-2.5.5.5-2.5L19 3zM7.5 14.5l2 2-3.5 1.5L3 21l3-3 1.5-3.5z" fill="currentColor"/></svg></span>大猫</div>
+      <div class="clue-slots"><span class="slot tile filled">6</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+    </div>
+    <div class="seat">
+      <div class="seat-name">阿飞</div>
+      <div class="clue-slots"><span class="slot tile empty dim">2</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+    </div>
+    <div class="seat">
+      <div class="seat-name">咪咪</div>
+      <div class="clue-slots"><span class="slot tile empty dim">9</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+      <span class="memo-badge empty"></span>
+    </div>
+  </div>
+  <div class="scan">
+    <div class="cluster">
+      <div class="seat"><div class="seat-name">老K</div><div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div><span class="memo-badge rose"></span></div>
+      <div class="seat self"><span class="self-tag">你</span><div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div><div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div><span class="true-color-badge rose"></span></div>
+      <div class="seat dagger"><div class="seat-name"><span class="dagger-icon" title="持有匕首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3l2 2-9.5 9.5-2.5.5.5-2.5L19 3zM7.5 14.5l2 2-3.5 1.5L3 21l3-3 1.5-3.5z" fill="currentColor"/></svg></span>大猫</div><div class="clue-slots"><span class="slot tile filled">6</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div></div>
+      <div class="seat"><div class="seat-name">阿飞</div><div class="clue-slots"><span class="slot tile empty dim">2</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div></div>
+      <div class="seat"><div class="seat-name">咪咪</div><div class="clue-slots"><span class="slot tile empty dim">9</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div><span class="memo-badge empty"></span></div>
+    </div>
+  </div>
+  <p class="scan-label">↑ 远观模拟（62%）：先找自己。</p>
+</div>
+
+<footer>基线说明：本页三节的色徽统一为「金环色芯」推荐案（Q3），审判者紫罗兰为 Q2 推荐案——两者仍待拍板，本页只对比 Q1 的自己/他人区分机制。窄屏网格分支下三个机制同样生效（chip 与光晕不依赖圆桌定位）。</footer>
+</body>
+</html>

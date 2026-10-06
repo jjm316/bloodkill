@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型：干涉横幅位置对比（PROTOTYPE，用完即弃）</title>
+<!--
+  PROTOTYPE — 回答 ui-polish spec Q1：合并后的干涉横幅放哪。
+  三种状态经 ?variant= 切换（now / a / b），底部浮动条或 ← → 键盘循环。
+  样式直接链接真实 client/src/styles.css，模拟 7 人局干涉投票中的攻击者视角。
+  验证完把结论写回 spec，本文件丢弃。
+-->
+<link rel="stylesheet" href="../../client/src/styles.css">
+<style>
+  /* 原型专属样式：只加切换条与水印，不改任何产品类 */
+  .proto-badge {
+    position: fixed; top: 8px; right: 8px; z-index: 90;
+    background: #f5c518; color: #12141a; font-size: 12px; font-weight: 700;
+    padding: 4px 10px; border-radius: 4px; letter-spacing: .05em;
+  }
+  .proto-switcher {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 90;
+    display: flex; align-items: center; gap: 10px;
+    background: #0b0d12; border: 1px solid #f5c518; border-radius: 999px;
+    padding: 6px 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .6);
+  }
+  .proto-switcher button { min-height: 36px; width: 44px; border-radius: 999px; font-weight: 700; }
+  .proto-label { font-size: 13px; max-width: 62vw; }
+  .proto-label strong { color: #f5c518; }
+</style>
+</head>
+<body>
+<div class="proto-badge">PROTOTYPE · 仅对比横幅位置</div>
+
+<div id="root">
+  <div class="room">
+    <header class="room-header">
+      <span>房间 <strong>347216</strong></span>
+      <span class="status">进行中</span>
+      <label class="pref-toggle"><input type="checkbox">默认不挡刀</label>
+      <button type="button">离开</button>
+    </header>
+    <div id="stage"></div>
+  </div>
+</div>
+
+<div class="proto-switcher">
+  <button type="button" id="prev" aria-label="上一个">←</button>
+  <span class="proto-label" id="label"></span>
+  <button type="button" id="next" aria-label="下一个">→</button>
+</div>
+
+<script>
+  // —— 座位拟真数据（7 人局，老大哥 = 攻击者视角）——
+  const seats = [
+    { name: "老大哥", self: true, dagger: true,
+      slots: '<span class="slot tile empty dim" title="未亮出的等级">4</span><span class="slot dot empty" title="未亮出的身份标记"></span><span class="slot dot empty dim" title="未亮出的任选标记（亮出时自选红/蓝）">任</span>',
+      identity: '<div class="own-identity">（玫瑰 · 4）</div>',
+      clue: '<div class="own-clue-icon">你的徽记：🌹 · 已看到 小美 的：🐺</div>',
+      memo: '<button type="button" class="memo-badge beast" title="备忘标记（仅保存在本设备）">3</button>' },
+    { name: "小美", // 被攻击目标，已亮 2 格
+      slots: '<span class="slot tile filled" title="已亮出等级 7">7</span><span class="slot dot filled rose" title="已亮出玫瑰家族标记">玫</span><span class="slot dot empty" title="未亮出的身份标记"></span>' },
+    { name: "老王",
+      slots: '<span class="slot tile filled" title="已亮出等级 3">3</span><span class="slot dot empty" title="未亮出的身份标记"></span><span class="slot dot empty" title="未亮出的身份标记"></span>',
+      resources: '<div class="resources"><span title="羽毛">🪶×1</span></div>' },
+    { name: "阿强",
+      slots: '<span class="slot tile empty" title="未亮出的等级"></span><span class="slot dot empty" title="未亮出的身份标记"></span><span class="slot dot empty" title="未亮出的身份标记"></span>' },
+    { name: "小丽",
+      slots: '<span class="slot tile empty" title="未亮出的等级"></span><span class="slot dot empty" title="未亮出的身份标记"></span><span class="slot dot empty" title="未亮出的身份标记"></span>',
+      resources: '<div class="resources"><span title="盾">🛡×1</span></div>' },
+    { name: "大明",
+      slots: '<span class="slot tile empty" title="未亮出的等级"></span><span class="slot dot empty" title="未亮出的身份标记"></span><span class="slot dot empty" title="未亮出的身份标记"></span>' },
+    { name: "小红",
+      slots: '<span class="slot tile empty" title="未亮出的等级"></span><span class="slot dot empty" title="未亮出的身份标记"></span><span class="slot dot empty" title="未亮出的身份标记"></span>' },
+  ];
+
+  function seatHtml(s) {
+    return `<article role="listitem" class="seat${s.dagger ? " dagger" : ""}" aria-label="${s.name}">
+      <div class="seat-name">${s.dagger ? '<span class="dagger-icon" title="持有匕首">🗡️</span>' : ""}${s.name}${s.identity ?? ""}</div>
+      ${s.clue ?? ""}
+      <div class="clue-slots" role="img" aria-label="线索槽">${s.slots}</div>
+      ${s.resources ?? ""}
+      ${s.memo ?? ""}
+    </article>`;
+  }
+
+  const playersHtml = `<div class="players" role="list" aria-label="玩家座位">${seats.map(seatHtml).join("")}</div>`;
+  const actionsHtml = `<section class="actions"><p class="hint">等待其他玩家行动。</p></section>`;
+  const logHtml = `<details class="log" open><summary>事件日志</summary>
+    <ol>
+      <li class="cat-intervention"><span class="cat-tag">干涉</span>老王 表态：挡刀。</li>
+      <li class="cat-intervention"><span class="cat-tag">干涉</span>干涉投票开启：小美 被老大哥攻击。</li>
+      <li class="cat-dagger"><span class="cat-tag">匕首</span>老大哥 用匕首攻击 小美。</li>
+      <li class="cat-flow"><span class="cat-tag">流程</span>老大哥 把匕首攥紧了。</li>
+    </ol>
+  </details>`;
+
+  // —— 三种状态：只有横幅的数量与位置不同，其余完全一致 ——
+  const PENDING_NOW = `<div class="pending"><strong>小美</strong> 被攻击，干涉投票进行中：老王（挡刀）、阿强（挡刀）、小丽（不干涉）；等待 大明、小红 表态。</div>`;
+  const WAITING_NOW = `<div class="waiting-banner">等待 大明、小红 表态（剩 43 秒）</div>`;
+  const MERGED_PENDING = `<div class="pending"><strong>小美</strong> 被攻击，干涉投票进行中：老王（挡刀）、阿强（挡刀）、小丽（不干涉）；等待 大明、小红 表态（剩 43 秒）。</div>`;
+  const MERGED_WAITING = `<div class="waiting-banner"><strong>小美</strong> 被攻击，干涉投票进行中：老王（挡刀）、阿强（挡刀）、小丽（不干涉）；等待 大明、小红 表态（剩 43 秒）</div>`;
+
+  const VARIANTS = {
+    now: {
+      label: "现状 —— 双横幅重复（上方金边 + 下方灰条各说一半）",
+      html: `<section class="board" aria-label="对局桌面">${PENDING_NOW}${playersHtml}</section>${WAITING_NOW}${actionsHtml}${logHtml}`,
+    },
+    a: {
+      label: "方案 A —— 座位上方单条金边（.pending 吸收倒计时，删下方灰条）",
+      html: `<section class="board" aria-label="对局桌面">${MERGED_PENDING}${playersHtml}</section>${actionsHtml}${logHtml}`,
+    },
+    b: {
+      label: "方案 B —— 桌面下方单条（.waiting-banner 合并全部信息，删上方金边）",
+      html: `<section class="board" aria-label="对局桌面">${playersHtml}</section>${MERGED_WAITING}${actionsHtml}${logHtml}`,
+    },
+  };
+
+  const ORDER = ["now", "a", "b"];
+  const stage = document.getElementById("stage");
+  const label = document.getElementById("label");
+
+  function current() {
+    const v = new URLSearchParams(location.search).get("variant");
+    return ORDER.includes(v) ? v : "now";
+  }
+
+  function show(key) {
+    stage.innerHTML = VARIANTS[key].html;
+    label.innerHTML = `<strong>${key}</strong> · ${VARIANTS[key].label}`;
+    try { history.replaceState(null, "", `?variant=${key}`); } catch { /* file:// 下允许失败 */ }
+  }
+
+  function cycle(step) {
+    show(ORDER[(ORDER.indexOf(current()) + step + ORDER.length) % ORDER.length]);
+  }
+
+  document.getElementById("prev").addEventListener("click", () => cycle(-1));
+  document.getElementById("next").addEventListener("click", () => cycle(1));
+  window.addEventListener("keydown", (e) => {
+    const el = document.activeElement;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+    if (e.key === "ArrowLeft") cycle(-1);
+    if (e.key === "ArrowRight") cycle(1);
+  });
+
+  show(current());
+</script>
+</body>
+</html>

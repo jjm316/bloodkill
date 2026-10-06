@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>真实阵营色徽 · P1 重设计对比</title>
+<style>
+/* ===== 真实主题 token（client/src/styles.css :root 原样拷贝） ===== */
+:root {
+  --bg: #0e0709;
+  --card: #1f1219;
+  --card-hover: #2a1a23;
+  --border: #4b2e3a;
+  --text: #f2e7ea;
+  --muted: #b9a3ac;
+  --accent-gold: #f5c518;
+  --gold-text: #f0c060;
+  --gold-dim-bg: #2a1c0d;
+  --rose-bg: #8e2723;
+  --rose-border: #c0453c;
+  --beast-bg: #33608f;
+  --beast-border: #4f83b5;
+  --mark-gray-bg: #46303a;
+  --mark-gray-border: #5f4652;
+  --slot-dim: #937f88;
+  --slot-dashed: #5d414d;
+  /* 提案新增（仅色徽+图例示意消费，不进槽位/备忘语言） */
+  --order-bg: #8a5fc0;
+  --order-bg-alt: #6b4e5c; /* 备选：提亮灰 */
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px;
+  background: var(--bg); color: var(--text);
+  font-family: system-ui, "Microsoft YaHei", sans-serif;
+  font-size: 14px; line-height: 1.5;
+}
+h1 { font-size: 20px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+h2 { font-size: 15px; color: var(--gold-text); margin: 26px 0 8px; }
+h3 { font-size: 12px; font-weight: 400; color: var(--muted); margin: 0 0 8px; }
+
+.cells { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.cell { padding: 12px 14px 14px; border: 1px dashed var(--border); border-radius: 12px; }
+.cell.prop { border-color: rgba(245, 197, 24, 0.45); }
+.demo { display: flex; gap: 22px; align-items: flex-start; }
+.cell .note { max-width: 330px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+/* ===== 座位卡：Board 渲染现状复刻 ===== */
+.seat {
+  position: relative;
+  width: 208px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--card);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.seat.self { border-color: rgba(240, 192, 96, 0.5); }
+.seat-name { font-weight: 600; word-break: break-word; }
+.own-identity { font-weight: 400; color: var(--muted); }
+.own-clue-icon { font-size: 13px; color: var(--muted); word-break: break-word; }
+
+.clue-slots { display: flex; gap: 6px; align-items: center; }
+.slot {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; font-weight: 700;
+  border: 1.5px dashed var(--slot-dashed); color: transparent;
+  background: transparent; flex: none;
+}
+.slot.tile { border-radius: 6px; }
+.slot.dot { border-radius: 50%; }
+.slot.filled { border-style: solid; }
+.slot.tile.filled { background: var(--gold-dim-bg); border-color: var(--gold-text); color: var(--gold-text); }
+.slot.dot.filled.rose { background: var(--rose-bg); border-color: var(--rose-border); color: #fff; }
+.slot.dot.filled.beast { background: var(--beast-bg); border-color: var(--beast-border); color: #fff; }
+.slot.dot.filled.unknown { background: var(--mark-gray-bg); border-color: var(--mark-gray-border); color: var(--text); }
+.slot.empty.dim { color: var(--slot-dim); }
+
+/* 备忘角标（别人的卡）：现状原样 */
+.memo-badge {
+  position: absolute; top: -8px; right: -8px; z-index: 2;
+  width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; line-height: 1;
+  border: 2px solid var(--card); background: var(--mark-gray-bg); color: var(--text);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.memo-badge.rose { background: var(--rose-bg); color: #fff; }
+.memo-badge.beast { background: var(--beast-bg); color: #fff; }
+
+/* 真实阵营色徽：现状（f0435e3） */
+.true-color-badge {
+  position: absolute; top: -8px; right: -8px; z-index: 2;
+  display: inline-block; width: 14px; height: 14px; flex: none;
+  border-radius: 50%; border: 2px solid var(--card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.true-color-badge.rose { background: var(--rose-bg); }
+.true-color-badge.beast { background: var(--beast-bg); }
+.true-color-badge.order { background: var(--mark-gray-bg); }
+
+/* ===== 提案 A：金环色芯（色徽=「自己」标记语言）+ 左上「你」字标 ===== */
+.prop .true-color-badge {
+  width: 16px; height: 16px; top: -8px; right: -8px;
+  border: 2px solid var(--accent-gold); /* 金环：11:1 vs 卡底，全阵营 ≥3:1 边界 */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+.prop .true-color-badge.order { background: var(--order-bg); }      /* 紫 3.9:1 */
+.prop .true-color-badge.order-alt { background: var(--order-bg-alt); } /* 提亮灰 2.5:1（备选） */
+
+.self-tag {
+  position: absolute; top: -9px; left: -8px; z-index: 2;
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--accent-gold); color: #1f1209;
+  font-size: 10px; font-weight: 700; line-height: 1.5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* ===== 对比度注脚 ===== */
+footer { margin-top: 34px; border-top: 1px solid var(--border); padding-top: 14px; }
+table { border-collapse: collapse; font-size: 12px; }
+td, th { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+.ok { color: #9fd49f; } .bad { color: var(--danger); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 6px; border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<h1>真实阵营色徽 · P1 重设计对比</h1>
+<p class="sub">左列＝现状（f0435e3）；右列＝提案：色徽加金环（金＝「自己」标记语言）+ 左上「你」字标；审判者附紫罗兰与提亮灰两案。每格左边是你（阿紫）的卡，右边是老K 的卡（带备忘角标初始填充）。</p>
+
+<!-- ============ 玫瑰 ============ -->
+<h2>玫瑰家族（rose）</h2>
+<div class="cells">
+  <div class="cell now">
+    <h3>现状</h3>
+    <div class="demo">
+      <div class="seat self">
+        <div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div>
+        <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+        <div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+        <span class="true-color-badge rose"></span>
+      </div>
+      <div class="seat">
+        <div class="seat-name">老K</div>
+        <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+        <span class="memo-badge rose"></span>
+      </div>
+    </div>
+    <p class="note">灰暗卡环色徽 14px；与老K 的备忘角标同角同语言（玫红场景同色），且自己卡无任何强「自己」标记（金边仅 50%）。</p>
+  </div>
+  <div class="cell prop">
+    <h3>提案</h3>
+    <div class="demo">
+      <div class="seat self">
+        <span class="self-tag">你</span>
+        <div class="seat-name">阿紫 <span class="own-identity">(玫瑰家族 · 等级7)</span></div>
+        <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+        <div class="clue-slots"><span class="slot tile filled">7</span><span class="slot dot filled rose">玫</span><span class="slot dot empty">？</span></div>
+        <span class="true-color-badge rose"></span>
+      </div>
+      <div class="seat">
+        <div class="seat-name">老K</div>
+        <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+        <span class="memo-badge rose"></span>
+      </div>
+    </div>
+    <p class="note">金环色徽（金环 11:1＝「这是你自己」；别人卡的备忘角标永远是暗环）+ 左上金底「你」字标。左上归身份、右上归阵营，两角各司其职。</p>
+  </div>
+</div>
+
+<!-- ============ 野兽 ============ -->
+<h2>野兽家族（beast）</h2>
+<div class="cells">
+  <div class="cell now">
+    <h3>现状</h3>
+    <div class="demo">
+      <div class="seat self">
+        <div class="seat-name">阿紫 <span class="own-identity">(野兽家族 · 等级8)</span></div>
+        <div class="own-clue-icon">你的徽记：野兽 · 已看到 老K 的：玫瑰</div>
+        <div class="clue-slots"><span class="slot tile filled">8</span><span class="slot dot filled beast">兽</span><span class="slot dot empty">？</span></div>
+        <span class="true-color-badge beast"></span>
+      </div>
+      <div class="seat">
+        <div class="seat-name">老K</div>
+        <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+        <span class="memo-badge beast"></span>
+      </div>
+    </div>
+  </div>
+  <div class="cell prop">
+    <h3>提案</h3>
+    <div class="demo">
+      <div class="seat self">
+        <span class="self-tag">你</span>
+        <div class="seat-name">阿紫 <span class="own-identity">(野兽家族 · 等级8)</span></div>
+        <div class="own-clue-icon">你的徽记：野兽 · 已看到 老K 的：玫瑰</div>
+        <div class="clue-slots"><span class="slot tile filled">8</span><span class="slot dot filled beast">兽</span><span class="slot dot empty">？</span></div>
+        <span class="true-color-badge beast"></span>
+      </div>
+      <div class="seat">
+        <div class="seat-name">老K</div>
+        <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+        <span class="memo-badge beast"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 审判者 ============ -->
+<h2>审判者（secret-order）——两案对比</h2>
+<div class="cells">
+  <div class="cell now">
+    <h3>现状（灰 1.5:1）</h3>
+    <div class="demo">
+      <div class="seat self">
+        <div class="seat-name">阿紫 <span class="own-identity">(审判者 · 审判者)</span></div>
+        <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+        <div class="clue-slots"><span class="slot tile filled">审</span><span class="slot dot empty dim">任</span><span class="slot dot empty dim">任</span></div>
+        <span class="true-color-badge order"></span>
+      </div>
+      <div class="seat">
+        <div class="seat-name">老K</div>
+        <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+        <span class="memo-badge rose"></span>
+      </div>
+    </div>
+    <p class="note">灰芯对卡底仅 1.51:1，三色中最弱；且与「未知标记」的灰同色。</p>
+  </div>
+  <div class="cell prop">
+    <h3>提案 A：紫罗兰芯（3.9:1）——推荐</h3>
+    <div class="demo">
+      <div class="seat self">
+        <span class="self-tag">你</span>
+        <div class="seat-name">阿紫 <span class="own-identity">(审判者 · 审判者)</span></div>
+        <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+        <div class="clue-slots"><span class="slot tile filled">审</span><span class="slot dot empty dim">任</span><span class="slot dot empty dim">任</span></div>
+        <span class="true-color-badge order"></span>
+      </div>
+      <div class="seat">
+        <div class="seat-name">老K</div>
+        <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+        <span class="memo-badge rose"></span>
+      </div>
+    </div>
+    <p class="note">新 token --order-bg #8a5fc0（仅色徽+图例消费）：对卡底 3.9:1 达标，与玫/兽色相区分，「灰」从此只表示未知标记，语义更干净。</p>
+  </div>
+  <div class="cell prop">
+    <h3>提案 B：提亮灰芯（2.5:1，仍不达标）</h3>
+    <div class="demo">
+      <div class="seat self">
+        <span class="self-tag">你</span>
+        <div class="seat-name">阿紫 <span class="own-identity">(审判者 · 审判者)</span></div>
+        <div class="own-clue-icon">你的徽记：玫瑰 · 已看到 老K 的：野兽</div>
+        <div class="clue-slots"><span class="slot tile filled">审</span><span class="slot dot empty dim">任</span><span class="slot dot empty dim">任</span></div>
+        <span class="true-color-badge order-alt"></span>
+      </div>
+      <div class="seat">
+        <div class="seat-name">老K</div>
+        <div class="clue-slots"><span class="slot tile empty dim">4</span><span class="slot dot empty"> </span><span class="slot dot empty"> </span></div>
+        <span class="memo-badge rose"></span>
+      </div>
+    </div>
+    <p class="note">维持「灰＝无家族」语义提亮到 #6b4e5c 仍只有 2.5:1，且与备忘色板的灰更难区分。</p>
+  </div>
+</div>
+
+<footer>
+  <table>
+    <tr><th>色芯</th><th>对卡底 #1f1219</th><th>WCAG 1.4.11 非文本 ≥3:1</th></tr>
+    <tr><td><span class="swatch" style="background:#8e2723"></span>玫红（共享 token）</td><td>2.13:1</td><td class="bad">不足 → 由金环提供组件边界（金环 11.1:1）</td></tr>
+    <tr><td><span class="swatch" style="background:#33608f"></span>兽蓝（共享 token）</td><td>2.77:1</td><td class="bad">不足 → 同上，金环兜底</td></tr>
+    <tr><td><span class="swatch" style="background:#46303a"></span>灰（现状，共享 token）</td><td>1.51:1</td><td class="bad">不足且最弱</td></tr>
+    <tr><td><span class="swatch" style="background:#6b4e5c"></span>提亮灰（提案 B）</td><td>2.48:1</td><td class="bad">仍不足</td></tr>
+    <tr><td><span class="swatch" style="background:#8a5fc0"></span>紫罗兰（提案 A，新 token）</td><td>3.87:1</td><td class="ok">达标</td></tr>
+    <tr><td><span class="swatch" style="background:#f5c518"></span>金环 / 「你」字标（accent-gold）</td><td>11.1:1</td><td class="ok">达标，兼作「自己」标记</td></tr>
+  </table>
+</footer>
+</body>
+</html>

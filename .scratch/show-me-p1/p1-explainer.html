@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>真实阵营色徽 · 两条 P1 详解</title>
+<style>
+  :root {
+    --card: #1f1219;            /* 卡面 rgb(31,18,25) */
+    --page: #171014;
+    --rose-bg: #8e2723;  --rose-border: #c0453c;
+    --beast-bg: #33608f; --beast-border: #4f83b5;
+    --gray-bg: #46303a;  --gray-border: #5f4652;   /* --mark-gray tokens */
+    --gray-lift: #5c4150;                          /* 方案 B 候选提亮档 */
+    --gold: #f0c060;
+    --gold-dim: rgba(240, 192, 96, 0.5);
+    --muted: #937f88;
+    --text: #e9dfe4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text);
+    font-family: system-ui, "Microsoft YaHei", sans-serif;
+    font-size: 15px; line-height: 1.7; padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+  h1, h2, h3 { font-family: "Noto Serif SC", "Source Han Serif SC", STZhongsong, KaiTi, serif; }
+  h1 { font-size: 26px; color: var(--gold); margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 13.5px; }
+  section {
+    background: #1d1218; border: 1px solid #37232d; border-radius: 14px;
+    padding: 24px 26px; margin-bottom: 28px;
+  }
+  h2 { font-size: 20px; margin: 0 0 2px; color: var(--gold); }
+  h2 .tag {
+    font-family: system-ui, sans-serif; font-size: 12px; vertical-align: 3px;
+    background: #3a222b; color: var(--muted); border-radius: 20px; padding: 2px 10px; margin-left: 10px; font-weight: 400;
+  }
+  .lead { color: #cbb9c2; margin: 8px 0 20px; }
+  .lead b { color: var(--text); }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; margin: 14px 0; }
+  .panel {
+    background: var(--card); border: 1px solid #37232d; border-radius: 10px;
+    padding: 16px 18px; flex: 1 1 260px; min-width: 240px;
+  }
+  .panel .cap { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  .cap b { color: #cbb9c2; }
+
+  /* ── 色徽本体（与 Board 同参）── */
+  .dot {
+    display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--card); box-shadow: 0 2px 6px rgba(0,0,0,.5);
+    vertical-align: middle;
+  }
+  .dot.rose { background: var(--rose-bg); }
+  .dot.beast { background: var(--beast-bg); }
+  .dot.order { background: var(--gray-bg); }
+  .dot.order-ring { background: var(--gray-bg); border-color: var(--gray-border); }
+  .dot.order-lift { background: var(--gray-lift); }
+  .sample { display: inline-flex; align-items: center; gap: 9px; margin: 6px 14px 6px 0; }
+  .sample .n { font-size: 13px; color: #cbb9c2; }
+  .sample .r { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* 对比度条 */
+  .bar { position: relative; height: 8px; background: #2a1a21; border-radius: 4px; margin: 5px 0 2px; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--gold-dim); }
+  .bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #ff8a80; }
+  .scale { display: flex; justify-content: space-between; font-size: 10.5px; color: #6b5560; margin-bottom: 10px; }
+  .scale s { text-decoration: none; }
+  .dimmer { filter: brightness(0.55); }
+
+  /* 座位卡 mock（同 Board 比例） */
+  .seat {
+    position: relative; background: var(--card); border: 1px solid #4a3038;
+    border-radius: 10px; padding: 10px 14px 12px; width: 252px; font-size: 13.5px;
+  }
+  .seat.self { border-color: var(--gold-dim); }
+  .seat .name { font-weight: 600; }
+  .seat .ident { color: var(--muted); font-weight: 400; }
+  .seat .clue { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .slots { display: flex; gap: 6px; margin-top: 8px; }
+  .slot { width: 24px; height: 24px; border-radius: 6px; border: 1.5px dashed #5d414d; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: transparent; }
+  .slot.f { border-style: solid; color: #fff; font-weight: 700; }
+  .slot.f.rank { background: #3a222b; color: #e9dfe4; }
+  .slot.f.rose { background: var(--rose-bg); border-color: var(--rose-border); }
+  /* 备忘角标（24px，带字） */
+  .memo {
+    position: absolute; top: -8px; right: -8px; width: 24px; height: 24px;
+    border-radius: 50%; border: 2px solid var(--card); background: var(--rose-bg);
+    color: #fff; font-size: 12px; font-weight: 700; display: inline-flex;
+    align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+  }
+  .memo.empty { background: transparent; border: 1.5px dashed #5d414d; color: transparent; box-shadow: none; }
+  .tb { position: absolute; top: -8px; right: -8px; }
+  .pair { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .pair .col { flex: 1 1 240px; }
+  .pair .cap2 { font-size: 12.5px; color: var(--muted); margin: 8px 2px 0; }
+  .cap2 b { color: #cbb9c2; }
+
+  /* 实拍 */
+  .shots { display: flex; gap: 12px; flex-wrap: wrap; }
+  .shots figure { margin: 0; flex: 1 1 220px; }
+  .shots img { width: 100%; border-radius: 8px; border: 1px solid #37232d; display: block; }
+  .shots figcaption { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+
+  /* 方案卡 */
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 18px; }
+  .opt { border: 1px solid #37232d; border-radius: 10px; padding: 14px 16px; background: #231519; }
+  .opt.rec { border-color: var(--gold-dim); box-shadow: 0 0 0 1px var(--gold-dim) inset; }
+  .opt h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text); }
+  .opt.rec h3::after { content: "推荐"; font-family: system-ui, sans-serif; font-size: 11px; color: #1f1219; background: var(--gold); border-radius: 12px; padding: 1px 8px; margin-left: 8px; vertical-align: 2px; }
+  .opt ul { margin: 6px 0 0; padding-left: 18px; color: #cbb9c2; font-size: 13.5px; }
+  .opt li { margin: 3px 0; }
+  .opt .viz { margin: 8px 0 2px; }
+  .opt .code { font-family: Consolas, monospace; font-size: 12px; background: #170e12; border-radius: 6px; padding: 6px 9px; color: #d8b98a; margin-top: 8px; display: block; white-space: pre-wrap; }
+
+  .callout {
+    border-left: 3px solid var(--gold-dim); background: #241620; border-radius: 0 8px 8px 0;
+    padding: 10px 14px; margin: 14px 0; font-size: 13.5px; color: #cbb9c2;
+  }
+  .callout b { color: var(--gold); }
+  .verdict { border: 1px dashed #4a3038; border-radius: 10px; padding: 14px 18px; margin-top: 6px; }
+  .verdict h3 { margin: 0 0 6px; font-size: 15px; color: var(--gold); }
+  .verdict p { margin: 4px 0; }
+  table.data { border-collapse: collapse; font-size: 13px; margin: 8px 0; width: 100%; }
+  table.data th, table.data td { border: 1px solid #37232d; padding: 6px 10px; text-align: left; }
+  table.data th { color: var(--muted); font-weight: 600; background: #231519; }
+  table.data td.num { font-variant-numeric: tabular-nums; }
+  .k { color: var(--gold); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>真实阵营色徽 · 两条 P1 详解</h1>
+  <p class="sub">实现已提交 f0435e3，验收通过；以下两条是验收与评审共同标出的优化项，<b>均未实施</b>，等你拍板。</p>
+
+  <!-- ═══════════ P1-1 ═══════════ -->
+  <section>
+    <h2>P1-1 审判者灰点对比偏低<span class="tag">可读性</span></h2>
+    <p class="lead">三个阵营里<b>灰点最暗</b>：对卡面的对比度只有 <b>1.5:1</b>，不到玫红（2.1:1）的四分之三、兽蓝（2.8:1）的一半，也低于 WCAG 非文本 3:1 的建议线。低亮度屏上它可能整颗"消失"——审判者玩家会疑惑"为什么我没有色徽"。</p>
+
+    <div class="row">
+      <div class="panel">
+        <div class="cap"><b>真实尺寸（14px）× 真实卡面</b> · 数字 = 对卡面对比度</div>
+        <span class="sample"><span class="dot rose"></span><span class="n">玫红</span><span class="r">2.1:1</span></span>
+        <span class="sample"><span class="dot beast"></span><span class="n">兽蓝</span><span class="r">2.8:1</span></span>
+        <span class="sample"><span class="dot order"></span><span class="n">灰</span><span class="r">1.5:1</span></span>
+        <div class="bar"><i style="width:70%"></i><em style="left:100%"></em></div>
+        <div class="scale"><s>0</s><s>1:1</s><s>2:1</s><s>3:1 ←建议线</s></div>
+        <div class="bar"><i style="width:93%;background:rgba(79,131,181,.5)"></i><em style="left:100%"></em></div>
+        <div class="scale"><s>0</s><s>1:1</s><s>2:1</s><s>3:1</s></div>
+        <div class="bar"><i style="width:50%;background:#5f4652"></i><em style="left:100%"></em></div>
+        <div class="scale"><s>0</s><s>1:1</s><s>2:1</s><s>3:1</s></div>
+      </div>
+      <div class="panel">
+        <div class="cap"><b>实际渲染 ≈10px</b>（桌面圆桌 0.7 缩放）+ 低亮度模拟（brightness 0.55）</div>
+        <div style="transform:scale(.7);transform-origin:left center;margin-bottom:-6px">
+          <span class="sample"><span class="dot rose"></span><span class="sample" style="margin:0 14px 0 0"><span class="dot beast"></span><span class="dot order"></span></span></span>
+        </div>
+        <div class="dimmer" style="margin-top:10px">
+          <span class="sample"><span class="dot rose"></span><span class="n">玫红</span></span>
+          <span class="sample"><span class="dot beast"></span><span class="n">兽蓝</span></span>
+          <span class="sample"><span class="dot order"></span><span class="n">灰</span></span>
+        </div>
+        <div class="cap" style="margin-top:12px">灰点在低亮度档已接近融入卡面；玫红/兽蓝仍可辨——<b>色相差在兜底</b>，而灰没有色相可依赖。</div>
+      </div>
+      <div class="panel">
+        <div class="cap"><b>实拍：审判者房</b>（灰点 + 身份文字"审判者" + 会骗人的徽记行）</div>
+        <img src="../ui-true-color/shots/self-seat-secret-order.png" alt="审判者座位卡特写" style="width:100%;border-radius:8px;border:1px solid #37232d">
+      </div>
+    </div>
+
+    <div class="callout"><b>为什么当初会这样</b>：你拍板 Q3c「审判者不加第四色，复用灰 token」——灰 token 原生消费者（线索槽"？"、备忘灰块）<b>都自带字形</b>，不依赖底色对比；色徽是第一个"纯靠底色说话"的灰消费者，这个盲区拍板时不存在，是新用途暴露出来的。</div>
+
+    <div class="opts">
+      <div class="opt rec">
+        <h3>方案 A · 描边环提亮（推荐）</h3>
+        <div class="viz"><span class="dot order-ring" style="width:26px;height:26px;border-width:3px"></span></div>
+        <ul>
+          <li>只给审判者色徽把描边环从卡面色换成 <b>--mark-gray-border</b>（灰紫，对卡面 2.1:1），轮廓整体抬到 ≈2:1</li>
+          <li><b>零外溢</b>：槽位、备忘色板、memo 角标一概不动；Q3c"复用灰 token"原样成立</li>
+          <li>若实测仍弱，再升级到方案 B</li>
+        </ul>
+        <span class="code">.true-color-badge.order { border-color: var(--mark-gray-border); }</span>
+      </div>
+      <div class="opt">
+        <h3>方案 B · 共享灰提亮一档</h3>
+        <div class="viz"><span class="dot order-lift" style="width:26px;height:26px;border-width:3px"></span></div>
+        <ul>
+          <li>--mark-gray-bg #46303a → #5C4150，底色对比 1.5 → <b>2.0:1</b></li>
+          <li>波及全部灰消费者：线索槽"？"、备忘灰块、memo 灰角标——外观整体变浅一档</li>
+          <li>一步到位，但改动面最大；要 3:1 得提到 #7a5a6e，视觉变化明显</li>
+        </ul>
+        <span class="code">--mark-gray-bg: #5c4150;</span>
+      </div>
+      <div class="opt">
+        <h3>方案 C · 维持现状</h3>
+        <div class="viz"><span class="dot order" style="width:26px;height:26px;border-width:3px"></span></div>
+        <ul>
+          <li>色徽本来就是冗余通道：旁边身份文字明写"审判者"，title/aria 也有全称</li>
+          <li>灰=「不属于任何家族」，低存在感在语义上甚至说得通</li>
+          <li>代价：低亮度屏上"看不见自己的色徽"的困惑依旧</li>
+        </ul>
+        <span class="code">/* 不改代码 */</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ P1-2 ═══════════ -->
+  <section>
+    <h2>P1-2 同角双圆点的心智混淆<span class="tag">语义</span></h2>
+    <p class="lead">别人卡的<b>备忘角标</b>（24px，开局被右邻徽记色自动填色）和自己卡的<b>真实阵营色徽</b>（14px）同为右上角圆形、同一套"深环+投影"语言——rose 房里会<b>同屏同色</b>。风险：把"自己卡上=事实"过度泛化成"右上角颜色=真实阵营"，把<b>会骗人的线索</b>读成事实。</p>
+
+    <div class="pair">
+      <div class="col">
+        <div class="seat">
+          <span class="memo">玫</span>
+          <div class="name">老K</div>
+          <div class="slots"><span class="slot f rank">3</span><span class="slot"></span><span class="slot"></span></div>
+        </div>
+        <p class="cap2"><b>老K 的卡（别人的卡）</b>：右上角是<b>备忘角标</b>——24px、带"玫"字、开局被你看到的他的徽记自动填色、可清空改判。<b>它是猜测，而且源头（徽记）会骗人</b>（小丑徽记恒为敌对家族）。</p>
+      </div>
+      <div class="col">
+        <div class="seat self">
+          <span class="tb"><span class="dot rose"></span></span>
+          <div class="name">阿紫 <span class="ident">(玫瑰家族 · 等级7)</span></div>
+          <div class="clue">你的徽记：玫瑰</div>
+          <div class="slots"><span class="slot f rank">7</span><span class="slot"></span><span class="slot"></span></div>
+        </div>
+        <p class="cap2"><b>阿紫的卡（自己卡）</b>：右上角是<b>真实阵营色徽</b>——14px、无字、恒在、引擎事实。面积只有备忘角标的 1/3，但同角同语言。</p>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:18px">
+      <div class="panel">
+        <div class="cap"><b>实拍对照</b>（rose 房，两角同屏同色玫红）</div>
+        <div class="shots">
+          <figure><img src="../visual-verifier/run1/crop-self-corner-rose-1440.png" alt="自己卡角实拍"><figcaption>自己卡角：真实阵营色徽（事实）</figcaption></figure>
+          <figure><img src="../visual-verifier/run1/crop-laok-corner.png" alt="老K卡角实拍"><figcaption>老K卡角：备忘角标（猜测，开局自动填色）</figcaption></figure>
+        </div>
+      </div>
+      <div class="panel" style="flex:1.2">
+        <div class="cap"><b>已有的分辨线索（为什么不算 P0）</b></div>
+        <table class="data">
+          <tr><th></th><th>备忘角标（别人卡）</th><th>真实阵营色徽（自己卡）</th></tr>
+          <tr><td>尺寸</td><td class="num">24px（面积 2.9×）</td><td class="num">14px</td></tr>
+          <tr><td>字形</td><td>有（玫/兽/数字/审）或虚线空态</td><td>无，纯色点</td></tr>
+          <tr><td>归属</td><td>只出现在别人的卡</td><td>只出现在自己的卡</td></tr>
+          <tr><td>语义</td><td>我的猜测，可清空，仅本设备</td><td>引擎事实，恒在</td></tr>
+        </table>
+        <div class="cap" style="margin-top:6px">但图例里<b>完全没有备忘角标的说明</b>（helpContent 零提及）——"猜"的那半边全靠玩家自己悟，这才是混淆的真正缺口。</div>
+      </div>
+    </div>
+
+    <div class="callout"><b>换个角度看，同角未必是坏事</b>：右上角颜色可以读作"这张卡上我对阵营的<b>认知</b>"——别人的卡是猜测，自己的卡恰好是事实。同一语言、位置区分归属，本身自洽；要修的不是位置，是<b>把"事实 vs 猜测"讲出来</b>。</div>
+
+    <div class="opts">
+      <div class="opt">
+        <h3>方案 甲 · 色徽移到左上角</h3>
+        <ul>
+          <li>物理隔离，混淆根除</li>
+          <li>代价：推翻 Q1a"与备忘角标同位对称"的拍板；左右两角各一种圆点，卡片语言变碎</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>方案 乙 · 备忘角标改样式区分</h3>
+        <ul>
+          <li>如虚线环/半透明表示"猜测"——改动落在既有功能（ADR 0004）上，波及备忘色板、选择器、已养成习惯</li>
+          <li>直接撞上"备忘角标不动"的拍板</li>
+        </ul>
+      </div>
+      <div class="opt rec">
+        <h3>方案 丙 · 维持现状 + 一行文案消歧（推荐）</h3>
+        <ul>
+          <li>在「真实阵营色徽」短注末尾补一句，把两侧语义一次讲透：</li>
+        </ul>
+        <span class="code">别人卡右上角的同款圆点是你记的备忘（猜测，
+开局由你看到的徽记填色），不是事实。</span>
+        <ul>
+          <li>顺手补上图例对备忘角标零说明的缺口；零视觉改动、零回归风险</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 汇总 ═══════════ -->
+  <section>
+    <h2>建议汇总<span class="tag">等你拍板</span></h2>
+    <div class="verdict">
+      <p><b class="k">P1-1 → 方案 A</b>：色徽描边环改用 <span class="k">--mark-gray-border</span>。一行 CSS、token 纯净、Q3c 不破、零波及；审判者轮廓对比 1.5 → ≈2:1。实测仍弱再升级 B。</p>
+      <p><b class="k">P1-2 → 方案 丙</b>：位置不动、备忘不动，图例短注加一句消歧——补的正好是"备忘角标零说明"这个真缺口。</p>
+      <p style="color:var(--muted);font-size:13px">两条各一行改动；你说"照此实施"我就做（P1-1 含重截图复核，P1-2 含 helpContent 测试同步）。</p>
+    </div>
+  </section>
+</div>
+</body>
+</html>
