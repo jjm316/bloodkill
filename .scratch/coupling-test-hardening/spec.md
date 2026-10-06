@@ -1,6 +1,8 @@
 # 规则耦合测试补强（B9 / B7 / C2）
 
-Status: ready-for-agent
+Status: resolved（2026-10-06 剩余验收补齐，合并至 skill-coupling-test-hardening）
+
+主记录：[技能耦合测试补强](../skill-coupling-test-hardening/spec.md)。以下正文保留为原始需求与讨论历史；当前验收证据、golden 延期结论及测试结果见主记录末尾「2026-10-06 重复 spec 收口」，后续工作从主记录进入。
 
 ## Problem Statement
 
@@ -60,3 +62,5 @@ Status: ready-for-agent
 - 实施拆单建议：`issues/01-b9-mage-wild-lock.md`、`issues/02-b7-guardian-real-sources.md`、`issues/03-c2-intervention-unreachability.md`，三者互不依赖、可并行。
 
 ## Comments
+
+- 2026-10-06：逐项复核后合并关闭。B7/B9 与 C2 资格、性质不变量已有 `b19e59e` 的公开命令测试；本次补齐旧 spec 独有的「3 伤玩家在投票阶段伪造表态，拒绝且 revision 不变」验收。具体测试名称、断血验证及最新 golden 覆盖事实见[主记录收口说明](../skill-coupling-test-hardening/spec.md#2026-10-06-重复-spec-收口)。golden 分支锁继续按原约定延期，本次验收无剩余实现票据。

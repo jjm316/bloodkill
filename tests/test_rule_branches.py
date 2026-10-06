@@ -1065,6 +1065,39 @@ class SkillBranchTests(unittest.TestCase):
         for pid in pending.eligible_player_ids:
             self.assertNotIn("rank", engine.state.players[pid].revealed)
 
+    def test_three_damage_player_cannot_forge_an_intervention_response(self):
+        # Corpus C1/C2: three wounds force the rank to show, excluding this
+        # bystander from volunteering even if they forge a public command.
+        engine = started(7)
+        target = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        shown = next(pid for pid in engine.state.players if pid != target)
+        attack_wound(engine, shown, "shown-1", reveal_token="marker-0")
+        attack_wound(engine, shown, "shown-2", reveal_token="marker-1")
+        attack_wound(engine, shown, "shown-3")
+        self.assertEqual(engine.state.players[shown].damage, 3)
+        self.assertIn("rank", engine.state.players[shown].revealed)
+        engine.apply(command(engine, "skip-shown-skill", shown, "choose-skill", use=False))
+
+        attacker = next(pid for pid in engine.state.players if pid not in (shown, target))
+        give_dagger_to(engine, attacker)
+        engine.apply(command(engine, "attack-inquisitor", attacker, "attack", targetPlayerId=target))
+        self.assertEqual(engine.state.pending.context["stage"], "gate")
+        # ADR 0012: accepting the target's request is what actually opens
+        # the poll; a rejection during the gate would only prove not-poll.
+        events = engine.apply(command(engine, "open-poll", target, "answer-intervention-request", need=True))
+        opened = next(event for event in events if event.event_type == "InterventionPollOpened")
+        self.assertEqual(engine.state.pending.context["stage"], "poll")
+        self.assertTrue(opened.payload["eligiblePlayerIds"])
+        self.assertNotIn(shown, opened.payload["eligiblePlayerIds"])
+        self.assertEqual(legal_actions(engine.state, shown), [])
+
+        revision = engine.state.revision
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "forged-response", shown, "respond-intervention", volunteer=True))
+        self.assertEqual(error.exception.code, "intervention.not-eligible")
+        self.assertEqual(engine.state.revision, revision)
+        self.assertEqual(engine.state.pending.context["responses"], {})
+
     def test_courtesan_grants_fan_and_blocks_intervention(self):
         engine, found = started_with_ranks(6, 9)
         owner = found[9]
