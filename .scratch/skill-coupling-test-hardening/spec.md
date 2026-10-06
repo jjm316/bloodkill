@@ -76,3 +76,37 @@ Status: resolved（2026-10-04 实现，commit b19e59e；断血验证与两处实
 - golden 分支锁：跳过。6–12 人七份基准均未路过 `IdentityMarkersObscured` 或 `ResourceReturned`（grep 零命中），不为一条锁重生成全量基准——现有 golden 未覆盖这两分支，专项单测是唯一见证人。
 - 断血验证四连（各注入回归、确认变红、再还原）：删归还逻辑 → B7 四条全红；抹除变异改 pass → B9 两档全红；干涉资格去掉 rank 未亮过滤 → C2(b) 红；wound 停止亮牌（`_continue_damage` 提前 settle）→ C2(a) 性质不变量红。还原后全量 192 tests OK。
 - 实现中发现的结构事实：damage 3 ⇒ rank 已亮由 token 经济结构性保证——每次 wound 恰好净亮 1 个 token、退 token 必同时退 1 点伤，而 marker 只有 2 张，故第 3 点的 reveal 事件必落在 rank 上。不变量锁的是该结构被未来改动破坏的情形（例如亮牌与扣血解耦、或 wound 不再伴随 reveal），而非当前引擎可能出错。
+
+### 2026-10-06 重复 spec 收口
+
+合并来源：[coupling-test-hardening/spec.md](../coupling-test-hardening/spec.md)。起点 `80a71e2`（已包含交接基线 `94c0c00`），工作区干净；旧 spec 此时已跟踪。保留两份原始正文及历史 Comments，以本文件作为后续入口。
+
+逐项验收依据（既有实现提交 `b19e59e`，最新命令路径遵循 ADR 0012）：
+
+- **B7**：`tests/test_rule_branches.py` 的 `SkillBranchTests.test_guardian_returns_sword_and_shield_on_third_attack_damage`、`test_guardian_returns_sword_and_shield_on_intervention_damage`、`test_guardian_returns_sword_and_shield_on_mentalist_skill_damage`、`test_guardian_returns_sword_and_shield_on_berserker_reaction_damage` 覆盖四来源；经公开命令构造，断言剑盾归还 payload、原因及顺序、资源清零、守护关系清空、第 4 点不重复归还。挡刀的合法炼金退 rank 通路见上方历史说明。
+- **B9 / B8**：同类的 `test_mage_erasure_turns_unlit_wild_markers_into_plain_question_marks`、`test_mage_erasure_rewrites_a_public_wild_colour_to_the_question_mark` 覆盖未亮与已亮 wild；断言抹除事件、法杖发放、标记变问号、公开值改写、后续亮牌动作无色选窗。
+- **C2 / C1 / A5**：既有 `test_rank_shown_player_is_never_listed_as_intervention_volunteer` 锁 rank 已亮者排除与无合法动作；`tests/test_properties.py` 的 `assert_state_invariants` 在每条 walk 命令后锁 `damage == 3 ⇒ rank 已亮`。
+- **旧 spec 额外 C2 验收**：新增 `SkillBranchTests.test_three_damage_player_cannot_forge_an_intervention_response`。两次攻击自选 marker、第三次攻击强制亮 rank，放弃技能后保持 3 伤；另一玩家攻击审判者，目标以 `answer-intervention-request {need: true}` 真正开票。断言 `InterventionPollOpened.eligiblePlayerIds` 排除该旁观者、其无合法动作；伪造 `respond-intervention {volunteer: true}` 得到 `intervention.not-eligible`，revision 不动、responses 仍为空。该玩家与攻击方、目标均不同，覆盖了既有攻击方/目标越权测试未见证的资格分支。
+- **默认与确定性**：新增测试使用既有公开命令助手、显式 marker-0 → marker-1 顺序，无私有 pending 注入或手改状态，沿用 `unittest discover` 自动发现、无需新依赖。已有技能跨 hash 种子测试随相关套件通过。
+- **golden 延期复核**：当前 6–12 人七份 `tests/fixtures/golden-*.json` 均为 ruleset **0.6**（ADR 0012 已升版）；扫描仍无 `IdentityMarkersObscured` 或 `ResourceReturned`。这两分支继续由专项单测见证，golden 分支锁保留原延期约定。本次未改 ruleset、runner、fixtures。
+
+断血验证：仅在独立 Python 进程内临时禁用 `respond-intervention` 的资格拒绝；新增测试以 `RuleError not raised` 变红，证明能拦截伪造表态被接受的回归。进程结束即恢复原实现，仓库引擎文件未修改。当前行为符合语料与 ADR，无需另立 fix；旧 spec 已 resolved，本次验收无剩余实现票据。
+
+验证环境：工作树未自带 `.venv`，复用 `D:\AIProj\bloodkill\.venv\Scripts\python.exe` 执行本工作树的测试；下列命令均在当前仓库根目录运行。
+
+- `& D:\AIProj\bloodkill\.venv\Scripts\python.exe -m unittest tests.test_rule_branches.SkillBranchTests.test_three_damage_player_cannot_forge_an_intervention_response -v`：1 项 OK。
+- `& D:\AIProj\bloodkill\.venv\Scripts\python.exe -m unittest tests.test_rule_branches.SkillBranchTests tests.test_rule_branches.AttackBranchTests tests.test_properties -v`：56 项 OK。
+- 后端全量：**214 项 OK**（25.363 秒，含房间、WebSocket、golden 回放及分支锁）。默认沙箱临时目录的原子替换报 `WinError 5`；改用工作树临时目录后，限时堆栈诊断确认 asyncio 在 `socket.socketpair → accept` 阻塞。停止这两次受限运行后，在获批的沙箱外进程运行以下同一 discover 套件，临时目录在退出时清理：
+
+  ```powershell
+  @'
+  from pathlib import Path
+  import tempfile
+  import unittest
+  with tempfile.TemporaryDirectory(prefix='coupling-tests-', dir=Path.cwd()) as test_tmp:
+      tempfile.tempdir = test_tmp
+      unittest.main(module=None, argv=['unittest', 'discover', '-v'])
+  '@ | & D:\AIProj\bloodkill\.venv\Scripts\python.exe -
+  ```
+
+- `git diff --check`、`python -m py_compile tests/test_rule_branches.py tests/test_properties.py` 通过。仓库未配置 Python 静态类型检查，现有解释器未安装 mypy/pyright；本次仅增加测试与文档，未安装类型检查器。
