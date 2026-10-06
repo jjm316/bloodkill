@@ -1,0 +1,52 @@
+name: 自动检查
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 自动检查 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      QUALITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      QUALITY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            server/requirements.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: 安装 Python 测试依赖
+        run: python -m pip install -r requirements-dev.txt
+      - name: 安装前端锁定依赖
+        run: npm ci --prefix client
+      - name: 执行统一守门脚本
+        run: python scripts/check.py --base "$QUALITY_BASE" --default-branch "$QUALITY_DEFAULT_BRANCH"

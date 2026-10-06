@@ -1,0 +1,2 @@
+#!/bin/sh
+exec .githooks/run-check pre-push

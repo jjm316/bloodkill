@@ -11,7 +11,7 @@
 ## 环境要求
 
 - **Python 3.11+**（仓库已自带 `.venv`，本机验证为 Python 3.11.4）
-- **Node 18+**（仅开发、构建客户端时需要；普通玩家不需要）
+- **Node 24**（开发与 CI 使用同一主版本；普通玩家不需要）
 
 ## 启动
 
@@ -84,8 +84,11 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 ## 测试
 
 ```text
-python -m unittest discover -v          # 引擎 + 投影 + 房间 + WebSocket（共 106 项）
-cd client && npx tsc --noEmit           # 客户端类型检查
+python scripts/check.py                 # 全部自动检查，任一失败立即退出
+python scripts/check.py install-hooks   # 每个克隆安装一次本地 Git 守门
 ```
+
+依赖安装、单项检查及 AI 评审分工见 [`docs/agents/quality-checks.md`](docs/agents/quality-checks.md)。
+GitHub CI 在 Windows/Linux 上使用相同入口，覆盖 Python 测试、前端测试、类型检查和构建。
 
 发布前请按 [`docs/release-checklist.md`](docs/release-checklist.md) 逐项验证。

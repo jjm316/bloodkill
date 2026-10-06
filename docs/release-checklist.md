@@ -2,8 +2,7 @@
 
 ## 构建与验证
 
-- [ ] 使用 Python 3.11+，运行 `python -m unittest discover -v`。
-- [ ] 在 `client/` 运行 `npm ci` 和 `npm run build`，确认生成 `client/dist/`。
+- [ ] 安装 `requirements-dev.txt` 与前端锁定依赖，运行 `python scripts/check.py`，通过 Python/前端全部测试、类型检查与构建，确认生成 `client/dist/`。
 - [ ] 启动服务后运行 `.venv/Scripts/python.exe scripts/release_smoke.py --base-url http://127.0.0.1:8000`（需安装服务端 requirements）。脚本验收 v3 首次握手、6 人建局、命令 ack、同名重连、合法捕获终局和 HTTP 公开回放；逐步检查隐私，回放末尾必须与旁观者终局一致，未结束房间仍应返回 409。
 - [ ] 运行 `.venv/Scripts/python.exe -m unittest tests.test_release_smoke -v`，验证真实服务流程及连接失败、协议拒绝、消息等待超时的有限退出。测试使用独立本地端口、临时存档，并清理自己创建的服务进程。
 - [ ] 浏览器完成创建房间、加入、开始对局、操作、断线重连和回放 smoke 流程。

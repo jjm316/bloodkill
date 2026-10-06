@@ -1,5 +1,9 @@
 ## Agent skills
 
+### Automated checks
+
+提交或评审代码前运行 `python scripts/check.py`；确定性检查与 AI 评审的分工见 `docs/agents/quality-checks.md`。
+
 ### Issue tracker
 
 Issues and specs live as Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
