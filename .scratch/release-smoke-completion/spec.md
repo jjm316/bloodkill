@@ -1,7 +1,7 @@
 # 发布 smoke 与终局回放验收补齐
 
 Type: task
-Status: claimed
+Status: resolved
 
 依据：2026-10-06 交接文档 `bloodkill-handoff-20261006-01-release-smoke.md`；实施起点 `80a71e2`。
 
@@ -18,3 +18,7 @@ Status: claimed
 ## 接缝
 
 采用交接指定的公开 HTTP/WebSocket 与发布脚本 CLI；回放验证函数接受协议 JSON，坏回放测试锚定公开投影契约。
+
+## 完成记录
+
+2026-10-06：实现提交 `86da6d7`，专项 10 项、相关回归 198 项、全量 223 项均通过；真实服务完成握手 → 建局 → ack → 同名重连 → 终局 → 公开回放。code-review 标准与规格两轴独立评审均零发现。详见 [验收票据](issues/01-release-smoke.md)。

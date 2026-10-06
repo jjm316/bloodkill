@@ -1,7 +1,7 @@
 # 修复发布握手并验收终局公开回放
 
 Type: task
-Status: claimed
+Status: resolved
 Label: ready-for-agent
 
 ## 工作内容
@@ -40,3 +40,11 @@ smoke 通过：房间 114205
 - 错误场景通过真实 CLI 与网络边界验证：旧 v1 被真实服务拒绝；协议错误、拒绝 ack、连接关闭、持续事件不重置等待超时、WebSocket 总时限、命令上限、HTTP 连接失败，均有限返回退出码 1，无 traceback，无令牌泄露。
 - `.venv/Scripts/python.exe -m compileall -q scripts/release_smoke.py tests/test_release_smoke.py`、`git diff --check`：通过。仓库无 Python 静态类型检查配置，`.venv` 未安装 mypy/pyright，未声称完成 Python 静态类型检查。
 - 本项是服务发布验收，未执行浏览器人工可访问性、前端构建、移动设备性能或公网 TLS 验收；发布检查表保留这些独立门禁。
+
+### 评审与提交
+
+- 实现提交：`86da6d7`（`fix: complete v3 release smoke and public replay validation`）。
+- code-review Standards：零发现。简体中文诊断、协议与合法动作来源、隐私检查、临时资源清理符合仓库标准，无值得报告的代码味道。
+- code-review Spec：零发现。交接要求的握手、确认、重连、有界终局与公开回放均落实，无缺失或越界行为。
+- 评审固定本项提交与五个文件范围。期间并行交接提交/合并了耦合测试，已保留，不计入本项改动或评审。
+- 本票 resolved，原 issue11 的关闭历史不变；发布 smoke 终局回放缺口已补齐。
