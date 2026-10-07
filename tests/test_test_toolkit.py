@@ -1,5 +1,6 @@
 """scripts/test_toolkit.py 的纯逻辑单测（不触网、不杀进程、不依赖 WMI）。"""
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -84,6 +85,66 @@ class GridPositionsTest(unittest.TestCase):
             positions,
             [(0, 0), (100, 0), (200, 0), (0, 50), (100, 50), (200, 50)],
         )
+
+
+class StaleServerWarningTest(unittest.TestCase):
+    """陈旧服务端告警的纯判定逻辑（不查进程、不触网）。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.app = self.root / "server" / "app.py"
+        self.projection = self.root / "blood_bound" / "projection.py"
+        self.compiled = self.root / "blood_bound" / "__pycache__" / "cached.py"
+        for path in (self.app, self.projection, self.compiled):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"")
+        # 固定 mtime：app 旧、projection 新、__pycache__ 产物最新（应被忽略）
+        os.utime(self.app, (1000, 1000))
+        os.utime(self.projection, (1000, 2000))
+        os.utime(self.compiled, (1000, 3000))
+        self.roots = (self.root / "server", self.root / "blood_bound")
+
+    def test_scan_newest_ignores_pycache(self):
+        with mock.patch.object(test_toolkit, "SERVER_CODE_ROOTS", self.roots):
+            self.assertEqual(test_toolkit.newest_server_code_mtime(), (2000.0, self.projection))
+
+    def test_scan_missing_roots_returns_none(self):
+        with mock.patch.object(test_toolkit, "SERVER_CODE_ROOTS", (self.root / "nope",)):
+            self.assertIsNone(test_toolkit.newest_server_code_mtime())
+
+    def test_warning_names_file_and_command(self):
+        warning = test_toolkit.stale_server_warning((2000.0, self.projection), 1000.0, 8010)
+        self.assertIn("projection.py", warning)
+        self.assertIn(".venv/Scripts/python.exe", warning)
+        self.assertIn("restart", warning)
+        self.assertIn("8010", warning)
+
+    def test_warning_shows_relative_path_under_repo_root(self):
+        with mock.patch.object(test_toolkit, "REPO_ROOT", self.root):
+            warning = test_toolkit.stale_server_warning((2000.0, self.projection), 1000.0, 8000)
+        self.assertIn("blood_bound", warning)
+        self.assertNotIn(str(self.root), warning)
+
+    def test_silent_within_tolerance(self):
+        self.assertIsNone(test_toolkit.stale_server_warning((1002.0, self.projection), 1000.0, 8000))
+
+    def test_warns_beyond_tolerance(self):
+        self.assertIsNotNone(test_toolkit.stale_server_warning((1003.0, self.projection), 1000.0, 8000))
+
+    def test_silent_without_code_or_start_time(self):
+        self.assertIsNone(test_toolkit.stale_server_warning(None, 1000.0, 8000))
+        self.assertIsNone(test_toolkit.stale_server_warning((2000.0, self.projection), None, 8000))
+
+    def test_report_swallows_diagnostics_failure(self):
+        # fail-open：进程查询或 mtime 扫描抛错时不得打崩宿主子命令（spec：告警永不阻断）
+        with mock.patch.object(
+            test_toolkit, "process_start_time", side_effect=OSError("wmi down")
+        ), mock.patch.object(
+            test_toolkit, "newest_server_code_mtime", side_effect=OSError("stat race")
+        ):
+            test_toolkit.report_stale_server(8000, {123})
 
 
 if __name__ == "__main__":

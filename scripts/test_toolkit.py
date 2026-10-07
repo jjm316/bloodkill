@@ -26,6 +26,8 @@ scripts/ 目录下另有同名中文双击 bat 薄壳（测试工具箱-*.bat）
   重复运行复用同一批目录，不会线性增长；删掉该目录即得到全新环境。
 - 服务端通过 WMI 脱管启动（父进程 WmiPrvSE），不随终端/会话关闭；
   日志固定在 .scratch/uvicorn.log。
+- status 与 up/serve 复用运行中的服务端时，若 server/ 与 blood_bound/
+  下的代码比进程新，会提示 restart（不自动重启）。
 - 每次运行 up 都会创建一个新房间；玩家 1 是房主（窗口位于左上角），由它点"开始游戏"。
 - 自动进房依赖客户端的 URL 参数入口（?room=&name=&token=），见 client/src/App.tsx。
 """
@@ -48,6 +50,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIST = REPO_ROOT / "client" / "dist"
 SAVES_DIR = REPO_ROOT / "saves"
 DEFAULT_PROFILE_ROOT = REPO_ROOT / ".scratch" / "chrome-profiles"
+SERVER_CODE_ROOTS = (REPO_ROOT / "server", REPO_ROOT / "blood_bound")
+STALE_TOLERANCE_SECONDS = 2.0
 TASKBAR_LOGICAL_HEIGHT = 48
 LAUNCH_STAGGER_SECONDS = 0.4
 
@@ -180,6 +184,74 @@ def find_server_pids(port: int) -> list[int]:
     return sorted(pids)
 
 
+def newest_server_code_mtime() -> tuple[float, Path] | None:
+    """SERVER_CODE_ROOTS 各包里最新 .py 的 (mtime, 路径)；无文件返回 None。"""
+    newest: tuple[float, Path] | None = None
+    for root in SERVER_CODE_ROOTS:
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            mtime = path.stat().st_mtime
+            if newest is None or mtime > newest[0]:
+                newest = (mtime, path)
+    return newest
+
+
+def process_start_time(pid: int) -> float | None:
+    """监听进程的创建时刻（Unix 秒）；进程已消失或输出异常时返回 None。"""
+    result = powershell(
+        f"Get-CimInstance Win32_Process -Filter 'ProcessId={pid}' | "
+        "ForEach-Object { ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() }"
+    )
+    text = result.stdout.strip()
+    try:
+        return float(text) / 1000 if text else None
+    except ValueError:
+        return None
+
+
+def stale_server_warning(
+    newest: tuple[float, Path] | None,
+    started: float | None,
+    port: int,
+) -> str | None:
+    """代码最新 mtime 晚于进程创建时刻（含容差）时给出 restart 提示。"""
+    if newest is None or started is None:
+        return None
+    mtime, path = newest
+    if mtime <= started + STALE_TOLERANCE_SECONDS:
+        return None
+    try:
+        shown = path.relative_to(REPO_ROOT)
+    except ValueError:
+        shown = path
+    return (
+        f"警告：服务端代码比运行进程新（最新修改：{shown}），"
+        f"界面可能不反映最新代码；请执行 .venv/Scripts/python.exe "
+        f"scripts/test_toolkit.py restart --port {port}"
+    )
+
+
+def report_stale_server(port: int, listener_pids: set[int] | None = None) -> None:
+    """在复用运行中服务端的出口打印陈旧提示；诊断失败一律静默。"""
+    try:
+        pids = port_listener_pids(port) if listener_pids is None else listener_pids
+        starts = [
+            start
+            for start in (process_start_time(pid) for pid in sorted(pids))
+            if start is not None
+        ]
+        warning = stale_server_warning(
+            newest_server_code_mtime(), min(starts) if starts else None, port,
+        )
+        if warning:
+            log(warning)
+    except Exception:
+        pass  # 陈旧提示是诊断信息，自身出错（进程查询超时、文件竞态）不得阻断宿主子命令
+
+
 def stop_server(port: int, timeout: float = 15.0) -> int:
     """Kill the detached server process tree and wait for the port to free up."""
     pids = find_server_pids(port)
@@ -239,6 +311,7 @@ def ensure_server(port: int) -> None:
     base_url = f"http://127.0.0.1:{port}"
     if server_health(base_url):
         log(f"[3/5] 服务端已在运行（{base_url}），直接复用。")
+        report_stale_server(port)
         return
     log(f"[3/5] 启动服务端（独立进程，端口 {port}）……")
     start_server_detached(port)
@@ -401,6 +474,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     base_url = f"http://127.0.0.1:{args.port}"
     if server_health(base_url):
         log(f"服务端已在运行（{base_url}），无需重复启动。")
+        report_stale_server(args.port)
         return 0
     log(f"启动服务端（独立进程，端口 {args.port}）……")
     try:
@@ -459,6 +533,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         pids = port_listener_pids(args.port)
         pid_text = f"，PID {'/'.join(str(pid) for pid in sorted(pids))}" if pids else ""
         log(f"服务端：运行中（{base_url}{pid_text}）")
+        report_stale_server(args.port, pids)
     else:
         log(f"服务端：未运行（端口 {args.port}）")
     log(f"存档房间：{count_saved_rooms()} 个（saves/，服务端重启后自动恢复）")
