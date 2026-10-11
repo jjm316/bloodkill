@@ -28,3 +28,5 @@ client/dist/
 .scratch/headless-profile-cdp*/
 .scratch/browser-acceptance-environment/
 .scratch/e2e-inspect/verify/
+# consolidated throwaway prototypes (design-decision artifacts, kept local)
+/prototypes/
