@@ -4,7 +4,7 @@
 [`tests/test_engine.py`](../tests/test_engine.py)、[`tests/test_projection.py`](../tests/test_projection.py)、
 [`tests/test_rule_branches.py`](../tests/test_rule_branches.py)、[`tests/test_properties.py`](../tests/test_properties.py)
 与 [`tests/test_golden_replays.py`](../tests/test_golden_replays.py)（golden 回放双向验证 +
-规则耦合批次的分支覆盖锁 `GoldenBranchCoverageTests`，ruleset 0.6）。
+规则耦合批次的分支覆盖锁 `GoldenBranchCoverageTests`，ruleset 0.7）。
 性质测试的随机 sweep 对多数分支给出额外的「随机路径」覆盖，下表只列确定性测试。
 
 标记说明：
@@ -93,6 +93,15 @@ ADR 0012 branch additions（干涉请求门控 `intervention.gate`，ruleset 0.6
 | golden 分支锁 | 走查器首门控接受（投票分支覆盖不缩水）、次门控拒绝（target-declined 混入）、后续全接受；每个 fixture 锁接受接力和拒绝免投票结算两路 | `GoldenBranchCoverageTests.test_every_golden_accepts_a_gate_and_relays_it_into_a_poll`、`test_every_golden_mixes_a_target_declined_gate` |
 | 前端门控层 | 弹窗渲染/按钮命令/倒计时、no-assist 代发与防重复、四条「干涉」日志、门控窗与单人窗口互斥 | client vitest（ticket 04：`client/src/interventionGate.test.tsx` 等）；e2e 见 `.scratch/e2e-gate.py` |
 
+Ruleset 0.7 branch additions（诅咒归属公开 + B9 golden 分支锁，ADR 0014）:
+
+| Branch | Behavior | Coverage |
+| --- | --- | --- |
+| CurseDistributed 公开广播 | 每卡一条公开事件，payload 只含 `recipientPlayerId`（去掉 curseId，真/假不进公开事件流）；`PRIVATE_EVENT_TYPES` 收缩为保留字 `CurseViewed` | `RulesEngineTests.test_curse_distribution_rides_the_skill_command_and_broadcasts_recipients`；golden 锁 `GoldenBranchCoverageTests.test_odd_goldens_broadcast_curse_recipients_and_end_face_up` |
+| 终局翻开归属 | `GameEnded`/`result.curseAssignments` 带完整归属映射（未分发/放弃为空 dict），与快照权威一致 | `RulesEngineTests.test_game_end_turns_the_curse_assignments_face_up`；golden 锁同上 |
+| 投影：归属公开 | `players[].holdsCurseCard` 全员含观众可见；审判者 `viewer.curseAssignments`（分发前空 dict、重连不丢），他人视角无此字段 | `ProjectionTests.test_curse_ownership_is_public_in_the_players_list`、`test_curse_assignments_are_the_inquisitors_private_viewer_field` |
+| B9 法师×wild 抹除 golden 锁（rule-coupling 挂起项，随本次 bump 落地） | 走查器定向路由：审判者满 2 伤后给一名无伤 rank-8 法师一伤、其亮牌窗亮 rank、技能抹除落在 wild 审判者上（staff + `IdentityMarkersObscured`；9/11 人局法师即固定攻击者，扫描无候选即放弃）；锁断言抹除恰一次、目标是审判者、标记变问号、staff 发放、抹除后不再有色选亮牌 | `GoldenBranchCoverageTests.test_some_golden_erases_the_inquisitors_wild_markers`（单测两级矩阵见 `test_rule_branches.py` 的 mage erasure 两例） |
+
 ## 引擎分支
 
 | 分支 | 行为 | 覆盖测试 |
@@ -140,7 +149,7 @@ ADR 0012 branch additions（干涉请求门控 `intervention.gate`，ruleset 0.6
 | `choose-skill` rank 2 捕获 | 终局后相位/匕首清空（issue 15 已修） | `SkillBranchTests.test_assassin_skill_capture_leaves_ended_phase` |
 | 诅咒窗口触发（ADR 0003，规则 0.4） | 亮出 fleur-cross 即开唯一技能窗口：自选亮等级（1/2 点自选）、第 3 点被迫、挡刀承伤被迫，三路一致；非感应者技能伤害新亮出同样触发（ADR 0009 D1，`trigger=None`）；被感应者封印后永不再开 | `RulesEngineTests.test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`CurseBranchTests.test_self_chosen_rank_reveal_opens_the_curse_window`、`test_third_damage_forced_rank_reveal_opens_the_curse_window`、`test_intervention_damage_opens_the_curse_window`、`test_skill_damage_self_chosen_rank_reveal_opens_the_curse_window`、`test_mentalist_seal_kills_the_curse_path_and_heal_cannot_unseal` |
 | `choose-skill` 诅咒放弃 | `SkillDeclined`、技能永久失去、诅咒留供应区；后续不再出现第二次窗口；家族胜利照常结算不做诅咒判定 | `RulesEngineTests.test_inquisitor_rank_reveal_opens_the_curse_skill_window`；`CurseBranchTests.test_decline_keeps_curses_in_supply_and_closes_the_window_for_good`、`test_declined_curse_never_judges_a_family_win` |
-| `choose-skill` 诅咒发动 | `SkillUsed` + 每卡一条私密 `CurseDistributed`、供应区清空、归属入终局判定；无伤害、匕首与行动阶段原样恢复 | `RulesEngineTests.test_curse_distribution_rides_the_skill_command_and_stays_private`；`CurseBranchTests.test_distribute_does_not_disturb_dagger_or_open_new_windows` |
+| `choose-skill` 诅咒发动 | `SkillUsed` + 每卡一条公开 `CurseDistributed`（payload 只含 recipientPlayerId，ADR 0014）、供应区清空、归属入终局判定；无伤害、匕首与行动阶段原样恢复 | `RulesEngineTests.test_curse_distribution_rides_the_skill_command_and_broadcasts_recipients`；`CurseBranchTests.test_distribute_does_not_disturb_dagger_or_open_new_windows` |
 | 诅咒发动校验 | 分配键与待分发集合不符（含空）→ `curse.invalid-count`；重复收件人 → `curse.duplicate-recipient`；未知/已捕获收件人 → `target.not-found` / `target.captured`；非审判者 → `player.not-eligible`；窗口已关 → `skill.not-open`；重复发动 → `skill.already-used`（注入） | `CurseBranchTests.test_distribute_with_no_curses_is_rejected`、`test_distribute_with_wrong_assignment_keys_is_rejected`、`test_distribute_to_unknown_or_captured_recipient_is_rejected`、`test_distribute_duplicate_recipient_is_rejected`、`test_distribute_by_non_inquisitor_is_rejected`、`test_distribute_then_decline_is_rejected_as_window_closed`、`test_repeated_use_in_a_reopened_window_is_rejected` |
 | 旧 `distribute-curse` 命令移除 | 旧命令 → `command.unknown`，分发仅剩技能命令一条路径 | `CurseBranchTests.test_standalone_distribute_curse_command_is_gone` |
 | `_end_game` 真诅咒夺胜 | 正常家族胜方领袖持真诅咒 → 胜方改写为审判者独赢（`inquisitor-true-curse`） | `CurseBranchTests.test_winning_leader_holding_true_curse_gives_the_inquisitor_a_solo_win` |
@@ -161,7 +170,7 @@ ADR 0012 branch additions（干涉请求门控 `intervention.gate`，ruleset 0.6
 | 观众投影 | 无身份、无 seed、无行动 | `ProjectionTests.test_spectator_sees_no_identity_or_seed` |
 | 玩家投影 | 仅自己身份；公共玩家列表无身份字段 | `ProjectionTests.test_player_sees_only_their_own_identity` |
 | 线索展示 | 伤害后才出现在投影 | `ProjectionTests.test_revealed_clues_appear_only_after_damage` |
-| 诅咒视图 | 仅审判者见 `cursesToDistribute`（待分发卡 ID，分发后清空） | `ProjectionTests.test_curse_supply_is_visible_to_the_inquisitor_alone` |
+| 诅咒视图 | 仅审判者见 `cursesToDistribute`（待分发卡 ID，分发后清空）；`players[].holdsCurseCard` 归属全员含观众可见（ADR 0014）；真/假归属 `viewer.curseAssignments` 仅审判者视角存在 | `ProjectionTests.test_curse_supply_is_visible_to_the_inquisitor_alone`、`test_curse_ownership_is_public_in_the_players_list`、`test_curse_assignments_are_the_inquisitors_private_viewer_field` |
 | `legal_actions` 行动阶段 | 仅匕首持有者有 pass/attack；盾目标不可攻击；审判者的攻击列表过滤已受 3 伤目标（他人不受限） | `ProjectionTests.test_dagger_holder_actions_are_derived_from_authority`；`ProjectionTests.test_inquisitor_attack_actions_filter_three_damage_targets` |
 | `legal_actions` 诅咒技能窗 | 审判者=放弃+发动两项，他人与观众无动作；分发完成后任何 viewer 不再有分发/技能动作 | `ProjectionTests.test_curse_window_offers_decline_and_use_to_the_inquisitor_only`、`test_after_distribution_no_viewer_has_a_curse_entry_point` |
 | `legal_actions` 技能窗 | rank 2 列出目标；rank 1 无目标；rank 7 持盾 owner 也给发动选项（ADR 0010，旧"只给放弃"特判已删） | `ProjectionTests.test_rank_two_skill_window_offers_valid_targets`；`ProjectionBranchTests.test_elder_skill_window_offers_use_without_a_target`；`SkillBranchTests.test_shielded_berserker_volunteer_can_react` |
@@ -179,7 +188,7 @@ ADR 0012 branch additions（干涉请求门控 `intervention.gate`，ruleset 0.6
 - 确定性：同 seed + 命令序列 → 事件日志（revision/type/payload）一致；
 - 恢复等价：任意位置 checkpoint → resume 后与不中断运行逐事件一致、revision 相等（无双重结算）；
 - 幂等：走法中每条命令重复提交 → 返回原事件、revision 不变；
-- 投影保密：任意 viewer（含观众）投影不含 seed、不含他人 faction/rank/clueIcon、不含 pending context，诅咒仅审判者可见；
+- 投影保密：任意 viewer（含观众）投影不含 seed、不含他人 faction/rank/clueIcon、不含 pending context；诅咒真/假仅审判者可见（ADR 0014：归属 `holdsCurseCard` 例外，全员公开）；
 - 状态不变量：每条命令后 damage/capture/revealed/匕首持有者/revision 连续性成立。
 
 ## 已知缺陷

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "ruleset": {
     "id": "blood-bound-compatible",
-    "version": "0.6"
+    "version": "0.7"
   },
   "game": {
     "gameId": "golden-6",
@@ -11,7 +11,7 @@
   "snapshot": {
     "schemaVersion": 2,
     "rulesetId": "blood-bound-compatible",
-    "rulesetVersion": "0.6",
+    "rulesetVersion": "0.7",
     "gameId": "golden-6",
     "seed": "golden-seed-6",
     "revision": 78,
@@ -232,7 +232,8 @@
           "score": 0
         }
       ],
-      "explanationKey": "game.end.captured-player"
+      "explanationKey": "game.end.captured-player",
+      "curseAssignments": {}
     },
     "curses": [],
     "curseAssignments": {},
@@ -1722,11 +1723,12 @@
               "score": 0
             }
           ],
-          "explanationKey": "game.end.captured-player"
+          "explanationKey": "game.end.captured-player",
+          "curseAssignments": {}
         }
       },
       "previousHash": "8f21100a3737ab50d67eaf664b5a3cd6afbb2cc9038f1097cf3521133b15e5e7",
-      "hash": "6fcf483298dcd210f01cf9d3ebd8ef27510a0d75dcb459995d680c06e98dbd8a"
+      "hash": "0a3e69f043d41b934c7e788e7f27127d03d9394ed23020192ef72423b37d39c4"
     },
     {
       "event": {
@@ -1747,8 +1749,8 @@
           }
         }
       },
-      "previousHash": "6fcf483298dcd210f01cf9d3ebd8ef27510a0d75dcb459995d680c06e98dbd8a",
-      "hash": "fdf78cb2d9ce2f148807424df983120f18d56873f4a643044e3decad06adc94a"
+      "previousHash": "0a3e69f043d41b934c7e788e7f27127d03d9394ed23020192ef72423b37d39c4",
+      "hash": "49ad7a75696a38d3daca8fac195417134a1d68bb7d397b1731e5f9600126f04b"
     }
   ],
   "commands": [
@@ -2115,7 +2117,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "fdf78cb2d9ce2f148807424df983120f18d56873f4a643044e3decad06adc94a",
-    "snapshotHash": "636f26ab00c319de4075c07dc2047f0714ed25b1944f341f7a6dffc7b8470005"
+    "eventHead": "49ad7a75696a38d3daca8fac195417134a1d68bb7d397b1731e5f9600126f04b",
+    "snapshotHash": "d3aed601da4030c15576110c6a0e93ad5cceee04fe9965a78ce59bd70b15b74b"
   }
 }

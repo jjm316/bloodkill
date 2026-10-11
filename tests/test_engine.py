@@ -25,6 +25,7 @@ from blood_bound import (
     save_game,
     validate_content,
 )
+from server.protocol import PRIVATE_EVENT_TYPES
 
 
 class FixedClock:
@@ -211,7 +212,11 @@ class RulesEngineTests(unittest.TestCase):
         assert engine.state.pending and engine.state.pending.kind == "skill" and engine.state.pending.rank == "fleur-cross"
         return inquisitor
 
-    def test_curse_distribution_rides_the_skill_command_and_stays_private(self):
+    def test_curse_distribution_rides_the_skill_command_and_broadcasts_recipients(self):
+        # ADR 0014: ownership is public — each curse broadcasts one
+        # CurseDistributed naming the recipient only; the true/false split
+        # never enters the public event stream (the private type set shrinks
+        # to the reserved CurseViewed).
         engine = self.started(7)
         inquisitor = self.curse_window(engine)
         recipients = [pid for pid in engine.state.players if pid != inquisitor][: len(engine.state.curses)]
@@ -220,14 +225,30 @@ class RulesEngineTests(unittest.TestCase):
         events = engine.apply(command(engine, "curse", inquisitor, "choose-skill", use=True, assignments=assignments))
         self.assertEqual([event.event_type for event in events], ["SkillUsed", "CurseDistributed", "CurseDistributed", "PhaseChanged"])
         distributed = [event for event in events if event.event_type == "CurseDistributed"]
-        self.assertEqual([event.payload["curseId"] for event in distributed], ["true-curse-1", "false-curse-1"])
+        self.assertEqual(
+            [event.payload for event in distributed],
+            [{"recipientPlayerId": recipients[0]}, {"recipientPlayerId": recipients[1]}],
+        )
         self.assertEqual(engine.state.curses, [])
         self.assertEqual(engine.state.curse_assignments, assignments)
+        self.assertEqual(PRIVATE_EVENT_TYPES, frozenset({"CurseViewed"}))
         # no wound, no new window: the action phase resumes with the same holder
         self.assertEqual(engine.state.players[inquisitor].damage, 1)
         self.assertIsNone(engine.state.pending)
         self.assertEqual(engine.state.phase, {"kind": "action", "activePlayerId": dagger_before})
         self.assertIn("fleur-cross", engine.state.players[inquisitor].skills_used)
+
+    def test_game_end_turns_the_curse_assignments_face_up(self):
+        # ADR 0014: the terminal result carries the full ownership map —
+        # everyone reads it before the outcome; an undistributed (or declined)
+        # supply ends as an empty dict.
+        odd, _ = run_deterministic_game(7)
+        self.assertEqual(odd.state.status, "ended")
+        self.assertTrue(odd.state.curse_assignments)
+        self.assertEqual(odd.state.result["curseAssignments"], odd.state.curse_assignments)
+        even, _ = run_deterministic_game(6)
+        self.assertEqual(even.state.status, "ended")
+        self.assertEqual(even.state.result["curseAssignments"], {})
 
     def test_deterministic_runner_closes_even_and_odd_games(self):
         even_engine, even_replay = run_deterministic_game(6)
@@ -249,11 +270,11 @@ class RulesEngineTests(unittest.TestCase):
         self.assertEqual(engine.state.status, "ended")
         self.assertEqual(len(replay.command_ids), len(set(replay.command_ids)))
 
-    def test_ruleset_is_0_6_and_older_checkpoints_are_rejected(self):
+    def test_ruleset_is_0_7_and_older_checkpoints_are_rejected(self):
         engine = self.started()
-        self.assertEqual(engine.state.ruleset_version, "0.6")
+        self.assertEqual(engine.state.ruleset_version, "0.7")
         stale = deepcopy(engine.checkpoint())
-        stale.ruleset_version = "0.5"
+        stale.ruleset_version = "0.6"
         with self.assertRaises(RuleError):
             RulesEngine.resume_from_checkpoint(stale, clock=FixedClock())
 

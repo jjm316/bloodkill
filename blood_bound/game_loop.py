@@ -40,7 +40,11 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
       every fixture keeps the accept -> poll -> volunteer branch coverage) and
       the second gate declines, replaying the target-declined settlement of
       ADR 0012; every later gate accepts again;
-    - wild markers are revealed as the question mark (issue 26).
+    - wild markers are revealed as the question mark (issue 26);
+    - odd games plan one extra wound on a rank-8 mage whose own reveal takes
+      ``rank``, so the mage's erasure lands on the wild-holding inquisitor and
+      the B9 coupling replays in the goldens (rule-coupling golden lock,
+      deferred to the next bump and landed here).
 
     It exists for golden replay and CI smoke coverage, not as an AI strategy.
     """
@@ -74,6 +78,14 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
     volunteer_pid: str | None = None
     volunteer_planned = False
     gate_count = 0
+    # B9 golden routing: wound one mage after the victim carries two wounds,
+    # then let their rank-8 skill erase the inquisitor's wild markers. The
+    # scan is a one-shot and gives up permanently when no eligible mage exists
+    # (e.g. the mage holds the dagger themselves, so this skeleton cannot
+    # wound them); ``mage_target`` only marks whose reveal window takes rank.
+    mage_wound_planned = inquisitor is not None
+    mage_wound_done = False
+    mage_target: str | None = None
 
     def fresh_target(owner_id: str) -> str:
         """First live zero-damage player that is neither the window owner nor the fixed victim."""
@@ -91,7 +103,26 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
         holder = engine.state.dagger_holder_id
         if holder != attacker:
             send(f"pass-{turn}", holder, "pass-dagger", targetPlayerId=attacker)
-        send(f"attack-{turn}", attacker, "attack", targetPlayerId=victim)
+        attack_target = victim
+        if mage_wound_planned and not mage_wound_done and engine.state.players[victim].damage >= 2:
+            mage_wound_done = True
+            mage_target = next(
+                (
+                    player_id
+                    for player_id in sorted(engine.state.players)
+                    if player_id not in (attacker, victim)
+                    and engine.state.players[player_id].rank == 8
+                    and not engine.state.players[player_id].captured
+                    and engine.state.players[player_id].damage == 0
+                    and "8" not in engine.state.players[player_id].skills_used
+                ),
+                None,
+            )
+            if mage_target is None:
+                mage_wound_planned = False
+            else:
+                attack_target = mage_target
+        send(f"attack-{turn}", attacker, "attack", targetPlayerId=attack_target)
         # Resolve every window the attack opened, including windows opened by
         # the skills used below (the assassin's wounds defer the dagger
         # hand-off until their victim-choice reveal windows close, B12).
@@ -151,6 +182,10 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
                     )
                     continue
                 token = pending.context["eligibleTokens"][0]
+                # B9 routing: the planned mage reveals their own rank so the
+                # rank-8 skill window opens for the erasure below.
+                if "rank" in pending.context["eligibleTokens"] and target == mage_target and 8 not in used_skill_ranks:
+                    token = "rank"
                 payload = {"token": token}
                 if token.startswith("marker-") and engine.state.players[target].identity_markers[int(token[-1])] == "wild":
                     payload["color"] = "unknown"
@@ -164,6 +199,17 @@ def run_deterministic_game(player_count: int, *, game_id: str = "golden", seed: 
                         for index, curse_id in enumerate(engine.state.curses)
                     }
                     send(f"curse-{turn}", pending.actor_player_id, "choose-skill", use=True, assignments=assignments)
+                elif pending.rank == 8 and 8 not in used_skill_ranks and pending.actor_player_id == mage_target:
+                    # B9: the mage's erasure lands on the wild-holding
+                    # inquisitor, locking the coupling into the golden replay.
+                    used_skill_ranks.add(8)
+                    send(
+                        f"use-rank-8-{turn}",
+                        pending.actor_player_id,
+                        "choose-skill",
+                        use=True,
+                        targetPlayerId=inquisitor,
+                    )
                 elif pending.rank in {2, 5} and pending.rank not in used_skill_ranks:
                     used_skill_ranks.add(pending.rank)
                     send(

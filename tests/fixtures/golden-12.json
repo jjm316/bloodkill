@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "ruleset": {
     "id": "blood-bound-compatible",
-    "version": "0.6"
+    "version": "0.7"
   },
   "game": {
     "gameId": "golden-12",
@@ -11,7 +11,7 @@
   "snapshot": {
     "schemaVersion": 2,
     "rulesetId": "blood-bound-compatible",
-    "rulesetVersion": "0.6",
+    "rulesetVersion": "0.7",
     "gameId": "golden-12",
     "seed": "golden-seed-12",
     "revision": 114,
@@ -422,7 +422,8 @@
           "score": 0
         }
       ],
-      "explanationKey": "game.end.captured-player"
+      "explanationKey": "game.end.captured-player",
+      "curseAssignments": {}
     },
     "curses": [],
     "curseAssignments": {},
@@ -2608,11 +2609,12 @@
               "score": 0
             }
           ],
-          "explanationKey": "game.end.captured-player"
+          "explanationKey": "game.end.captured-player",
+          "curseAssignments": {}
         }
       },
       "previousHash": "2089347fe5d1da71347df7305db04051e5ef62f0b6720d3ad33ec3d3bff9932e",
-      "hash": "c68005fcf43b6264d4be8d609bf4ee026f817b4df9fea1811491a8808fb36536"
+      "hash": "42ab1b5cd0d00584bc00b4bb40ebc2b6d71f6253b8abf7c14a8fb5a6434ccf3b"
     },
     {
       "event": {
@@ -2633,8 +2635,8 @@
           }
         }
       },
-      "previousHash": "c68005fcf43b6264d4be8d609bf4ee026f817b4df9fea1811491a8808fb36536",
-      "hash": "29135fc7dbc9b5bac120b7fff86957432fdb644130b36c39f04a69a9116e9f05"
+      "previousHash": "42ab1b5cd0d00584bc00b4bb40ebc2b6d71f6253b8abf7c14a8fb5a6434ccf3b",
+      "hash": "539ae0f5ebda7272a87c435c7503ecd456216b10b7a834a83f2cb1ec738d9046"
     }
   ],
   "commands": [
@@ -3297,7 +3299,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "29135fc7dbc9b5bac120b7fff86957432fdb644130b36c39f04a69a9116e9f05",
-    "snapshotHash": "1fc267452871f4fbf72b887b8675e6cba7f6ca62c36490cfaa6f0a855ade75cf"
+    "eventHead": "539ae0f5ebda7272a87c435c7503ecd456216b10b7a834a83f2cb1ec738d9046",
+    "snapshotHash": "07408c1957f5b553e347a89e79c8c97214ab5687419300a635604a8e42261eb0"
   }
 }

@@ -243,6 +243,73 @@ class GoldenBranchCoverageTests(unittest.TestCase):
             return
         self.fail("no golden fixture reveals a wild marker as the question mark both by choice and by timeout")
 
+    def test_odd_goldens_broadcast_curse_recipients_and_end_face_up(self):
+        # ADR 0014 (ruleset 0.7): the odd goldens replay the curse path — the
+        # public CurseDistributed payload names the recipient only (no curseId:
+        # the true/false split never enters the public event stream) and the
+        # GameEnded payload turns the ownership map face up, matching the
+        # snapshot authority; even goldens never deal curses and end empty.
+        for count, document in self.fixtures():
+            ended = self.payloads(document, "GameEnded")
+            self.assertEqual(len(ended), 1, f"golden-{count}: a finished golden ends exactly once")
+            self.assertEqual(
+                ended[0].get("curseAssignments"), document["snapshot"]["curseAssignments"],
+                f"golden-{count}: the end result must publish the authoritative ownership map",
+            )
+            distributed = self.payloads(document, "CurseDistributed")
+            if count % 2 == 0:
+                self.assertEqual(distributed, [], f"golden-{count}: an even game deals no curses")
+                self.assertEqual(ended[0]["curseAssignments"], {})
+                continue
+            self.assertTrue(distributed, f"golden-{count}: the odd golden must replay the curse path")
+            self.assertEqual(
+                [set(payload) for payload in distributed],
+                [{"recipientPlayerId"}] * len(distributed),
+                f"golden-{count}: the public payload must carry the recipient only",
+            )
+
+    def test_some_golden_erases_the_inquisitors_wild_markers(self):
+        # B9 (rule-coupling lock, landed with the 0.7 bump after its deferral):
+        # the runner routes one mage wound so a golden replays the erasure —
+        # the wild-holding inquisitor's markers become plain question marks,
+        # the staff lands on them, and the colour window is gone for good: no
+        # coloured choose-reveal may follow the obscuring event.
+        for count, document in self.fixtures():
+            obscured = self.payloads(document, "IdentityMarkersObscured")
+            if not obscured:
+                continue
+            self.assertEqual(len(obscured), 1, f"golden-{count}: the erasure replays exactly once")
+            target_id = obscured[0]["playerId"]
+            target = document["snapshot"]["players"][target_id]
+            self.assertEqual(
+                target["faction"], "secret-order",
+                f"golden-{count}: the erasure must land on the wild-holding inquisitor",
+            )
+            self.assertEqual(
+                target["identityMarkers"], ["unknown", "unknown"],
+                f"golden-{count}: the wild markers must be plain question marks afterwards",
+            )
+            self.assertIn(
+                {"playerId": target_id, "resource": "staff", "amount": 1},
+                self.payloads(document, "ResourceGranted"),
+                f"golden-{count}: the erasure grants the staff",
+            )
+            erasure_revision = next(
+                record["event"]["revision"] for record in document["events"]
+                if record["event"]["eventType"] == "IdentityMarkersObscured"
+            )
+            late_coloured = [
+                record["commandId"] for record in self.commands(document, "choose-reveal")
+                if record["actorPlayerId"] == target_id and "color" in record["payload"]
+                and record["expectedRevision"] >= erasure_revision
+            ]
+            self.assertEqual(
+                late_coloured, [],
+                f"golden-{count}: the colour window must not reopen after the erasure",
+            )
+            return
+        self.fail("no golden fixture replays the mage's wild-marker erasure (B9 routing dropped?)")
+
 
 if __name__ == "__main__":
     regenerate_fixtures()

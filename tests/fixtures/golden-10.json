@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "ruleset": {
     "id": "blood-bound-compatible",
-    "version": "0.6"
+    "version": "0.7"
   },
   "game": {
     "gameId": "golden-10",
@@ -11,7 +11,7 @@
   "snapshot": {
     "schemaVersion": 2,
     "rulesetId": "blood-bound-compatible",
-    "rulesetVersion": "0.6",
+    "rulesetVersion": "0.7",
     "gameId": "golden-10",
     "seed": "golden-seed-10",
     "revision": 108,
@@ -362,7 +362,8 @@
           "score": 0
         }
       ],
-      "explanationKey": "game.end.captured-player"
+      "explanationKey": "game.end.captured-player",
+      "curseAssignments": {}
     },
     "curses": [],
     "curseAssignments": {},
@@ -2425,11 +2426,12 @@
               "score": 0
             }
           ],
-          "explanationKey": "game.end.captured-player"
+          "explanationKey": "game.end.captured-player",
+          "curseAssignments": {}
         }
       },
       "previousHash": "deeef384e5111a585b7b376520644a75e578be493c5d3401def96600ca531b55",
-      "hash": "0422dfd8b567cca9b6c18e868e51972d623b6642e8095f1f707972f1b4fc87ec"
+      "hash": "388304c67c7fb7751cb99a49a8c5ab8a49b391586a7fede514371b8abb11dfc2"
     },
     {
       "event": {
@@ -2450,8 +2452,8 @@
           }
         }
       },
-      "previousHash": "0422dfd8b567cca9b6c18e868e51972d623b6642e8095f1f707972f1b4fc87ec",
-      "hash": "8db94622579f1dfcb22abbc8f5422c94f477c1510b55a947dc9f916d612570af"
+      "previousHash": "388304c67c7fb7751cb99a49a8c5ab8a49b391586a7fede514371b8abb11dfc2",
+      "hash": "5271a6034bca775a4c552be19d7f0b18e6cf4a6a4a84110550169a5e872db382"
     }
   ],
   "commands": [
@@ -3042,7 +3044,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "8db94622579f1dfcb22abbc8f5422c94f477c1510b55a947dc9f916d612570af",
-    "snapshotHash": "7aaac6606a69ff0700cf692a314924bcc940831a3278eaa7a73671dbd3f77eb9"
+    "eventHead": "5271a6034bca775a4c552be19d7f0b18e6cf4a6a4a84110550169a5e872db382",
+    "snapshotHash": "be8ae0f079a26399e1988db3e801a2c57329f73df9f90b2408b2ee2bccb960d0"
   }
 }

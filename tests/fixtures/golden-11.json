@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "ruleset": {
     "id": "blood-bound-compatible",
-    "version": "0.6"
+    "version": "0.7"
   },
   "game": {
     "gameId": "golden-11",
@@ -11,7 +11,7 @@
   "snapshot": {
     "schemaVersion": 2,
     "rulesetId": "blood-bound-compatible",
-    "rulesetVersion": "0.6",
+    "rulesetVersion": "0.7",
     "gameId": "golden-11",
     "seed": "golden-seed-11",
     "revision": 114,
@@ -393,7 +393,11 @@
           "score": 0
         }
       ],
-      "explanationKey": "game.end.inquisitor-captured"
+      "explanationKey": "game.end.inquisitor-captured",
+      "curseAssignments": {
+        "true-curse-1": "p1",
+        "false-curse-1": "p10"
+      }
     },
     "curses": [],
     "curseAssignments": {
@@ -2129,12 +2133,11 @@
         "timestamp": 0.0,
         "commandId": "curse-4",
         "payload": {
-          "curseId": "true-curse-1",
           "recipientPlayerId": "p1"
         }
       },
       "previousHash": "6a46396b40cc2434b4e0f1f5d4ff4c1d9681a50660f177c4f23cfc5b1b640c89",
-      "hash": "74a9b2f0761ae9a5a3824ba7c02ed32aa8c1ae3c83c8048f41e3378a65b9cb8b"
+      "hash": "6a3a1c6fb633bbe3fc564ecdfa4ac91c300a62895861f0ca1692b5a6bdfc6563"
     },
     {
       "event": {
@@ -2145,12 +2148,11 @@
         "timestamp": 0.0,
         "commandId": "curse-4",
         "payload": {
-          "curseId": "false-curse-1",
           "recipientPlayerId": "p10"
         }
       },
-      "previousHash": "74a9b2f0761ae9a5a3824ba7c02ed32aa8c1ae3c83c8048f41e3378a65b9cb8b",
-      "hash": "b8779107c89c69e727a28a7e35d2e80a4ade0ffdb2f7713e18c0ac58aaaebc1a"
+      "previousHash": "6a3a1c6fb633bbe3fc564ecdfa4ac91c300a62895861f0ca1692b5a6bdfc6563",
+      "hash": "00b9802bcd77a313b760515533df65f8c885fb65ff5f6d3f4aa837c9b869e7f6"
     },
     {
       "event": {
@@ -2171,8 +2173,8 @@
           }
         }
       },
-      "previousHash": "b8779107c89c69e727a28a7e35d2e80a4ade0ffdb2f7713e18c0ac58aaaebc1a",
-      "hash": "4343c0264bcdbbf9ee05cd824188029791ec2b818c2b94ea6e5a79d5bbf40f13"
+      "previousHash": "00b9802bcd77a313b760515533df65f8c885fb65ff5f6d3f4aa837c9b869e7f6",
+      "hash": "393cbc05fe234fe88309f078b510a0e0fb33236dc5f93bd6df966d436ba9282e"
     },
     {
       "event": {
@@ -2187,8 +2189,8 @@
           "toPlayerId": "p3"
         }
       },
-      "previousHash": "4343c0264bcdbbf9ee05cd824188029791ec2b818c2b94ea6e5a79d5bbf40f13",
-      "hash": "6670417f2682a770859d5871c9dfa565ef41430c5e4c89f269976581185738a1"
+      "previousHash": "393cbc05fe234fe88309f078b510a0e0fb33236dc5f93bd6df966d436ba9282e",
+      "hash": "ca3a0e7f7d6ce5c332a6cb116f3feb2473fc13703931ee1e4c952c38338ee438"
     },
     {
       "event": {
@@ -2209,8 +2211,8 @@
           }
         }
       },
-      "previousHash": "6670417f2682a770859d5871c9dfa565ef41430c5e4c89f269976581185738a1",
-      "hash": "a6fde3959eeb4c4eb182174932822571576bd4446ceed9e74f64286b5bb595ee"
+      "previousHash": "ca3a0e7f7d6ce5c332a6cb116f3feb2473fc13703931ee1e4c952c38338ee438",
+      "hash": "516bdfc66e36d2c64b3fdefb565760595cffeca1e5eeb557f48434055b892681"
     },
     {
       "event": {
@@ -2225,8 +2227,8 @@
           "targetPlayerId": "p0"
         }
       },
-      "previousHash": "a6fde3959eeb4c4eb182174932822571576bd4446ceed9e74f64286b5bb595ee",
-      "hash": "39089bc1aa149fabbe0f712d03797afe1efc7b80f991571680c236cfbd64cb3a"
+      "previousHash": "516bdfc66e36d2c64b3fdefb565760595cffeca1e5eeb557f48434055b892681",
+      "hash": "62be6d242157b51f535ea2ba3025f6f3d86fd51d24617403eb9ee79e0a8d7671"
     },
     {
       "event": {
@@ -2250,8 +2252,8 @@
           ]
         }
       },
-      "previousHash": "39089bc1aa149fabbe0f712d03797afe1efc7b80f991571680c236cfbd64cb3a",
-      "hash": "e8bdbb398628a8df0db7804da71b5e3a401792a85d92459a17e33472b76b7b03"
+      "previousHash": "62be6d242157b51f535ea2ba3025f6f3d86fd51d24617403eb9ee79e0a8d7671",
+      "hash": "d821aa305ee24c7f99d8877b1d8ec733b720c34abb0ff8c57f35d07eba423bd8"
     },
     {
       "event": {
@@ -2273,8 +2275,8 @@
           }
         }
       },
-      "previousHash": "e8bdbb398628a8df0db7804da71b5e3a401792a85d92459a17e33472b76b7b03",
-      "hash": "0bdcfc3243c325a2608bc7d158fb7f4f76d9c223fe66d407479a8edafdc90893"
+      "previousHash": "d821aa305ee24c7f99d8877b1d8ec733b720c34abb0ff8c57f35d07eba423bd8",
+      "hash": "d9bfb77f8d172c1a91209a9604c3e4a88ce30d14db041999f00943cbd278970a"
     },
     {
       "event": {
@@ -2288,8 +2290,8 @@
           "targetPlayerId": "p0"
         }
       },
-      "previousHash": "0bdcfc3243c325a2608bc7d158fb7f4f76d9c223fe66d407479a8edafdc90893",
-      "hash": "c8bbec930f29166dfbd82072b5a58ddd06bcb4ed8704df62fabc6ad31c464e20"
+      "previousHash": "d9bfb77f8d172c1a91209a9604c3e4a88ce30d14db041999f00943cbd278970a",
+      "hash": "b661eef0e9a627597012b8732a9fe27ed1e7bf20c0de8ae4bcc232919d815326"
     },
     {
       "event": {
@@ -2313,8 +2315,8 @@
           ]
         }
       },
-      "previousHash": "c8bbec930f29166dfbd82072b5a58ddd06bcb4ed8704df62fabc6ad31c464e20",
-      "hash": "b32157af7381eb517ae5cff00a603b51d6bafeccb5aef3061f5e2167da2e2eff"
+      "previousHash": "b661eef0e9a627597012b8732a9fe27ed1e7bf20c0de8ae4bcc232919d815326",
+      "hash": "71a7400f3547b67295c63fbb5cb333024d3cf2fe3c1970006407a1caf40e4bdd"
     },
     {
       "event": {
@@ -2337,8 +2339,8 @@
           }
         }
       },
-      "previousHash": "b32157af7381eb517ae5cff00a603b51d6bafeccb5aef3061f5e2167da2e2eff",
-      "hash": "8ee39f9aa6e662c6fecccbf3e03455684b9e480abd78210b971fb380188da5be"
+      "previousHash": "71a7400f3547b67295c63fbb5cb333024d3cf2fe3c1970006407a1caf40e4bdd",
+      "hash": "6544a1ff53fe4e37e1ea41af34ade7e5cee297b4cdd751e767d2c9d107044160"
     },
     {
       "event": {
@@ -2353,8 +2355,8 @@
           "volunteer": false
         }
       },
-      "previousHash": "8ee39f9aa6e662c6fecccbf3e03455684b9e480abd78210b971fb380188da5be",
-      "hash": "a63273a7d2ea3e72c5d9a5be79aa1d085aba6f7b1272b3dad37447817cc2ca35"
+      "previousHash": "6544a1ff53fe4e37e1ea41af34ade7e5cee297b4cdd751e767d2c9d107044160",
+      "hash": "e93df06b7aaa23e0b804ca89eb6962bd5c6ee2d348ed2d11d589f180637452a6"
     },
     {
       "event": {
@@ -2369,8 +2371,8 @@
           "volunteer": false
         }
       },
-      "previousHash": "a63273a7d2ea3e72c5d9a5be79aa1d085aba6f7b1272b3dad37447817cc2ca35",
-      "hash": "b866243388095e666f5f6b7f8b54ad9bbfde4e09190aa3c4b1168f8365abab4e"
+      "previousHash": "e93df06b7aaa23e0b804ca89eb6962bd5c6ee2d348ed2d11d589f180637452a6",
+      "hash": "298966e65b1cbe8baebec19878995046fd69de8ceac4506389a25a199677efa3"
     },
     {
       "event": {
@@ -2385,8 +2387,8 @@
           "volunteer": false
         }
       },
-      "previousHash": "b866243388095e666f5f6b7f8b54ad9bbfde4e09190aa3c4b1168f8365abab4e",
-      "hash": "36319b1f1171b805f21bd3d8db01344d69e54719d2aa8594afc50be8d9195c1f"
+      "previousHash": "298966e65b1cbe8baebec19878995046fd69de8ceac4506389a25a199677efa3",
+      "hash": "a57a356a14db521160907cb388e946589f78b3b9ebbc9f2d32019d8efc2199ac"
     },
     {
       "event": {
@@ -2401,8 +2403,8 @@
           "volunteer": false
         }
       },
-      "previousHash": "36319b1f1171b805f21bd3d8db01344d69e54719d2aa8594afc50be8d9195c1f",
-      "hash": "f073469e0ce22bd6684e60f9683c937c97d568be3429e311b6c0ed69b7fe0242"
+      "previousHash": "a57a356a14db521160907cb388e946589f78b3b9ebbc9f2d32019d8efc2199ac",
+      "hash": "4136b8fcf97dba5b26333d22a2d75ab8afa515a8ced28e8df535e2c294cd48ea"
     },
     {
       "event": {
@@ -2417,8 +2419,8 @@
           "volunteer": false
         }
       },
-      "previousHash": "f073469e0ce22bd6684e60f9683c937c97d568be3429e311b6c0ed69b7fe0242",
-      "hash": "330b3f5ba1f6fd9fac1547bc7c7eca81a55cf233855eb935cae8800124eb71f9"
+      "previousHash": "4136b8fcf97dba5b26333d22a2d75ab8afa515a8ced28e8df535e2c294cd48ea",
+      "hash": "06625e87b5d78052c45548cef4dc818788c13044f77e8109f631601821095dc8"
     },
     {
       "event": {
@@ -2433,8 +2435,8 @@
           "volunteer": false
         }
       },
-      "previousHash": "330b3f5ba1f6fd9fac1547bc7c7eca81a55cf233855eb935cae8800124eb71f9",
-      "hash": "2cffe83d35cf37302bd569e93030f3edd5c8601afa233c38afaf0fa16c12121f"
+      "previousHash": "06625e87b5d78052c45548cef4dc818788c13044f77e8109f631601821095dc8",
+      "hash": "70a06b22e9b9d9f4983cabce74523a0748728f756ef2870b2f5f3d36a9f2c5e6"
     },
     {
       "event": {
@@ -2449,8 +2451,8 @@
           "volunteer": false
         }
       },
-      "previousHash": "2cffe83d35cf37302bd569e93030f3edd5c8601afa233c38afaf0fa16c12121f",
-      "hash": "95b9aa58c7418c14764a022995f8700c4aecf34abd1e5b38276e7134c5c2de89"
+      "previousHash": "70a06b22e9b9d9f4983cabce74523a0748728f756ef2870b2f5f3d36a9f2c5e6",
+      "hash": "0e6ee0b1a940dd04d131ae4c7c8d41e520d70f5ace6d65036820a570e4564312"
     },
     {
       "event": {
@@ -2465,8 +2467,8 @@
           "reason": "no-volunteers"
         }
       },
-      "previousHash": "95b9aa58c7418c14764a022995f8700c4aecf34abd1e5b38276e7134c5c2de89",
-      "hash": "85287b53acf0903efdf0b6e840e452ef36e646990afa8b0e844fc0e3d269e13e"
+      "previousHash": "0e6ee0b1a940dd04d131ae4c7c8d41e520d70f5ace6d65036820a570e4564312",
+      "hash": "b7d6bc098a941f85216b493ff219b13ecc4f0214deb37c23ae62b7a417fbf59f"
     },
     {
       "event": {
@@ -2483,8 +2485,8 @@
           "triggerContext": "attack"
         }
       },
-      "previousHash": "85287b53acf0903efdf0b6e840e452ef36e646990afa8b0e844fc0e3d269e13e",
-      "hash": "041702e1ab9b855c4a31f5c11b38cfc07e6f9af8df0b1cc7354a48d3f494f126"
+      "previousHash": "b7d6bc098a941f85216b493ff219b13ecc4f0214deb37c23ae62b7a417fbf59f",
+      "hash": "11ec3491dc77a1c0a1cbf0cc9f09ab1d2e9f1fa43a760193983bdb7afd7fbc77"
     },
     {
       "event": {
@@ -2498,8 +2500,8 @@
           "playerId": "p0"
         }
       },
-      "previousHash": "041702e1ab9b855c4a31f5c11b38cfc07e6f9af8df0b1cc7354a48d3f494f126",
-      "hash": "0e7076514678b392d767891daa7921df0beb35f972ae3d760485d3327a7f03ab"
+      "previousHash": "11ec3491dc77a1c0a1cbf0cc9f09ab1d2e9f1fa43a760193983bdb7afd7fbc77",
+      "hash": "c9d45e6883b895421752b0b34ba61eac0afe4371708274af016005e35a135985"
     },
     {
       "event": {
@@ -2571,11 +2573,15 @@
               "score": 0
             }
           ],
-          "explanationKey": "game.end.inquisitor-captured"
+          "explanationKey": "game.end.inquisitor-captured",
+          "curseAssignments": {
+            "true-curse-1": "p1",
+            "false-curse-1": "p10"
+          }
         }
       },
-      "previousHash": "0e7076514678b392d767891daa7921df0beb35f972ae3d760485d3327a7f03ab",
-      "hash": "cd75703e761edd8076a30b69c31a300b17b9e58a09e55452e460b96937de872c"
+      "previousHash": "c9d45e6883b895421752b0b34ba61eac0afe4371708274af016005e35a135985",
+      "hash": "4e4e95c501fdae976297c59cae135ffcce590ba9e93fcfb6da902f0022e40552"
     },
     {
       "event": {
@@ -2596,8 +2602,8 @@
           }
         }
       },
-      "previousHash": "cd75703e761edd8076a30b69c31a300b17b9e58a09e55452e460b96937de872c",
-      "hash": "12bdd478471a589cabcb5a710e287a7a4f35c979325f131a346990e25ff43556"
+      "previousHash": "4e4e95c501fdae976297c59cae135ffcce590ba9e93fcfb6da902f0022e40552",
+      "hash": "addfe77898001999a271a02e58f702655479fa90eb5936c29f2dd5895c5022e8"
     }
   ],
   "commands": [
@@ -3224,7 +3230,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "12bdd478471a589cabcb5a710e287a7a4f35c979325f131a346990e25ff43556",
-    "snapshotHash": "5634d66102be3598945b91f88b10b4c3912091183b07587b87349eb25db06c06"
+    "eventHead": "addfe77898001999a271a02e58f702655479fa90eb5936c29f2dd5895c5022e8",
+    "snapshotHash": "ba27db6f0be338661d25f7da5d7eee186482ede4af27d9a50298b56deed4db3d"
   }
 }

@@ -17,6 +17,9 @@ SERVER_ERROR = "error"
 SERVER_ACK = "ack"
 SERVER_TAKEN_OVER = "taken-over"
 
-# Engine event types whose payload carries private facts (curse assignments).
-# They are never broadcast to any client.
-PRIVATE_EVENT_TYPES = frozenset({"CurseViewed", "CurseDistributed"})
+# Engine event types whose payload carries private facts. ADR 0014: curse
+# ownership is public — CurseDistributed (recipients only) broadcasts, and the
+# true/false split lives in the engine state, the saved command payloads and
+# the inquisitor's projection, never in a public event. CurseViewed stays
+# reserved.
+PRIVATE_EVENT_TYPES = frozenset({"CurseViewed"})

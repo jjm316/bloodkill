@@ -1,8 +1,10 @@
 # Blood Bound 网页协议（PROTOCOL）
 
 服务器（FastAPI/uvicorn）是权威节点：全部规则由 `blood_bound` 引擎裁决，浏览器只收到
-**按连接投影后**的状态。任何玩家的身份（阵营/位阶）、诅咒分配、私密事件都不会下发到
-其他浏览器；随机种子也永不进入投影。开局徽记按规则只对本人和其右邻可见：`viewer`
+**按连接投影后**的状态。任何玩家的身份（阵营/位阶）、诅咒真/假之分与私密事件都不会
+下发到其他浏览器（ADR 0014：诅咒卡的归属例外——谁持卡是公开对局事实，经
+`CurseDistributed` 广播与 `players[].holdsCurseCard` 下发，真/假仅审判者可见、终局翻开）；
+随机种子也永不进入投影。开局徽记按规则只对本人和其右邻可见：`viewer`
 块带本人 `clueIcon` 与右邻徽记 `seenNeighbourClue`，公共 `players[]` 条目不含任何
 徽记字段。房主只有管理权（开始/锁定房间），不能替其他玩家操作。
 
@@ -128,7 +130,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 | 类型 | 说明 |
 | --- | --- |
 | `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`，并附服务端墙钟 `serverTime`（倒计时对齐用）。 |
-| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`、`CurseDistributed` 被过滤。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉的请求门控事件（`InterventionGateOpened` / `InterventionGateAccepted` / `InterventionGateDeclined`）与投票表态事件（`InterventionResponded` 等）全部公开。 |
+| `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`（保留字）被过滤。诅咒归属已公开（ADR 0014）：`CurseDistributed` 为公开广播，payload 只含 `{"recipientPlayerId": "p-…"}`（每卡一条，不含 curseId，真/假之分不进公开事件流）。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉的请求门控事件（`InterventionGateOpened` / `InterventionGateAccepted` / `InterventionGateDeclined`）与投票表态事件（`InterventionResponded` 等）全部公开。 |
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
 | `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭。 |
@@ -176,7 +178,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
       "playerId": "p-…", "seat": 0, "displayName": "小明",
       "damage": 1, "captured": false,
       "revealed": {"rank": 3} | {"affiliation": "beast"} | {"rank": 3, "affiliation": "beast"} | null,
-      "resources": ["curse"]
+      "holdsCurseCard": false,  // 是否持有诅咒卡（ADR 0014，归属公开：全员含旁观者可见）
+      "resources": {"quill": 0, "shield": 1, "sword": 0, "staff": 0, "fan": 0}
     }
   ],
   "daggerHolderId": "p-…",
@@ -190,16 +193,17 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
        单人窗口（reveal|skill|token-return）同样携带 deadline */
     "kind": "intervention", "stage": "poll", "responses": {"p-…": true}, "deadline": 1788537090.0
   },
-  "result": null | {"winner": "rose|beast|inquisitor", "explanationKey": "capture|…", "ranking": [{"playerId","seat"}]},
+  "result": null | {"winner": "rose|beast|inquisitor", "explanationKey": "capture|…", "ranking": [{"playerId","seat"}], "curseAssignments": {"c-…": "p-…"}},  // 终局翻开诅咒归属（ADR 0014）；未分发/放弃为空 dict
   "interventionTimeoutSeconds": 90,
   "singleWindowTimeoutSeconds": 90,
   "viewer": null | {
     "playerId": "p-…",
     "identity": {"faction": "rose", "rank": 5},
     "identityMarkers": ["rose", "rose"],  // 本人身份标记原面（未亮出时也下发本人）
-    "resources": ["curse"],
+    "resources": {"quill": 0, "shield": 1, "sword": 0, "staff": 0, "fan": 0},
     "skillsUsed": false,
     "cursesToDistribute": ["c-…"],   // 待分发诅咒卡 ID，仅审判者可见（分发后清空）；分发动作经技能窗口的 choose-skill
+    "curseAssignments": {"c-…": "p-…"},  // 诅咒真/假归属，仅审判者视角存在此字段（ADR 0014）；分发前为空 dict，投影驱动、断线重连不丢
     "inspections": {"p-…": {"faction": "rose", "rank": 5}},  // 小丑检视出的目标身份，仅检视者本人可见（ADR 0013）
     "clueIcon": "rose",              // 本人阵营徽记
     "seenNeighbourClue": {"playerId": "p-…", "icon": "beast"}  // 右邻徽记，仅此一处
@@ -224,8 +228,9 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 投影**不含**随机种子 `seed`（知道种子即可用 `random.Random(seed)` 重现全部身份分配）。
 - 阵营徽记按规则只向左邻展示：徽记只出现在被展示者的 `viewer` 块里（本人 `clueIcon` + 右邻 `seenNeighbourClue`）；`players[]` 条目、旁观者投影与回放步骤均**不含**任何徽记字段。
 - `cursesToDistribute` 只在审判者自己的 `viewer` 块里。
+- 诅咒可见性（ADR 0014，ruleset 0.7）：卡的**归属**是公开对局事实——`players[].holdsCurseCard` 全员含旁观者可见；**真/假之分**只出现在审判者自己的 `viewer.curseAssignments`（其他视角无此字段）与终局 `result.curseAssignments`（全员翻开）里；任何公开事件流不含 curseId 或真/假信息。
 - `inspections`（小丑检视结果）只在检视者本人的 `viewer` 块里；`HarlequinInspected` 广播事件只含目标 playerId，不含阵营/等级。
-- 事件广播过滤 `CurseViewed` / `CurseDistributed`；服务器端存档保留完整事件流，用于回放校验。
+- 事件广播只过滤保留字 `CurseViewed`；`CurseDistributed` 已是公开事件（payload 只含 recipientPlayerId）。服务器端存档保留完整事件流与命令载荷（真/假归属的权威记录），用于回放校验。
 
 ### 错误码
 

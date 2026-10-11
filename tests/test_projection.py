@@ -174,6 +174,43 @@ class ProjectionTests(unittest.TestCase):
             if view["viewer"] is not None:
                 self.assertEqual(view["viewer"]["cursesToDistribute"], [])
 
+    def test_curse_ownership_is_public_in_the_players_list(self):
+        # ADR 0014: who holds a curse card is a public game fact — every
+        # viewer, spectators included, reads it straight off the projection
+        # (reconnection safe, no event replay needed).
+        engine = self.started(7)
+        for viewer in [None, *engine.state.players]:
+            for player in project_state(engine.state, viewer)["players"]:
+                self.assertFalse(player["holdsCurseCard"])
+        inquisitor = self.open_curse_window(engine)
+        recipients = [pid for pid in sorted(engine.state.players) if pid != inquisitor][:2]
+        engine.apply(command(engine, "use", inquisitor, "choose-skill", use=True, assignments={"true-curse-1": recipients[0], "false-curse-1": recipients[1]}))
+        for viewer in [None, *engine.state.players]:
+            by_id = {player["playerId"]: player for player in project_state(engine.state, viewer)["players"]}
+            for pid, player in by_id.items():
+                self.assertEqual(player["holdsCurseCard"], pid in recipients)
+
+    def test_curse_assignments_are_the_inquisitors_private_viewer_field(self):
+        # ADR 0014: the true/false split is the inquisitor's alone — a
+        # projection field under the same gate as cursesToDistribute, present
+        # (empty) before distribution so a reconnecting inquisitor recovers
+        # their own choice. Nobody else's viewer block carries the field.
+        engine = self.started(7)
+        inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")
+        other = next(pid for pid in engine.state.players if pid != inquisitor)
+        self.assertEqual(project_state(engine.state, inquisitor)["viewer"]["curseAssignments"], {})
+        self.assertNotIn("curseAssignments", project_state(engine.state, other)["viewer"])
+        self.assertIsNone(project_state(engine.state)["viewer"])
+        self.open_curse_window(engine)
+        recipients = [pid for pid in sorted(engine.state.players) if pid != inquisitor][:2]
+        assignments = {"true-curse-1": recipients[0], "false-curse-1": recipients[1]}
+        engine.apply(command(engine, "use", inquisitor, "choose-skill", use=True, assignments=assignments))
+        self.assertEqual(project_state(engine.state, inquisitor)["viewer"]["curseAssignments"], assignments)
+        for viewer in engine.state.players:
+            if viewer == inquisitor:
+                continue
+            self.assertNotIn("curseAssignments", project_state(engine.state, viewer)["viewer"])
+
     def test_inquisitor_attack_actions_filter_three_damage_targets(self):
         engine = self.started(7)
         inquisitor = next(pid for pid, player in engine.state.players.items() if player.faction == "secret-order")

@@ -162,7 +162,7 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
         "gameId": state.game_id,
         "revision": state.revision,
         "status": state.status,
-        "players": [_public_player(player) for player in sorted(state.players.values(), key=lambda p: p.seat)],
+        "players": [_public_player(player, state.curse_assignments) for player in sorted(state.players.values(), key=lambda p: p.seat)],
         "daggerHolderId": state.dagger_holder_id,
         "phase": dict(state.phase),
         "pending": _pending_view(state.pending),
@@ -174,7 +174,7 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
         projection["viewer"] = None
         projection["legalActions"] = []
     else:
-        projection["viewer"] = {
+        viewer_view = {
             "playerId": viewer.player_id,
             "identity": {"faction": viewer.faction, "rank": viewer.rank},
             "identityMarkers": list(viewer.identity_markers),
@@ -185,11 +185,18 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
             "clueIcon": viewer.clue_icon,
             "seenNeighbourClue": neighbour_view,
         }
+        if viewer.faction == "secret-order":
+            # ADR 0014: the true/false split is the inquisitor's alone and is
+            # projection-driven, so a reconnect never depends on event replay.
+            # The field exists (empty) before distribution for the same reason;
+            # no other viewer's block carries it at all.
+            viewer_view["curseAssignments"] = dict(state.curse_assignments)
+        projection["viewer"] = viewer_view
         projection["legalActions"] = legal_actions(state, viewer_player_id)
     return projection
 
 
-def _public_player(player: "Player") -> dict[str, Any]:
+def _public_player(player: "Player", curse_assignments: dict[str, str]) -> dict[str, Any]:
     revealed: dict[str, Any] = {"markers": [None, None]}
     if "rank" in player.revealed:
         revealed["rank"] = player.revealed_values.get("rank", player.rank)
@@ -206,6 +213,9 @@ def _public_player(player: "Player") -> dict[str, Any]:
         "revealed": revealed,
         "identityMarkers": [None, None],
         "resources": dict(player.resources),
+        # ADR 0014: card ownership is a public game fact — every viewer,
+        # spectators included, sees who is holding a curse card.
+        "holdsCurseCard": player.player_id in curse_assignments.values(),
     }
 
 

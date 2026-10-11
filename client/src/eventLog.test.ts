@@ -24,7 +24,7 @@ const expectedCategories: Record<EventCategoryId, string[]> = {
     "InterventionSelected", "InterventionDeclined",
   ],
   skill: [
-    "SkillWindowOpened", "SkillUsed", "SkillDeclined", "HarlequinInspected",
+    "SkillWindowOpened", "SkillUsed", "SkillDeclined", "CurseDistributed", "HarlequinInspected",
     "DamageHealed", "TokenReturned", "IdentityMarkersObscured", "TokenReturnOpened",
   ],
   reveal: ["ClueRevealed", "RevealWindowOpened"],

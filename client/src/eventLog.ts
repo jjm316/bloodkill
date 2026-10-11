@@ -69,6 +69,7 @@ const EVENT_DEFINITIONS: Record<string, EventDefinition> = {
       : `${n(p.playerId)} 发动了${displayRank(p.rank as number | string)}技能`,
   },
   SkillDeclined: { category: "skill", describe: (p, n) => `${n(p.playerId)} 放弃了技能${timedOut(p)}` },
+  CurseDistributed: { category: "skill", describe: (p, n) => `将诅咒卡交给了 ${n(p.recipientPlayerId)}` },
   HarlequinInspected: {
     category: "skill",
     describe: (p, n) => {

@@ -155,6 +155,11 @@ class RulesEngine:
             EngineState(
                 schema_version=2,
                 ruleset_id="blood-bound-compatible",
+                # 0.7: curse ownership went public (ADR 0014, 2026-10-11) —
+                # CurseDistributed broadcasts with the recipient only (the
+                # true/false split leaves the public event stream), the public
+                # projection carries holdsCurseCard, the inquisitor's viewer
+                # keeps curseAssignments, and GameEnded turns the cards face up.
                 # 0.6: intervention request gate (ADR 0012, 2026-10-04) — after a
                 # dagger attack only the target is asked whether others may
                 # volunteer (stage "gate" before the poll); timeout counts as no
@@ -166,7 +171,7 @@ class RulesEngine:
                 # timeouts (ADR 0011) and the wild question-mark reveal (issue 26).
                 # 0.4: curse distribution became a reveal-triggered skill (ADR 0003);
                 # 0.3 saves are explicitly rejected, affected games must be rebuilt.
-                ruleset_version="0.6",
+                ruleset_version="0.7",
                 game_id=game_id,
                 seed=seed,
             ),
@@ -179,7 +184,7 @@ class RulesEngine:
 
     @classmethod
     def resume_from_checkpoint(cls, checkpoint: EngineState, *, clock: Clock | None = None) -> "RulesEngine":
-        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.6":
+        if checkpoint.schema_version != 2 or checkpoint.ruleset_version != "0.7":
             raise RuleError("state.invalid", reason="unsupported schema version")
         engine = cls(deepcopy(checkpoint), clock=clock)
         cls._validate(engine.state)
@@ -812,8 +817,9 @@ class RulesEngine:
         Validation semantics are the ones the removed standing distribute-curse
         command used: assignment keys must match the pending curse set exactly,
         recipients must be live and pairwise distinct, and only the inquisitor
-        may distribute. Each curse emits one private CurseDistributed event and
-        the supply clears on success.
+        may distribute. Each curse emits one public CurseDistributed event
+        naming its recipient only (ADR 0014: which card is true stays out of
+        the event stream) and the supply clears on success.
         """
         if owner.faction != "secret-order":
             raise RuleError("player.not-eligible")
@@ -835,7 +841,7 @@ class RulesEngine:
                 state,
                 command,
                 "CurseDistributed",
-                {"curseId": curse_id, "recipientPlayerId": assignments[curse_id]},
+                {"recipientPlayerId": assignments[curse_id]},
             )
             for curse_id in pending_curses
         ]
@@ -1059,6 +1065,9 @@ class RulesEngine:
             "activePlayerId": active_id,
             "ranking": ranking,
             "explanationKey": f"game.end.{branch}",
+            # ADR 0014: the end turns the curses face up — everyone reads the
+            # full ownership map (empty when the supply was never distributed).
+            "curseAssignments": dict(state.curse_assignments),
         }
         return self._event(state, command, "GameEnded", state.result)
 

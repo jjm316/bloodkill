@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "ruleset": {
     "id": "blood-bound-compatible",
-    "version": "0.6"
+    "version": "0.7"
   },
   "game": {
     "gameId": "golden-8",
@@ -11,7 +11,7 @@
   "snapshot": {
     "schemaVersion": 2,
     "rulesetId": "blood-bound-compatible",
-    "rulesetVersion": "0.6",
+    "rulesetVersion": "0.7",
     "gameId": "golden-8",
     "seed": "golden-seed-8",
     "revision": 103,
@@ -306,7 +306,8 @@
           "score": 0
         }
       ],
-      "explanationKey": "game.end.captured-leader"
+      "explanationKey": "game.end.captured-leader",
+      "curseAssignments": {}
     },
     "curses": [],
     "curseAssignments": {},
@@ -2270,11 +2271,12 @@
               "score": 0
             }
           ],
-          "explanationKey": "game.end.captured-leader"
+          "explanationKey": "game.end.captured-leader",
+          "curseAssignments": {}
         }
       },
       "previousHash": "883d98f7fb8fcb9ab39b11819c33caa8e664efac16485a477e1e24abf0bd87ae",
-      "hash": "9911a752273521803ebe79fece33882453af6117bfcb30ae3a78fe82eddd6528"
+      "hash": "774f167790fb7e18e66fb936855b4e700267e3b618224c4d5a2b17f2324e6d0b"
     },
     {
       "event": {
@@ -2295,8 +2297,8 @@
           }
         }
       },
-      "previousHash": "9911a752273521803ebe79fece33882453af6117bfcb30ae3a78fe82eddd6528",
-      "hash": "3a398c8bf2a576c78cf79c85b9513204542e30fc35a9ea64330af459e273c841"
+      "previousHash": "774f167790fb7e18e66fb936855b4e700267e3b618224c4d5a2b17f2324e6d0b",
+      "hash": "bef37c5d19556481f16f0b4f508d762ca775237f6c46d105fffb7c411b416ca1"
     }
   ],
   "commands": [
@@ -2786,7 +2788,7 @@
   ],
   "integrity": {
     "algorithm": "sha256",
-    "eventHead": "3a398c8bf2a576c78cf79c85b9513204542e30fc35a9ea64330af459e273c841",
-    "snapshotHash": "c272dc18742d1cdc0193d2603d9f9c67e624f760ae1d2178eb6c14c786ccbeb1"
+    "eventHead": "bef37c5d19556481f16f0b4f508d762ca775237f6c46d105fffb7c411b416ca1",
+    "snapshotHash": "8cf4c6fd1b3185bd08f31b710bb7bee73f7971ccc2888bff1eeafbbd0cf8c12b"
   }
 }
