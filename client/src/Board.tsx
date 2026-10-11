@@ -42,14 +42,28 @@ const RESOURCE_ICONS: Record<string, IconName> = {
   fan: "fan",
 };
 
+// 金色药丸徽章（spec 2026-10-11 Q4，原型方案 A）：图标 + 单字中文标签，
+// count>1 才标 ×N。悬浮说明锚定 helpContent 图例与语料裁决原文（勿临场发明）：
+// 扇＝他人不能替持扇者干涉；杖＝身份标记全部变为问号。
+const RESOURCE_SHORT_LABELS: Record<string, string> = { quill: "笔", shield: "盾", sword: "剑", staff: "杖", fan: "扇" };
+const RESOURCE_EFFECT_NOTES: Record<string, string> = {
+  quill: "——消耗后本家族领袖改由存活成员中等级数字最大者担任",
+  shield: "——持有者不可被攻击，也不可被技能指定伤害",
+  sword: "——守护标记：守护者累计 3 点伤害时与盾一同归还",
+  staff: "——该玩家的身份标记全部变为问号",
+  fan: "——他人不能替持扇者干涉",
+};
+
 function Resources({ resources }: { resources: Record<string, number> }) {
   const held = Object.entries(resources).filter(([, count]) => count > 0);
   if (held.length === 0) return null;
   return (
     <div className="resources">
       {held.map(([name, count]) => (
-        <span key={name} title={displayResource(name)}>
-          {RESOURCE_ICONS[name] ? <Icon name={RESOURCE_ICONS[name]} /> : displayResource(name)}×{count}
+        <span key={name} className="resource-pill" title={`${displayResource(name)}${RESOURCE_EFFECT_NOTES[name] ?? ""}`}>
+          {RESOURCE_ICONS[name] ? <Icon name={RESOURCE_ICONS[name]} /> : null}
+          {RESOURCE_SHORT_LABELS[name] ?? displayResource(name)}
+          {count > 1 ? `×${count}` : ""}
         </span>
       ))}
     </div>
