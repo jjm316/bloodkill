@@ -23,3 +23,8 @@ client/dist/
 # inspect e2e local runtime state (room code/host token) and server log
 .scratch/e2e-inspect/state.json
 .scratch/e2e-inspect/server.log
+# browser e2e runtime artifacts (headless profiles regenerate on every run)
+.scratch/headless-profile/
+.scratch/headless-profile-cdp*/
+.scratch/browser-acceptance-environment/
+.scratch/e2e-inspect/verify/
