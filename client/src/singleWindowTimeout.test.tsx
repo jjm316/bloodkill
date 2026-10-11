@@ -13,6 +13,7 @@ function makePlayer(id: string, name: string, seat: number): PlayerView {
     displayName: name,
     damage: 0,
     captured: false,
+    holdsCurseCard: false,
     revealed: { markers: [null, null] },
     identityMarkers: [null, null],
     resources: {},

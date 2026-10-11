@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // 不引第三方图标库、无位图。造型源：mockups/icon-strip.html（2026-09-13 拍板）。
 // 玫瑰/野兽/未知标记维持"字 + 色块"现状，不走此组件（兼顾色弱辨识）。
 
-export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill" | "help" | "close" | "eye";
+export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill" | "help" | "close" | "eye" | "curseCard";
 
 const ICON_SHAPES: Record<IconName, ReactNode> = {
   dagger: (
@@ -87,6 +87,18 @@ const ICON_SHAPES: Record<IconName, ReactNode> = {
       stroke="none"
       d="M12 5C5.5 5 1.7 11.2 1.6 11.5a1 1 0 000 1C1.7 12.8 5.5 19 12 19s10.3-6.2 10.4-6.5a1 1 0 000-1C22.3 11.2 18.5 5 12 5zm0 11a4 4 0 110-8 4 4 0 010 8zm0-6a2 2 0 100 4 2 2 0 000-4z"
     />
+  ),
+  // 诅咒卡背（ADR 0014，spec seat-marker-visibility Part B）：暗置卡＝圆角
+  // 矩形卡身 + 封印纹（圈内十字）+ 卡脚横线；描边风格、currentColor，
+  // 随 .curse-pill 紫底白字着色。卡是暗置的：面上只有封印，没有真/假记号。
+  curseCard: (
+    <>
+      <rect x="5.5" y="2.5" width="13" height="19" rx="2" />
+      <circle cx="12" cy="10.5" r="3.4" strokeWidth={1.5} />
+      <line x1="12" y1="8.2" x2="12" y2="12.8" strokeWidth={1.5} />
+      <line x1="9.7" y1="10.5" x2="14.3" y2="10.5" strokeWidth={1.5} />
+      <line x1="9" y1="17.5" x2="15" y2="17.5" strokeWidth={1.5} />
+    </>
   ),
 };
 

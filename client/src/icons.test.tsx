@@ -6,10 +6,10 @@ import { Icon, type IconName } from "./icons";
 // 不逐个断言路径数据——造型以 mockups/icon-strip.html 参考稿为准。
 // help 徽记例外：它的几何即需求本身（居中/同轴不变量），故额外断言结构，见下方 describe。
 
-const NAMES: IconName[] = ["dagger", "shield", "sword", "staff", "fan", "lock", "quill", "help"];
+const NAMES: IconName[] = ["dagger", "shield", "sword", "staff", "fan", "lock", "quill", "help", "curseCard"];
 
 describe("内联 SVG 图标", () => {
-  it("8 个图标都渲染为 24 视窗的线性 svg，且对读屏隐藏", () => {
+  it("9 个图标都渲染为 24 视窗的线性 svg，且对读屏隐藏", () => {
     for (const name of NAMES) {
       const { container } = render(<Icon name={name} />);
       const svg = container.querySelector("svg");
@@ -57,5 +57,20 @@ describe("help 徽记图标", () => {
     const circles = container.querySelectorAll("circle");
     expect(circles[0]).toHaveAttribute("cx", "12");
     expect(circles[1]).toHaveAttribute("cx", "12");
+  });
+});
+
+// 诅咒卡背（ADR 0014）：暗置卡＝卡身矩形 + 封印纹；卡面不得出现真/假记号
+// （真假只有审判者知道，翻牌前不进任何图形语言）。
+describe("诅咒卡背图标", () => {
+  it("圆角卡身矩形与封印纹共存，且无文字元素", () => {
+    const { container } = render(<Icon name="curseCard" />);
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    const card = svg?.querySelector("rect");
+    expect(card, "卡身矩形").not.toBeNull();
+    expect(card).toHaveAttribute("rx", "2");
+    expect(svg?.querySelectorAll("circle").length).toBeGreaterThanOrEqual(1); // 封印环
+    expect(svg?.querySelector("text")).toBeNull();
   });
 });

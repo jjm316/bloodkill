@@ -39,11 +39,11 @@ describe("RulesOverlay 浮层", () => {
     expect(inquisitor.textContent).toContain("真诅咒");
   });
 
-  it("图例含 6 条道具条目与线索/徽记/真实阵营色/检视标记四条短注", () => {
+  it("图例含 7 条条目（五资源 + 匕首 + 诅咒卡）与线索/徽记/真实阵营色/检视标记四条短注", () => {
     const { container } = render(<RulesOverlay onClose={() => {}} />);
     const items = container.querySelectorAll("ul.legend-list > li.legend-row");
-    expect(items.length).toBe(6);
-    for (const name of ["匕首", "羽毛笔", "盾牌", "剑", "法杖", "扇子"]) {
+    expect(items.length).toBe(7);
+    for (const name of ["匕首", "羽毛笔", "盾牌", "剑", "法杖", "扇子", "诅咒卡"]) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     const notes = container.querySelectorAll("ul.clue-notes > li.clue-note");
@@ -121,6 +121,7 @@ function makePlayer(id: string, name: string, seat: number): PlayerView {
     displayName: name,
     damage: 0,
     captured: false,
+    holdsCurseCard: false,
     revealed: { markers: [null, null] },
     identityMarkers: [null, null],
     resources: {},

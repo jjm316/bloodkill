@@ -58,6 +58,7 @@ function makeState(): RoomState {
     displayName: "阿玫",
     damage: 0,
     captured: false,
+    holdsCurseCard: false,
     revealed: { markers: [null, null] },
     identityMarkers: [null, null],
     resources: {},

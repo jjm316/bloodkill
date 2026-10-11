@@ -30,6 +30,8 @@ export interface PlayerView {
   revealed: { rank?: number | string; markers: [string | null, string | null] };
   identityMarkers: [string | null, string | null];
   resources: Record<string, number>;
+  /** 是否持有诅咒卡（ADR 0014：归属公开，全员含旁观者可见） */
+  holdsCurseCard: boolean;
 }
 
 export interface ViewerView {
@@ -40,6 +42,8 @@ export interface ViewerView {
   skillsUsed: string[];
   inspections: Record<string, { faction: string | null; rank: number | string | null }>;
   cursesToDistribute: string[];
+  /** 诅咒真/假归属（ADR 0014）：仅审判者视角存在此字段（其他视角无此键），投影驱动、重连不丢；分发前为空对象 */
+  curseAssignments?: Record<string, string>;
   clueIcon: string | null;
   seenNeighbourClue: { playerId: string; icon: string | null } | null;
 }
@@ -71,6 +75,8 @@ export interface GameResult {
   activePlayerId: string | null;
   ranking: { playerId: string; place: number; score: number }[];
   explanationKey: string;
+  /** 终局翻开的诅咒归属（ADR 0014：GameEnded 全员翻牌）；未分发/放弃为空对象 */
+  curseAssignments: Record<string, string>;
 }
 
 export interface GameState {

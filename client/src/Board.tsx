@@ -4,7 +4,7 @@ import { InterventionSummary } from "./intervention";
 import type { MemoApi, MemoColor, MemoEntry, MemoMark, MemoPatch } from "./memoMarkers";
 import { memoColorOf } from "./memoMarkers";
 import { seatPosition, seatTier, tableShape, type SeatTier } from "./tableSeats";
-import type { Action, GameState, Identity, PendingView, PlayerView } from "./types";
+import type { Action, GameState, Identity, PendingView, PlayerView, ViewerView } from "./types";
 import { displayClueIcon, displayFaction, displayRank, displayResource } from "./types";
 
 // The shared projection component: the live game and the replay render the
@@ -14,6 +14,23 @@ function nameOf(players: PlayerView[], playerId: string | null | undefined): str
   const player = players.find((p) => p.playerId === playerId);
   return player ? player.displayName : "?";
 }
+
+// 诅咒药丸标签解析（ADR 0014，spec seat-marker-visibility Part B）：返回
+// "true" / "false" / null（null＝保持暗置只显「咒」）。归属来源二选一：
+// 终局翻牌优先（result.curseAssignments，GameEnded 载荷全员可见，未分发为空
+// 对象时不生效）；其余对局查 viewer.curseAssignments（仅审判者视角携带此字段，
+// 投影驱动、重连不丢）。收件人＝该玩家且 curseId 以 "true-curse" 开头判真咒，
+// 否则假咒。
+function curseRevealOf(player: PlayerView, viewer: ViewerView | null, result: GameState["result"], ended: boolean): "true" | "false" | null {
+  // ?? {} 兜底旧存档回放：ruleset 0.7 之前的终局 result 没有 curseAssignments 键
+  const endedAssignments = ended && result ? result.curseAssignments ?? {} : {};
+  const assignments = endedAssignments && Object.keys(endedAssignments).length > 0 ? endedAssignments : viewer?.curseAssignments ?? {};
+  const entry = Object.entries(assignments).find(([, recipient]) => recipient === player.playerId);
+  if (!entry) return null;
+  return entry[0].startsWith("true-curse") ? "true" : "false";
+}
+
+const curseLabel = (reveal: "true" | "false" | null) => (reveal === "true" ? "真咒" : reveal === "false" ? "假咒" : "咒");
 
 // 浮层通用关闭：Escape、尺寸或滚动变化（fixed 定位的浮层会脱离锚点）；点 backdrop 由调用方自备
 function useDismissOverlay(active: boolean, close: () => void) {
@@ -54,9 +71,9 @@ const RESOURCE_EFFECT_NOTES: Record<string, string> = {
   fan: "——他人不能替持扇者干涉",
 };
 
-function Resources({ resources }: { resources: Record<string, number> }) {
+function Resources({ resources, children }: { resources: Record<string, number>; children?: React.ReactNode }) {
   const held = Object.entries(resources).filter(([, count]) => count > 0);
-  if (held.length === 0) return null;
+  if (held.length === 0 && !children) return null;
   return (
     <div className="resources">
       {held.map(([name, count]) => (
@@ -66,6 +83,7 @@ function Resources({ resources }: { resources: Record<string, number> }) {
           {count > 1 ? `×${count}` : ""}
         </span>
       ))}
+      {children}
     </div>
   );
 }
@@ -268,6 +286,7 @@ const Seat = memo(function Seat({
   onSlotAction,
   memoBadge,
   factBadge,
+  curseReveal,
   style,
 }: {
   player: PlayerView;
@@ -284,6 +303,8 @@ const Seat = memo(function Seat({
   memoBadge?: SeatMemo;
   /** 检视事实角标（ADR 0013）：不传 = 不渲染（自己座位 / 无检视数据） */
   factBadge?: SeatFact;
+  /** 诅咒药丸翻牌态（ADR 0014）："true"/"false"＝显「真咒/假咒」，null/省略＝暗置「咒」 */
+  curseReveal?: "true" | "false" | null;
   /** 圆桌坐标（容器百分比）：以 CSS 变量注入，仅 ≥720px 圆桌分支的 CSS 消费
    * （left: var(--seat-x)）；窄屏网格分支不消费变量，避免 relative 定位下
    * 百分比 left/top 变成从网格单元格平移的偏移量 */
@@ -334,7 +355,17 @@ const Seat = memo(function Seat({
       )}
       {identity && clueLine && <div className="own-clue-icon">{clueLine}</div>}
       <ClueSlots player={player} selfMarkers={selfMarkers} selfRank={identity?.rank} highlight={highlight} selfActions={selfActions} onSlotAction={onSlotAction} />
-      <Resources resources={player.resources} />
+      {/* 诅咒药丸（ADR 0014）：谁持卡全员可见，故随 player 渲染（含旁观/回放）；
+          持卡者被捕获后药丸仍显示（随 .seat.captured 整卡半透明）。
+          标签三分支由 curseRevealOf 解析：默认「咒」，审判者/终局翻「真咒/假咒」。 */}
+      <Resources resources={player.resources}>
+        {player.holdsCurseCard && (
+          <span className="curse-pill" title="暗置诅咒卡：真/假仅审判者可知；终局全员翻开">
+            <Icon name="curseCard" />
+            {curseLabel(curseReveal ?? null)}
+          </span>
+        )}
+      </Resources>
       {/* 检视事实角标（ADR 0013）：小丑技能产出，常驻备忘角标左侧（right:22），
           有无备忘不跳动。只读 span——事实绝不写入/覆盖/清除备忘（ADR 0004：
           备忘=猜测的不变量），眼睛角点是「看过」的区分记号（原型变体 A 拍板） */}
@@ -444,15 +475,37 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
   return null;
 }
 
+// 诅咒归属行（ADR 0014）：终局 GameEnded 载荷带完整归属（未分发/放弃为空对象）。
+// 排在胜负判词上方；true-curse 触发独赢时（engine branch inquisitor-true-curse）
+// 措辞点明家族胜利被覆盖。归属视图与回放终局共用（同走 ResultBanner）。
+function curseAttributionOf(result: NonNullable<GameState["result"]>, players: PlayerView[]): string | null {
+  // ?? {} 兜底旧存档回放：ruleset 0.7 之前的终局 result 没有 curseAssignments 键
+  const entries = Object.entries(result.curseAssignments ?? {});
+  if (entries.length === 0) return null;
+  const holderOf = (prefix: string) => {
+    const entry = entries.find(([curseId]) => curseId.startsWith(prefix));
+    return entry ? nameOf(players, entry[1]) : null;
+  };
+  const truth = holderOf("true-curse");
+  const lie = holderOf("false-curse");
+  const stole = result.explanationKey === "game.end.inquisitor-true-curse";
+  const truthPart = truth ? (stole ? `真诅咒在 ${truth}（胜方领袖）→ 审判者独赢，家族胜利被覆盖` : `真诅咒在 ${truth}`) : null;
+  if (truthPart && lie) return `${truthPart}；假诅咒在 ${lie}`;
+  return truthPart ?? (lie ? `假诅咒在 ${lie}` : null);
+}
+
 function ResultBanner({ result, players }: { result: NonNullable<GameState["result"]>; players: PlayerView[] }) {
   const explanation = ({
     "game.end.captured-leader": "敌方领袖被捕获",
     "game.end.captured-player": "普通玩家被捕获",
     "game.end.inquisitor-captured": "审判者被捕获",
     "game.end.inquisitor-active-capture": "审判者主动捕获目标",
+    "game.end.inquisitor-true-curse": "胜方领袖持有真诅咒",
   } as Record<string, string>)[result.explanationKey] ?? "规则结算";
+  const attribution = curseAttributionOf(result, players);
   return (
     <div className="result">
+      {attribution && <p className="curse-attribution">{attribution}</p>}
       <strong>对局结束，{displayFaction(result.winner)}获胜</strong>（{explanation}）
       {result.ranking.length > 0 && (
         <ol className="ranking">
@@ -536,6 +589,7 @@ export function Board({ game, onSlotAction, memos }: { game: GameState; onSlotAc
                     : undefined
                 }
                 factBadge={!isSelf ? viewer?.inspections?.[player.playerId] : undefined}
+                curseReveal={player.holdsCurseCard ? curseRevealOf(player, viewer, game.result, game.status === "ended") : null}
               />
             );
           })}

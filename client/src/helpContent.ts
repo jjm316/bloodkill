@@ -138,8 +138,8 @@ export interface HelpLegendItem {
   effect: string;
 }
 
-// 道具图例六条：名称与对局内资源显示名（displayResource）统一，
-// 玩家把图标、名字、效果对上号，不制造第二套名字。
+// 图例七条：匕首 + 五资源 + 诅咒卡（ADR 0014）。资源名称与对局内资源显示名
+// （displayResource）统一，玩家把图标、名字、效果对上号，不制造第二套名字。
 export const HELP_LEGEND_ITEMS: HelpLegendItem[] = [
   {
     icon: "dagger",
@@ -171,6 +171,12 @@ export const HELP_LEGEND_ITEMS: HelpLegendItem[] = [
     icon: "fan",
     name: "扇子",
     effect: "持有扇子的玩家被攻击时，无人可为其挡刀——干涉表决直接跳过，攻击立即结算。",
+  },
+  {
+    icon: "curseCard",
+    name: "诅咒卡",
+    effect:
+      "审判者发动技能后把真、假两张诅咒卡暗置分给两名玩家：持卡者座位上出现紫色「咒」药丸（谁持卡全员可见）。真/假之分对局中仅审判者可知，终局全员翻开——若胜方领袖持有真诅咒，审判者夺取胜利独赢，假诅咒无任何效果。",
   },
 ];
 

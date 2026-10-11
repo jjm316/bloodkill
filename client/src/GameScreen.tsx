@@ -47,7 +47,8 @@ function HarlequinInspectUse({ actions, players, send }: { actions: Action[]; pl
   </div>;
 }
 // 审判者诅咒技能的两步发动（issue 01 / ADR 0003）：动作区先只有一个发动按钮，
-// 点开才展开带真假标注的选择器，提交前弹确认框说明不可逆与保密性。
+// 点开才展开带真假标注的选择器，提交前弹确认框说明不可逆与可见性
+// （ADR 0014：持卡归属全员公开，真/假之分仅审判者可知、终局翻开）。
 function CurseSkillUse({ game, send }: { game: GameState; send: (c: string, p?: Record<string, unknown>) => void }) {
   const curses = game.viewer?.cursesToDistribute ?? [];
   const self = game.viewer?.playerId;
@@ -63,7 +64,7 @@ function CurseSkillUse({ game, send }: { game: GameState; send: (c: string, p?: 
       {curses.map((id) => <label key={id} className="field" htmlFor={`curse-${id}`}>{curseLabel(id)}<select id={`curse-${id}`} value={picks[id] ?? ""} onChange={(e) => setPicks({ ...picks, [id]: e.target.value })}><option value="">请选择</option>{recipients.map((p) => <option key={p.playerId} value={p.playerId}>{p.displayName}</option>)}</select></label>)}
       <button className="curse-confirm" disabled={!ready} onClick={() => setConfirming(true)}>分发</button>
     </div>}
-    {confirming && <ConfirmDialog title="确认分发诅咒牌" body="分发后不可更改，归属对其他玩家永远保密。" confirmText="确认分发" cancelText="取消" onConfirm={() => { send("choose-skill", { use: true, assignments: picks }); setConfirming(false); }} onCancel={() => setConfirming(false)} />}
+    {confirming && <ConfirmDialog title="确认分发诅咒牌" body="分发后不可更改；持卡归属对全员公开（座位上出现紫色「咒」药丸），真/假之分仅你可知，终局全员翻开。" confirmText="确认分发" cancelText="取消" onConfirm={() => { send("choose-skill", { use: true, assignments: picks }); setConfirming(false); }} onCancel={() => setConfirming(false)} />}
   </div>;
 }
 function ActionsPanel({ game, intervention, hostActions, send, sendHost }: { game: GameState; intervention: ReturnType<typeof useIntervention>; hostActions: Action[]; send: (c: string, p?: Record<string, unknown>) => void; sendHost: (a: string, p?: Record<string, unknown>) => void }) {

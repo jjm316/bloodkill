@@ -68,13 +68,23 @@ describe("helpContent 等级技能表数据", () => {
 });
 
 describe("helpContent 图例与简介数据", () => {
-  it("道具图例六条：匕首 + 五资源，资源名称与对局显示名统一", () => {
-    expect(HELP_LEGEND_ITEMS.map((i) => i.icon)).toEqual(["dagger", "quill", "shield", "sword", "staff", "fan"]);
+  it("图例七条：匕首 + 五资源 + 诅咒卡（ADR 0014），资源名称与对局显示名统一", () => {
+    expect(HELP_LEGEND_ITEMS.map((i) => i.icon)).toEqual(["dagger", "quill", "shield", "sword", "staff", "fan", "curseCard"]);
     expect(HELP_LEGEND_ITEMS[0].name).toBe("匕首");
-    for (const item of HELP_LEGEND_ITEMS.slice(1)) {
+    for (const item of HELP_LEGEND_ITEMS.slice(1, 6)) {
       expect(item.name).toBe(displayResource(item.icon));
       expect(item.effect.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  it("诅咒卡图例条目（ADR 0014）：紫药丸＝暗置诅咒卡，归属公开、真假仅审判者可知、终局翻开", () => {
+    const curse = HELP_LEGEND_ITEMS.find((i) => i.icon === "curseCard");
+    expect(curse?.name).toBe("诅咒卡");
+    expect(curse?.effect).toContain("「咒」");
+    expect(curse?.effect).toContain("全员可见");
+    expect(curse?.effect).toContain("仅审判者可知");
+    expect(curse?.effect).toContain("终局全员翻开");
+    expect(curse?.effect).toContain("独赢");
   });
 
   it("线索、徽记、真实阵营色与检视标记各压成一条短注", () => {

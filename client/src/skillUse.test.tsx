@@ -15,6 +15,7 @@ function makePlayer(id: string, seat: number): PlayerView {
     displayName: `玩家${seat}`,
     damage: 0,
     captured: false,
+    holdsCurseCard: false,
     revealed: { rank: undefined, markers: [null, null] },
     identityMarkers: [null, null],
     resources: {},

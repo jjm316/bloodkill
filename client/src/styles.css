@@ -695,6 +695,30 @@ h2 {
   color: var(--gold-text);
 }
 
+/* 诅咒药丸（ADR 0014，spec seat-marker-visibility Part B）：持卡者的暗置卡徽章，
+   紫底白字——审判者紫系 --order-bg（同真实阵营色徽/检视标记的语言），尺寸同金色
+   药丸；对局中只显「咒」，审判者设备与终局翻牌后显「真咒/假咒」。持卡者被捕获
+   时随 .seat.captured 整卡半透明，药丸不单独隐藏。 */
+.curse-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: var(--order-bg);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.curse-pill svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* 待办横幅：桌面端渲染在椭圆桌正中（见圆桌媒体查询），人名衬线金字 */
 .pending {
   border: 1px solid var(--accent-gold);
@@ -717,6 +741,15 @@ h2 {
 
 .result strong {
   font-family: var(--font-display);
+}
+
+/* 诅咒归属行（ADR 0014）：终局翻开真/假归属，列于胜负判词上方；
+   字色用提亮紫（--order-bg 对卡底仅 3.9:1，不够 13px 正文 4.5:1；
+   #b9a0e6 对 --card ≈ 7.4:1），呼应座位上的诅咒药丸 */
+.curse-attribution {
+  margin: 0 0 4px;
+  color: #b9a0e6;
+  font-size: 13px;
 }
 
 .ranking {
@@ -1292,7 +1325,8 @@ h2 {
   }
 
   /* 压缩档联动：药丸字号再收一档（对齐同档 .slot 11px），保住 xl 满员桌不溢出 */
-  .table-area.size-xl .resource-pill {
+  .table-area.size-xl .resource-pill,
+  .table-area.size-xl .curse-pill {
     font-size: 11px;
   }
 }
