@@ -1,6 +1,6 @@
 # 座位卡标记可见性：资源行徽章化 + 诅咒卡归属公开
 
-Status: ready-for-agent
+Status: resolved
 
 来源：2026-10-11 grill-with-docs 主会话（Q1–Q9 全部拍板）＋同日侧聊 Q4 三案原型对比（方案 A 胜出，交接稿内容已全部吸收进本 spec，Temp 下交接文件可弃）。规则依据：`.scratch/blood-oath-replica/rules-corpus-user-extract.md`「产品方裁决（2026-10-11）」＋ `docs/adr/0014-curse-card-visibility.md`。
 
@@ -82,3 +82,4 @@ Status: ready-for-agent
 ## Comments
 
 - 2026-10-11：grill-with-docs 两轮（Q1–Q4、Q5–Q9）全部拍板后发布；Q4 细节吸收自侧聊交接稿（原型三案对比，方案 A 胜出）；Q2 为规则级产品方裁决，语料与 ADR 0014 同日落盘。
+- 2026-10-11（协调者）：三票全部落地销案，集成于 `spec/seat-marker-visibility`（ee7bc9cd…fccdcc4）并 ff 落 master。提交链：底座 e7bc9cd → 01 ac9b3be → 02 e981c2d（golden 重生成＋B9 golden 分支锁随 bump 落地，绊线实测）→ 03 b21aaa2 → 评审修复 1b711da/b25bde6（真假解析归一 curseReveal.ts、日志文案双层断言）→ 窄档折行修复 0aa5c19 → e2e 适配 fccdcc4。门禁：后端 260、前端 193、check.py 全绿。真机验收 9/9（7 人审判者局房间实拍＋10 人局双档实测）：旁观紫咒/审判者真假/重连投影恢复/日志无泄漏/终局翻牌＋归属行在判词上方/回放一致全部 PASS；截图与测量证据在 `prototypes/seat-marker-visibility/`（visual-verifier 终判 14/14 PASS）。实施期拍板记录：①「盾＋剑×2＋笔」组合真实引擎不可达（笔即得即耗），验收以真实可达的「盾×2＋剑＋杖」等价替代；② xl 档药丸 11px、五句资源 title 按图例缩写（01 票 Comments）；③ ViewerView.curseAssignments 可选、GameScreen 确认框文案修正、inquisitor-true-curse 判词中文名（03 票 Comments）；④ 窄档（144px 座位）药丸压缩联动 11px/padding 1px 4px/gap 1px（修复 0aa5c19，120px 档物理放不下维持 wrap 兜底属既有几何限制）；⑤ 捕获态药丸对比度 P2 建议未采纳（visual-verifier 终判注明非必须）。
