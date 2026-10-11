@@ -55,7 +55,7 @@ class Client:
 
         info = load()
         self.ws = connect(f"{WS}/ws/{info['code']}", open_timeout=10)
-        hello = {"type": "hello", "name": name, "protocolVersion": "2"}
+        hello = {"type": "hello", "name": name, "protocolVersion": "3"}
         if token:
             hello["token"] = token
         self.ws.send(json.dumps(hello))
@@ -79,15 +79,31 @@ class Client:
         viewer = game.get("viewer")
         if viewer is not None and viewer.get("cursesToDistribute"):
             raise Leak(f"{self.name} 看到 cursesToDistribute={viewer['cursesToDistribute']}")
+        # ADR 0014（ruleset 0.7）：真/假归属只进审判者 viewer 与终局 result；
+        # 其他玩家 viewer 块不得出现 curseAssignments。
+        if viewer is not None and viewer.get("curseAssignments"):
+            raise Leak(f"{self.name} 看到 curseAssignments={viewer['curseAssignments']}")
+        if game.get("status") != "ended" and not any(
+            str(e.get("eventType", "")) == "GameEnded"
+            for e in list(message.get("events") or []) + self.events
+        ):
+            # 终局翻开真假是设计内行为（GameEnded 起全员可见归属）；
+            # 对局中任何载荷不得出现真假 curseId。
+            blob = json.dumps(message, ensure_ascii=False)
+            if "true-curse" in blob or "false-curse" in blob:
+                raise Leak(f"{self.name} 对局中看到真假字样：{blob[:200]}")
         for action in game.get("legalActions") or []:
             if action.get("type") == "distribute-curse":
                 raise Leak(f"{self.name} 看到 distribute-curse 动作")
-        for event in message.get("events") or []:
-            if str(event.get("eventType", "")).startswith("Curse"):
-                raise Leak(f"{self.name} 收到私密事件 {event.get('eventType')}")
-        for event in self.events:
-            if str(event.get("eventType", "")).startswith("Curse"):
-                raise Leak(f"{self.name} 曾收到私密事件 {event.get('eventType')}")
+        for event in list(message.get("events") or []) + self.events:
+            event_type = str(event.get("eventType", ""))
+            payload = event.get("payload") or {}
+            if event_type == "CurseDistributed":
+                # 0.7：归属公开广播，但载荷只允许收件人一个字段。
+                if set(payload) != {"recipientPlayerId"}:
+                    raise Leak(f"CurseDistributed 载荷越界：{payload}")
+            elif event_type.startswith("Curse"):
+                raise Leak(f"{self.name} 收到私密事件 {event_type}")
 
     def _drain(self):
         import threading
@@ -221,6 +237,14 @@ def advance(client, *, stop_at_curse_window=True):
         kind = pending["kind"]
         actor = next(p["displayName"] for p in client.state["game"]["players"] if p["playerId"] == pending["actorPlayerId"])
         if kind == "intervention":
+            if pending.get("stage") == "gate":
+                # 协议 v3（ADR 0012）：先由被攻击者本人答挡刀请求门控；
+                # 场景一律「自己承受」，攻击随即在原目标结算。
+                target = next(p["displayName"] for p in client.state["game"]["players"] if p["playerId"] == pending["actorPlayerId"])
+                answerer = Client(target)
+                answerer.send("answer-intervention-request", {"need": False})
+                client = answerer
+                continue
             client = answer_poll(client)
         elif kind == "reveal":
             client = resolve_reveal(client)
