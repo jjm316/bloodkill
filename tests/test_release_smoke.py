@@ -71,7 +71,14 @@ class ReleaseSmokeTests(unittest.TestCase):
 
     @staticmethod
     def stop_server(server):
-        server.terminate()
+        if os.name == "nt":
+            # Windows 虚拟环境解释器可能启动子进程；整棵树退出后日志句柄才会释放。
+            subprocess.run(
+                ["taskkill", "/PID", str(server.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+            )
+        else:
+            server.terminate()
         try:
             server.wait(timeout=5)
         except subprocess.TimeoutExpired:
@@ -202,6 +209,21 @@ class ReleaseFailureTests(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(SERVER_AVAILABLE, "requires server/requirements.txt")
 class ReplayValidationTests(unittest.TestCase):
+    def test_identity_is_allowed_only_in_ended_player_entries(self):
+        player = {"playerId": "p1", "identityMarkers": [None, None]}
+        active = {"gameId": "game", "revision": 4, "status": "active", "result": None, "viewer": None, "legalActions": [], "players": [player]}
+        final = {**active, "revision": 5, "status": "ended", "result": {"winner": "rose"}, "players": [{**player, "identity": {"faction": "rose", "rank": 3}}]}
+        validate_replay({"gameId": "game", "steps": [active, final]}, final)
+        bad_steps = [
+            {**active, "players": final["players"]},
+            {**final, "revision": 4, "identity": {"faction": "rose", "rank": 3}},
+            {**final, "revision": 4, "players": [{**player, "identity": {"faction": "rose", "rank": 3, "seed": "private"}}]},
+            {**final, "revision": 4, "players": [{**player, "identity": {"faction": "secret-order", "rank": 1}}]},
+        ]
+        for step in bad_steps:
+            with self.subTest(step=step), self.assertRaises(SmokeFailure):
+                validate_replay({"gameId": "game", "steps": [step, final]}, final)
+
     def test_empty_mismatched_and_private_replays_are_rejected(self):
         final = {"gameId": "game", "revision": 5, "status": "ended", "result": {"winner": "rose"}, "viewer": None, "legalActions": [], "players": [{"playerId": "p1", "identityMarkers": [None, None]}]}
         public = {**final, "revision": 4, "status": "active", "result": None}

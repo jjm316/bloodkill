@@ -1,12 +1,18 @@
 # Blood Bound 网页协议（PROTOCOL）
 
 服务器（FastAPI/uvicorn）是权威节点：全部规则由 `blood_bound` 引擎裁决，浏览器只收到
-**按连接投影后**的状态。任何玩家的身份（阵营/位阶）、诅咒真/假之分与私密事件都不会
+**按连接投影后**的状态。对局进行中，其他玩家的身份（阵营/位阶）、诅咒真/假之分与私密事件都不会
 下发到其他浏览器（ADR 0014：诅咒卡的归属例外——谁持卡是公开对局事实，经
 `CurseDistributed` 广播与 `players[].holdsCurseCard` 下发，真/假仅审判者可见、终局翻开）；
 随机种子也永不进入投影。开局徽记按规则只对本人和其右邻可见：`viewer`
 块带本人 `clueIcon` 与右邻徽记 `seenNeighbourClue`，公共 `players[]` 条目不含任何
 徽记字段。房主只有管理权（开始/锁定房间），不能替其他玩家操作。
+
+终局身份揭晓（ADR 0015）：仅 `status="ended"` 的公共 `players[]` 增加
+`identity: {"faction": "rose|beast|secret-order", "rank": 1..9|"fleur-cross"}`。
+玩家、旁观者、刷新与重连、回放末帧都能读取全员真实身份；进行中和回放此前各帧不带
+此字段。个人胜负读取 `result.ranking[].score`（1 胜、0 负），`place` 是排序序号，
+不是角色等级。新增字段不改变存档或胜负规则。
 
 协议版本：当前 v3（2026-10-04，ADR 0012）。v2 → v3 硬切：干涉投票前新增被攻击者
 挡刀请求门控（`answer-intervention-request` 命令、`InterventionGate*` 三个事件、
@@ -223,7 +229,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 ### 隐私保证（服务器强制，客户端无法绕过）
 
-- `viewer.identity` 只出现在投影接收者自己的 `viewer` 块里；其他玩家的 `players[]` 项**不含**阵营/位阶。
+- `viewer.identity` 只出现在投影接收者自己的 `viewer` 块里；`setup` / `active` 状态的公共 `players[]` **不含**真实阵营/位阶。仅 `ended` 状态通过 `players[].identity` 全员公开真实身份（ADR 0015），旁观者与回放末帧同样可见。
 - `revealed` 只在身份被公开（受伤/被捕获）后出现。
 - 投影**不含**随机种子 `seed`（知道种子即可用 `random.Random(seed)` 重现全部身份分配）。
 - 阵营徽记按规则只向左邻展示：徽记只出现在被展示者的 `viewer` 块里（本人 `clueIcon` + 右邻 `seenNeighbourClue`）；`players[]` 条目、旁观者投影与回放步骤均**不含**任何徽记字段。

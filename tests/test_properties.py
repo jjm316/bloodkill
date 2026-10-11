@@ -278,6 +278,11 @@ class ProjectionSecrecyPropertyTests(unittest.TestCase):
                         # the seed string itself never appears anywhere in the view
                         self.assertNotIn(state.seed, json.dumps(view, sort_keys=True))
                         for entry in view["players"]:
+                            if state.status == "ended":
+                                actual = state.players[entry["playerId"]]
+                                self.assertEqual(entry["identity"], {"faction": actual.faction, "rank": actual.rank})
+                            else:
+                                self.assertNotIn("identity", entry)
                             for private_key in ("faction", "rank", "clueIcon"):
                                 self.assertNotIn(private_key, entry)
                             self.assertTrue(set(entry.get("revealed", {})) <= {"rank", "markers"})

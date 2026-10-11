@@ -40,6 +40,72 @@
   --font-display: "Noto Serif SC", "Source Han Serif SC", STZhongsong, KaiTi, serif;
 }
 
+/* 终局结算：宽屏两家族对照，审判者独立横条；窄屏纵向排列。 */
+.result .result-open { margin-left: 12px; width: auto; }
+.endgame-overlay { padding: 20px; z-index: 60; }
+.endgame-modal {
+  width: min(860px, 100%);
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.endgame-head { padding: 24px 26px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.endgame-eyebrow { margin: 0 0 10px; color: var(--muted); font-size: 12px; letter-spacing: 3px; }
+.endgame-head h2 { margin: 0; font-size: 26px; font-family: var(--font-display); color: var(--gold-text); overflow-wrap: anywhere; }
+.endgame-personal { margin: 10px 0 0; color: var(--muted); }
+.endgame-modal .won { color: var(--gold-text); }
+.endgame-body { padding: 18px 26px; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.endgame-explanation { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+.endgame-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.endgame-group { border: 1px solid var(--border); border-radius: 10px; min-width: 0; overflow: hidden; }
+.endgame-group.rose { --faction-color: var(--rose-border); }
+.endgame-group.beast { --faction-color: var(--beast-border); }
+.endgame-group.order { --faction-color: var(--order-bg); grid-column: 1 / -1; }
+.endgame-group.unknown { --faction-color: var(--muted); grid-column: 1 / -1; }
+.endgame-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 13px 16px; background: var(--card-hover); }
+.endgame-group-head h3 { margin: 0; font-size: 16px; color: color-mix(in srgb, var(--faction-color), var(--text) 40%); }
+.endgame-group-head > span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.endgame-color { display: inline-block; width: 11px; height: 11px; margin-right: 8px; border-radius: 50%; background: var(--faction-color); }
+.endgame-roster { list-style: none; margin: 0; padding: 0; }
+.endgame-roster li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; border-top: 1px solid var(--border); }
+.endgame-player { min-width: 0; flex: 1; }
+.endgame-name { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.endgame-you { flex-shrink: 0; display: inline-block; padding: 1px 5px; border: 1px solid var(--gold-text); border-radius: 4px; color: var(--gold-text); font-size: 11px; }
+.endgame-identity { margin-top: 5px; color: var(--muted); font-size: 12px; }
+.endgame-identity > span { color: color-mix(in srgb, var(--faction-color), var(--text) 40%); }
+.endgame-verdict { flex-shrink: 0; font-size: 12px; color: var(--muted); }
+.endgame-verdict.won { padding: 4px 7px; border: 1px solid var(--gold-text); border-radius: 5px; background: var(--gold-dim-bg); }
+.endgame-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 26px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.endgame-footer > span { color: var(--muted); font-size: 12px; }
+.endgame-footer button { min-height: 44px; width: auto; flex-shrink: 0; border-color: var(--gold-text); }
+
+@media (max-width: 600px) {
+  .endgame-overlay { padding: 10px; }
+  .endgame-modal { max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); border-radius: 12px; }
+  .endgame-head { padding: 18px 16px 14px; }
+  .endgame-head h2 { font-size: 22px; }
+  .endgame-body { padding: 14px 16px; }
+  .endgame-groups { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .endgame-group-head, .endgame-roster li { padding: 12px; }
+  .endgame-footer { padding: 12px 16px; }
+}
+@media (max-height: 450px) {
+  .endgame-overlay { padding: 8px; }
+  .endgame-modal { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+  .endgame-head { padding: 10px 16px; }
+  .endgame-eyebrow { display: none; }
+  .endgame-head h2 { font-size: 20px; }
+  .endgame-personal { margin-top: 4px; }
+  .endgame-body { padding: 12px 16px; }
+  .endgame-footer { padding: 8px 16px; }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -258,7 +324,26 @@ h2 {
 
 .seat-name {
   font-weight: 600;
-  word-break: break-word;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.marquee-name { display: block; min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; }
+.marquee-name-text { display: inline-block; white-space: nowrap; }
+.marquee-name.is-overflowing .marquee-name-text { animation: nickname-pan var(--marquee-duration) linear infinite alternate; }
+.marquee-name:hover .marquee-name-text { animation-play-state: paused; }
+.marquee-name:focus { overflow-x: auto; scrollbar-width: none; }
+.marquee-name:focus::-webkit-scrollbar { display: none; }
+.marquee-name:focus .marquee-name-text { animation: none; transform: none; }
+@keyframes nickname-pan {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(calc(-1 * var(--marquee-distance))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-name.is-overflowing { overflow-x: auto; scrollbar-width: none; }
+  .marquee-name.is-overflowing::-webkit-scrollbar { display: none; }
+  .marquee-name.is-overflowing .marquee-name-text { animation: none !important; transform: none; }
 }
 
 .dagger-icon {
@@ -266,6 +351,7 @@ h2 {
   color: var(--accent-gold);
   display: inline-flex;
   vertical-align: -2px;
+  flex-shrink: 0;
 }
 
 .dagger-icon svg { width: 14px; height: 14px; }
@@ -1286,11 +1372,10 @@ h2 {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   }
 
-  /* 桌面端姓名单行省略：卡片高度可控是圆桌不重叠的前提 */
+  /* 姓名始终单行，溢出由 MarqueeName 在自身可视区内滚动。 */
   .table-area .seat-name {
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .table-area .dagger-icon svg { width: 15px; height: 15px; }

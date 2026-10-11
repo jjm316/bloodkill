@@ -32,6 +32,8 @@ export interface PlayerView {
   resources: Record<string, number>;
   /** 是否持有诅咒卡（ADR 0014：归属公开，全员含旁观者可见） */
   holdsCurseCard: boolean;
+  /** 仅终局公开真实身份；进行中没有此字段，旧回放可能缺失。 */
+  identity?: Identity;
 }
 
 export interface ViewerView {

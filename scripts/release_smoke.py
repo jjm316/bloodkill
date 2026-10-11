@@ -183,9 +183,23 @@ def validate_replay(replay: dict, final: dict) -> None:
         require(step["revision"] > revision, "回放修订号未递增")
         revision = step["revision"]
         require(step.get("viewer") is None and step.get("legalActions") == [], "回放不是旁观者投影")
+        public_players = []
         for player in step["players"]:
             require("rank" not in player and "faction" not in player and player.get("identityMarkers") == [None, None], "回放泄露未公开的玩家身份或标记")
-        check_private_fields(step)
+            if "identity" in player:
+                # ADR 0015 的例外只允许结束帧 players[].identity；其他路径
+                # 和进行中的帧仍经过原有递归保密检查。
+                identity = player["identity"]
+                require(step["status"] == "ended" and isinstance(identity, dict), "回放提前揭晓身份")
+                require(set(identity) == {"faction", "rank"}, "终局身份包含额外字段")
+                faction, rank = identity["faction"], identity["rank"]
+                require(
+                    (faction in {"rose", "beast"} and type(rank) is int and 1 <= rank <= 9)
+                    or (faction == "secret-order" and rank == "fleur-cross"),
+                    "终局身份不合法",
+                )
+            public_players.append({key: value for key, value in player.items() if key != "identity"})
+        check_private_fields({**step, "players": public_players})
 
 
 def check_private_fields(value) -> None:

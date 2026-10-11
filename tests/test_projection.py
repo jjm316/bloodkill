@@ -52,6 +52,7 @@ class ProjectionTests(unittest.TestCase):
         self.assertNotIn("clueIcon", view)
         self.assertNotIn("seenNeighbourClue", view)
         for player in view["players"]:
+            self.assertNotIn("identity", player)
             self.assertNotIn("faction", player)
             self.assertNotIn("rank", player)
             self.assertNotIn("clueIcon", player)
@@ -107,8 +108,31 @@ class ProjectionTests(unittest.TestCase):
         self.assertIn("rank", view["viewer"]["identity"])
         # no other player's identity leaks through the public player list
         for player in view["players"]:
+            self.assertNotIn("identity", player)
             self.assertNotIn("faction", player)
             self.assertNotIn("rank", player)
+
+    def test_ended_identity_reveal_is_public_and_does_not_leak_into_earlier_views(self):
+        engine = self.started(7)
+        before = project_state(engine.state)
+        attacker = next(p for p in engine.state.players.values() if p.faction == "rose")
+        target = min((p for p in engine.state.players.values() if p.faction == "beast"), key=lambda p: p.rank)
+        engine.state.dagger_holder_id = attacker.player_id
+        target.damage = 3
+        target.revealed = {"rank", "marker-0", "marker-1"}
+        engine.apply(command(engine, "final-attack", attacker.player_id, "attack", targetPlayerId=target.player_id))
+        if engine.state.pending:
+            engine.apply(command(engine, "decline-gate", target.player_id, "answer-intervention-request", need=False))
+        self.assertEqual(engine.state.status, "ended")
+        for viewer in [None, *engine.state.players]:
+            view = project_state(engine.state, viewer)
+            self.assertNotIn("seed", view)
+            self.assertEqual(view["legalActions"], [])
+            for player in view["players"]:
+                actual = engine.state.players[player["playerId"]]
+                self.assertEqual(player["identity"], {"faction": actual.faction, "rank": actual.rank})
+        for player in before["players"]:
+            self.assertNotIn("identity", player)
 
     def test_revealed_clues_appear_only_after_damage(self):
         engine = self.started()

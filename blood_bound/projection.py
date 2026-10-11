@@ -2,12 +2,13 @@
 
 The engine holds every hidden fact (identity, ranks, un-revealed tokens, curse
 assignments). A projection is the derived, visible slice for one viewer. It is
-never persisted as authority and never exposes another player's private data.
+never persisted as authority. Identities become public only after the game ends.
 
 Projection rules follow the domain contract (03):
 
 - a player sees every public fact plus only their own hidden identity;
 - a spectator sees only the public facts;
+- an ended game reveals every player's true identity to all viewers;
 - the RNG seed is never included (knowing it would let a viewer reproduce the
   whole identity assignment);
 - the clue icon of every player appears only in the viewer block of the player
@@ -162,7 +163,7 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
         "gameId": state.game_id,
         "revision": state.revision,
         "status": state.status,
-        "players": [_public_player(player, state.curse_assignments) for player in sorted(state.players.values(), key=lambda p: p.seat)],
+        "players": [_public_player(player, state.curse_assignments, state.status == "ended") for player in sorted(state.players.values(), key=lambda p: p.seat)],
         "daggerHolderId": state.dagger_holder_id,
         "phase": dict(state.phase),
         "pending": _pending_view(state.pending),
@@ -196,7 +197,7 @@ def project_state(state: "EngineState", viewer_player_id: str | None = None) -> 
     return projection
 
 
-def _public_player(player: "Player", curse_assignments: dict[str, str]) -> dict[str, Any]:
+def _public_player(player: "Player", curse_assignments: dict[str, str], ended: bool) -> dict[str, Any]:
     revealed: dict[str, Any] = {"markers": [None, None]}
     if "rank" in player.revealed:
         revealed["rank"] = player.revealed_values.get("rank", player.rank)
@@ -204,7 +205,7 @@ def _public_player(player: "Player", curse_assignments: dict[str, str]) -> dict[
         token = f"marker-{index}"
         if token in player.revealed:
             revealed["markers"][index] = player.revealed_values.get(token, player.identity_markers[index])
-    return {
+    view = {
         "playerId": player.player_id,
         "seat": player.seat,
         "displayName": player.display_name,
@@ -217,6 +218,9 @@ def _public_player(player: "Player", curse_assignments: dict[str, str]) -> dict[
         # spectators included, sees who is holding a curse card.
         "holdsCurseCard": player.player_id in curse_assignments.values(),
     }
+    if ended:
+        view["identity"] = {"faction": player.faction, "rank": player.rank}
+    return view
 
 
 def _pending_view(pending: "Pending | None") -> dict[str, Any] | None:

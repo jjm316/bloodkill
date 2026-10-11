@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useState } from "react";
-import { curseAttributionOf, cursePillLabel, curseRevealOf } from "./curseReveal";
+import { cursePillLabel, curseRevealOf } from "./curseReveal";
+import { EndgameResults } from "./EndgameResults";
+import { MarqueeName } from "./MarqueeName";
 import { Icon, type IconName } from "./icons";
 import { InterventionSummary } from "./intervention";
 import type { MemoApi, MemoColor, MemoEntry, MemoMark, MemoPatch } from "./memoMarkers";
@@ -321,13 +323,14 @@ const Seat = memo(function Seat({
             <Icon name="dagger" />
           </span>
         )}
-        {player.displayName}
-        {identity && (
-          <span className="own-identity">
-            {" "}
-            ({displayFaction(identity.faction)} · {displayRank(identity.rank)})
-          </span>
-        )}
+        <MarqueeName name={player.displayName}>
+          {identity && (
+            <span className="own-identity">
+              {" "}
+              ({displayFaction(identity.faction)} · {displayRank(identity.rank)})
+            </span>
+          )}
+        </MarqueeName>
       </div>
       {/* 「你」字标：页面级区分自己/他人（P1 重设计拍板），self 座位专属 */}
       {self && <span className="self-tag">你</span>}
@@ -463,32 +466,6 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
   return null;
 }
 
-// 诅咒归属行：终局 GameEnded 载荷带完整归属，解析在 ./curseReveal 的
-// curseAttributionOf（未分发为空对象时返回 null，不出行）。
-function ResultBanner({ result, players }: { result: NonNullable<GameState["result"]>; players: PlayerView[] }) {
-  const explanation = ({
-    "game.end.captured-leader": "敌方领袖被捕获",
-    "game.end.captured-player": "普通玩家被捕获",
-    "game.end.inquisitor-captured": "审判者被捕获",
-    "game.end.inquisitor-active-capture": "审判者主动捕获目标",
-    "game.end.inquisitor-true-curse": "胜方领袖持有真诅咒",
-  } as Record<string, string>)[result.explanationKey] ?? "规则结算";
-  const attribution = curseAttributionOf(result, players);
-  return (
-    <div className="result">
-      {attribution && <p className="curse-attribution">{attribution}</p>}
-      <strong>对局结束，{displayFaction(result.winner)}获胜</strong>（{explanation}）
-      {result.ranking.length > 0 && (
-        <ol className="ranking">
-          {result.ranking.map((entry) => (
-            <li key={entry.playerId}>{nameOf(players, entry.playerId)}</li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
 // 亮牌 / 归还标记窗口：当事玩家的可选槽位高亮（甲）。
 function highlightFor(pending: PendingView | null, playerId: string): string[] | undefined {
   if (!pending) return undefined;
@@ -525,7 +502,9 @@ export function Board({ game, onSlotAction, memos }: { game: GameState; onSlotAc
   const shape = tableShape(total);
   return (
     <section className="board" aria-label="对局桌面">
-      {game.status === "ended" && game.result && <ResultBanner result={game.result} players={game.players} />}
+      {game.status === "ended" && game.result && (
+        <EndgameResults key={game.gameId} result={game.result} players={game.players} viewer={game.viewer} />
+      )}
       <div
         className={`table-area${TIER_CLASS[seatTier(total)]}`}
         style={{ "--table-h": `${shape.height}px`, "--table-rx": `${shape.rx}%`, "--table-ry": `${shape.ry}%` } as React.CSSProperties}
