@@ -498,6 +498,59 @@ h2 {
 .true-color-badge.beast { background: var(--beast-bg); }
 .true-color-badge.order { background: var(--order-bg); }
 
+/* 检视事实角标（ADR 0013，原型变体 A 拍板 .scratch/prototype-inspect-badge/）：
+   小丑技能产出的私有事实，常驻目标座位卡。与备忘角标（私有猜测）同位区并存——
+   事实恒在左侧（right:22）、备忘恒在右上角（right:-8），有无对方不跳动。
+   只读 span（非按钮）；底色=阵营 token（同备忘/色徽语言），白字数字或「审」，
+   右下白色眼睛角点 = 「看过」的区分记号。基类只管造型，贴角定位仅座位内生效。 */
+.fact-badge {
+  /* relative 供 .fact-eye 锚定；座位内再由 .seat > .fact-badge 覆写为 absolute 贴角 */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  border: 2px solid var(--card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.seat > .fact-badge {
+  position: absolute;
+  top: -8px;
+  right: 22px;
+  z-index: 2;
+}
+
+.fact-badge.rose { background: var(--rose-bg); }
+.fact-badge.beast { background: var(--beast-bg); }
+.fact-badge.order { background: var(--order-bg); }
+
+.fact-eye {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  color: #1f1219;
+  border: 2px solid var(--card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fact-eye svg {
+  width: 9px;
+  height: 9px;
+}
+
 /* 「你」字标（P1 重设计拍板）：自己座位卡左上角金底小 chip，页面级一眼定位自己；
    与等待房名册「（你）」同语言。左上归身份标记、右上归阵营色徽，两角各司其职。 */
 .self-tag {
@@ -516,6 +569,14 @@ h2 {
 }
 
 .self-badge-demo {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* 帮助图例的检视标记示意：复用 .fact-badge 真实造型（玫底数字 + 紫底「审」），
+   不带眼睛角点——图例小尺寸下角点不可辨，眼睛语义由正文文字解释 */
+.inspect-badge-demo {
   display: inline-flex;
   gap: 6px;
   align-items: center;
@@ -679,7 +740,10 @@ h2 {
   gap: 8px;
 }
 
-.curse-picker {
+/* 两步技能选择面板：审判者诅咒（.curse-picker）与小丑检视（.inspect-picker）
+   同一族交互——下拉选目标 + 禁用态确认按钮，共用同一面板造型 */
+.curse-picker,
+.inspect-picker {
   display: flex;
   flex-wrap: wrap;
   flex-direction: column;
@@ -690,7 +754,8 @@ h2 {
   padding: 10px;
 }
 
-.curse-picker p {
+.curse-picker p,
+.inspect-picker p {
   margin: 0;
   width: 100%;
 }

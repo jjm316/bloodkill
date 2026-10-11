@@ -196,9 +196,11 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
   "viewer": null | {
     "playerId": "p-…",
     "identity": {"faction": "rose", "rank": 5},
+    "identityMarkers": ["rose", "rose"],  // 本人身份标记原面（未亮出时也下发本人）
     "resources": ["curse"],
     "skillsUsed": false,
     "cursesToDistribute": ["c-…"],   // 待分发诅咒卡 ID，仅审判者可见（分发后清空）；分发动作经技能窗口的 choose-skill
+    "inspections": {"p-…": {"faction": "rose", "rank": 5}},  // 小丑检视出的目标身份，仅检视者本人可见（ADR 0013）
     "clueIcon": "rose",              // 本人阵营徽记
     "seenNeighbourClue": {"playerId": "p-…", "icon": "beast"}  // 右邻徽记，仅此一处
   },
@@ -209,7 +211,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
     {"type": "respond-intervention", "volunteer": true | false},
     {"type": "decline-intervention"},
     {"type": "choose-intervention", "responderPlayerId": "p-…"},
-    {"type": "choose-skill", "use": true, "targetPlayerId": "p-…"}
+    {"type": "choose-skill", "use": true, "targetPlayerId": "p-…"},
+    {"type": "choose-skill", "use": true, "targetPlayerIds": ["p-…", "p-…"]}  // 等级3：每对可选组合一个动作
   ]
 }
 ```
@@ -221,6 +224,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 投影**不含**随机种子 `seed`（知道种子即可用 `random.Random(seed)` 重现全部身份分配）。
 - 阵营徽记按规则只向左邻展示：徽记只出现在被展示者的 `viewer` 块里（本人 `clueIcon` + 右邻 `seenNeighbourClue`）；`players[]` 条目、旁观者投影与回放步骤均**不含**任何徽记字段。
 - `cursesToDistribute` 只在审判者自己的 `viewer` 块里。
+- `inspections`（小丑检视结果）只在检视者本人的 `viewer` 块里；`HarlequinInspected` 广播事件只含目标 playerId，不含阵营/等级。
 - 事件广播过滤 `CurseViewed` / `CurseDistributed`；服务器端存档保留完整事件流，用于回放校验。
 
 ### 错误码

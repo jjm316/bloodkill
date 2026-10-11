@@ -1,0 +1,211 @@
+{
+  "room": "561593",
+  "seat": "阿丑",
+  "targets": [
+    {
+      "name": "咪咪",
+      "playerId": "p-2d35ee6799e1",
+      "faction": "secret-order",
+      "rank": "fleur-cross"
+    },
+    {
+      "name": "阿玫",
+      "playerId": "p-a8d3b00ed901",
+      "faction": "beast",
+      "rank": 5
+    }
+  ],
+  "selector": {
+    "selectCount": 2,
+    "labels": [
+      "第一位检视对象请选择阿玫小兽老K大猫阿飞咪咪",
+      "第二位检视对象请选择阿玫小兽老K大猫阿飞咪咪"
+    ],
+    "submitText": "使用技能",
+    "submitDisabled": true,
+    "candidateCount": 6,
+    "declineButton": true,
+    "errorBanner": false,
+    "layoutOk": true,
+    "submitGateOk": true,
+    "noErrorOk": true
+  },
+  "submitEnabledAfterPick": true,
+  "badges": {
+    "badges": [
+      {
+        "seat": "阿玫",
+        "self": false,
+        "cls": "fact-badge beast",
+        "text": "5",
+        "title": "已检视：野兽家族·等级5（仅你可见）",
+        "aria": "已检视：野兽家族·等级5（仅你可见）",
+        "bg": "rgb(51, 96, 143)",
+        "pos": "absolute",
+        "top": "-8px",
+        "right": "22px",
+        "zIndex": "2",
+        "size": {
+          "w": 24,
+          "h": 24
+        },
+        "hasEye": true,
+        "eyeSize": {
+          "w": 13,
+          "h": 13
+        },
+        "memoRight": 637.4375,
+        "badgeRight": 607.4375,
+        "leftOfMemo": true,
+        "seatRect": {
+          "x": 422.4375,
+          "y": 166.5625,
+          "w": 208,
+          "h": 66
+        }
+      },
+      {
+        "seat": "咪咪",
+        "self": false,
+        "cls": "fact-badge order",
+        "text": "审",
+        "title": "已检视：审判者（仅你可见）",
+        "aria": "已检视：审判者（仅你可见）",
+        "bg": "rgb(138, 95, 192)",
+        "pos": "absolute",
+        "top": "-8px",
+        "right": "22px",
+        "zIndex": "2",
+        "size": {
+          "w": 24,
+          "h": 24
+        },
+        "hasEye": true,
+        "eyeSize": {
+          "w": 13,
+          "h": 13
+        },
+        "memoRight": 1024.546875,
+        "badgeRight": 994.546875,
+        "leftOfMemo": true,
+        "seatRect": {
+          "x": 809.546875,
+          "y": 166.5625,
+          "w": 208,
+          "h": 66
+        }
+      }
+    ],
+    "total": 2
+  },
+  "badgeChecks": {
+    "totalOk": true,
+    "noneSelf": true
+  },
+  "target0": {
+    "found": true,
+    "onSeat": true,
+    "toneOk": true,
+    "markOk": true,
+    "titleOk": true,
+    "colorOk": true,
+    "posOk": true,
+    "sizeOk": true,
+    "eyeOk": true,
+    "withMemoOk": true
+  },
+  "target1": {
+    "found": true,
+    "onSeat": true,
+    "toneOk": true,
+    "markOk": true,
+    "titleOk": true,
+    "colorOk": true,
+    "posOk": true,
+    "sizeOk": true,
+    "eyeOk": true,
+    "withMemoOk": true
+  },
+  "errorAfterUse": false,
+  "skillWindowClosed": true,
+  "logLine": true,
+  "legend": {
+    "found": true,
+    "mentionsEye": true,
+    "rect": {
+      "x": 399,
+      "y": 838.984375,
+      "width": 627,
+      "height": 76.125
+    }
+  },
+  "mobile": {
+    "badges": [
+      {
+        "seat": "阿玫",
+        "self": false,
+        "cls": "fact-badge beast",
+        "text": "5",
+        "title": "已检视：野兽家族·等级5（仅你可见）",
+        "aria": "已检视：野兽家族·等级5（仅你可见）",
+        "bg": "rgb(51, 96, 143)",
+        "pos": "absolute",
+        "top": "-8px",
+        "right": "22px",
+        "zIndex": "2",
+        "size": {
+          "w": 24,
+          "h": 24
+        },
+        "hasEye": true,
+        "eyeSize": {
+          "w": 13,
+          "h": 13
+        },
+        "memoRight": 198,
+        "badgeRight": 168,
+        "leftOfMemo": true,
+        "seatRect": {
+          "x": 8,
+          "y": 120,
+          "w": 183,
+          "h": 66
+        }
+      },
+      {
+        "seat": "咪咪",
+        "self": false,
+        "cls": "fact-badge order",
+        "text": "审",
+        "title": "已检视：审判者（仅你可见）",
+        "aria": "已检视：审判者（仅你可见）",
+        "bg": "rgb(138, 95, 192)",
+        "pos": "absolute",
+        "top": "-8px",
+        "right": "22px",
+        "zIndex": "2",
+        "size": {
+          "w": 24,
+          "h": 24
+        },
+        "hasEye": true,
+        "eyeSize": {
+          "w": 13,
+          "h": 13
+        },
+        "memoRight": 198,
+        "badgeRight": 168,
+        "leftOfMemo": true,
+        "seatRect": {
+          "x": 8,
+          "y": 398,
+          "w": 183,
+          "h": 66
+        }
+      }
+    ],
+    "total": 2
+  },
+  "mobileOk": true,
+  "pass": true
+}

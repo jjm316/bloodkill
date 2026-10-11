@@ -54,7 +54,7 @@ export const HELP_RANKS: HelpRankRow[] = [
     rank: 3,
     name: "小丑",
     markers: "double-unknown",
-    effect: "秘密检视任意两名玩家的身份（阵营与等级），情报只有你自己可见。",
+    effect: "秘密检视任意两名玩家的身份（阵营与等级），情报只有你自己可见，结果以带眼睛角点的检视标记常驻显示在其座位卡上（见「标记图例」）。",
   },
   {
     rank: 4,
@@ -177,7 +177,7 @@ export const HELP_LEGEND_ITEMS: HelpLegendItem[] = [
 // 线索、徽记与真实阵营色三行短注（compact 拍板版）：visual 由浮层按 kind 渲染，
 // 文案停留在此处与全部帮助内容同源。
 export interface HelpClueNote {
-  kind: "slots" | "emblems" | "self-badge";
+  kind: "slots" | "emblems" | "self-badge" | "inspect-badge";
   title: string;
   body: string;
 }
@@ -197,5 +197,10 @@ export const HELP_CLUE_NOTES: HelpClueNote[] = [
     kind: "self-badge",
     title: "真实阵营色徽",
     body: "自己座位卡右上角的圆点（金环是你自己的标记）始终显示你的真实阵营：玫红＝玫瑰家族，兽蓝＝野兽家族，紫＝审判者（不属于任何家族）；左上角的「你」字标帮你一眼认出自己的卡。它不是线索而是事实，允许与你的徽记矛盾——小丑与审判者的徽记本来就会骗人。",
+  },
+  {
+    kind: "inspect-badge",
+    title: "检视标记",
+    body: "小丑技能发动后，你秘密查看的两名玩家的真实阵营与等级，会以带眼睛角点的圆徽常驻显示在其座位卡右上角（你记的备忘标记左侧）：玫红/兽蓝底+数字＝家族与等级，紫底「审」＝审判者。它是已核实的事实（仅你可见），与你自己记的备忘标记（猜测）互不影响。",
   },
 ];

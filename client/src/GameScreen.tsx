@@ -16,12 +16,35 @@ const nameOf = (players: PlayerView[], id: string | null | undefined) => players
 const TIMEOUT_CHOICES = [30, 60, 90, 120, 180];
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) { return <div className="action-group"><span className="action-label">{label}：</span><div className="action-buttons">{children}</div></div>; }
-function SkillUse({ actions, players, send }: { actions: Action[]; players: PlayerView[]; send: (c: string, p?: Record<string, unknown>) => void }) {
+export function SkillUse({ actions, players, send }: { actions: Action[]; players: PlayerView[]; send: (c: string, p?: Record<string, unknown>) => void }) {
   const modes = actions.filter((a) => a.mode);
   if (modes.length) return <Group label="选择技能效果">{modes.map((a) => <button key={a.mode} onClick={() => send("choose-skill", { use: true, mode: a.mode })}>{a.mode === "harm" ? "强迫目标受伤" : "治疗目标并归还标记"}</button>)}</Group>;
   const targets = actions.filter((a) => a.targetPlayerId);
   if (targets.length) return <Group label="对其使用技能">{targets.map((a) => <button key={a.targetPlayerId} onClick={() => send("choose-skill", { use: true, targetPlayerId: a.targetPlayerId })}>{nameOf(players, a.targetPlayerId)}</button>)}</Group>;
+  const pairs = actions.filter((a) => Array.isArray(a.targetPlayerIds));
+  if (pairs.length) return <HarlequinInspectUse actions={pairs} players={players} send={send} />;
   return <button onClick={() => send("choose-skill", { use: true })}>使用技能</button>;
+}
+// 等级3（小丑）检视：投影为每个可选两人组合各下发一个动作（targetPlayerIds）。
+// 组合数随人数平方增长（7 人局 15 个、11 人局 45 个），逐组合按钮墙不可用——
+// 改为两步下拉选出两名不同玩家（CurseSkillUse 同族交互）；未选满前按钮禁用，
+// 杜绝发出裸 {use:true} 被引擎以 skill.invalid-target 拒绝的 bug 路径。
+function HarlequinInspectUse({ actions, players, send }: { actions: Action[]; players: PlayerView[]; send: (c: string, p?: Record<string, unknown>) => void }) {
+  const combos = actions.map((a) => a.targetPlayerIds as string[]);
+  const candidateIds = [...new Set(combos.flat())];
+  const [picks, setPicks] = useState<[string, string]>(["", ""]);
+  const ready =
+    picks[0] !== "" && picks[1] !== "" && picks[0] !== picks[1] &&
+    combos.some((ids) => ids.includes(picks[0]) && ids.includes(picks[1]));
+  const options = <>
+    <option value="">请选择</option>
+    {candidateIds.map((id) => <option key={id} value={id}>{nameOf(players, id)}</option>)}
+  </>;
+  return <div className="inspect-picker">
+    <label className="field" htmlFor="inspect-first">第一位检视对象<select id="inspect-first" value={picks[0]} onChange={(e) => setPicks([e.target.value, picks[1]])}>{options}</select></label>
+    <label className="field" htmlFor="inspect-second">第二位检视对象<select id="inspect-second" value={picks[1]} onChange={(e) => setPicks([picks[0], e.target.value])}>{options}</select></label>
+    <button className="inspect-confirm" disabled={!ready} onClick={() => send("choose-skill", { use: true, targetPlayerIds: [picks[0], picks[1]] })}>使用技能</button>
+  </div>;
 }
 // 审判者诅咒技能的两步发动（issue 01 / ADR 0003）：动作区先只有一个发动按钮，
 // 点开才展开带真假标注的选择器，提交前弹确认框说明不可逆与保密性。

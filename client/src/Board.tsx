@@ -93,6 +93,18 @@ interface SeatMemo {
   onClear: () => void;
 }
 
+// 小丑检视出的私有事实（viewer.inspections 的一项）：已核实的阵营与等级
+interface SeatFact {
+  faction: string | null;
+  rank: number | string | null;
+}
+
+// 事实角标的悬浮/读屏文案：审判者目标只报身份，家族目标报家族+等级
+const factBadgeText = (fact: SeatFact) =>
+  fact.faction === "secret-order" || fact.rank === "fleur-cross"
+    ? "已检视：审判者（仅你可见）"
+    : `已检视：${displayFaction(fact.faction ?? "")}·${displayRank(fact.rank ?? "")}（仅你可见）`;
+
 // 浮层的预估尺寸（px）：定位时用于贴边与上下翻转的保守估计。
 const PICKER_EST_SIZE = 132;
 
@@ -241,6 +253,7 @@ const Seat = memo(function Seat({
   selfActions,
   onSlotAction,
   memoBadge,
+  factBadge,
   style,
 }: {
   player: PlayerView;
@@ -255,6 +268,8 @@ const Seat = memo(function Seat({
   onSlotAction?: (action: Action) => void;
   /** 私有备忘角标：不传 = 不渲染（自己座位 / 回放屏） */
   memoBadge?: SeatMemo;
+  /** 检视事实角标（ADR 0013）：不传 = 不渲染（自己座位 / 无检视数据） */
+  factBadge?: SeatFact;
   /** 圆桌坐标（容器百分比）：以 CSS 变量注入，仅 ≥720px 圆桌分支的 CSS 消费
    * （left: var(--seat-x)）；窄屏网格分支不消费变量，避免 relative 定位下
    * 百分比 left/top 变成从网格单元格平移的偏移量 */
@@ -306,6 +321,22 @@ const Seat = memo(function Seat({
       {identity && clueLine && <div className="own-clue-icon">{clueLine}</div>}
       <ClueSlots player={player} selfMarkers={selfMarkers} selfRank={identity?.rank} highlight={highlight} selfActions={selfActions} onSlotAction={onSlotAction} />
       <Resources resources={player.resources} />
+      {/* 检视事实角标（ADR 0013）：小丑技能产出，常驻备忘角标左侧（right:22），
+          有无备忘不跳动。只读 span——事实绝不写入/覆盖/清除备忘（ADR 0004：
+          备忘=猜测的不变量），眼睛角点是「看过」的区分记号（原型变体 A 拍板） */}
+      {factBadge && (
+        <span
+          role="img"
+          className={`fact-badge ${FACTION_TONE[factBadge.faction ?? ""] ?? "order"}`}
+          title={factBadgeText(factBadge)}
+          aria-label={factBadgeText(factBadge)}
+        >
+          {factBadge.rank === "fleur-cross" ? "审" : factBadge.rank}
+          <span className="fact-eye" aria-hidden="true">
+            <Icon name="eye" />
+          </span>
+        </span>
+      )}
       {memoBadge && (
         <button
           type="button"
@@ -490,6 +521,7 @@ export function Board({ game, onSlotAction, memos }: { game: GameState; onSlotAc
                       }
                     : undefined
                 }
+                factBadge={!isSelf ? viewer?.inspections?.[player.playerId] : undefined}
               />
             );
           })}

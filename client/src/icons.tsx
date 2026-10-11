@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // 不引第三方图标库、无位图。造型源：mockups/icon-strip.html（2026-09-13 拍板）。
 // 玫瑰/野兽/未知标记维持"字 + 色块"现状，不走此组件（兼顾色弱辨识）。
 
-export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill" | "help" | "close";
+export type IconName = "dagger" | "shield" | "sword" | "staff" | "fan" | "lock" | "quill" | "help" | "close" | "eye";
 
 const ICON_SHAPES: Record<IconName, ReactNode> = {
   dagger: (
@@ -77,6 +77,16 @@ const ICON_SHAPES: Record<IconName, ReactNode> = {
       <line x1="6" y1="6" x2="18" y2="18" />
       <line x1="18" y1="6" x2="6" y2="18" />
     </>
+  ),
+  // 眼睛（实心）：检视事实角标的「看过」角点（原型变体 A 拍板，
+  // .scratch/prototype-inspect-badge/）。图标集唯一的实心字形：瞳孔以反向
+  // 子路径镂空，path 上覆写 fill；9px 角点里线性描边无法辨认。
+  eye: (
+    <path
+      fill="currentColor"
+      stroke="none"
+      d="M12 5C5.5 5 1.7 11.2 1.6 11.5a1 1 0 000 1C1.7 12.8 5.5 19 12 19s10.3-6.2 10.4-6.5a1 1 0 000-1C22.3 11.2 18.5 5 12 5zm0 11a4 4 0 110-8 4 4 0 010 8zm0-6a2 2 0 100 4 2 2 0 000-4z"
+    />
   ),
 };
 

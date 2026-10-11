@@ -22,6 +22,21 @@ describe("内联 SVG 图标", () => {
   });
 });
 
+// 眼睛（检视事实角标的「看过」角点，ADR 0013）：图标集唯一的实心字形——
+// path 覆写 fill=currentColor、stroke=none；线性描边在 9px 角点里无法辨认。
+describe("眼睛图标", () => {
+  it("渲染为实心字形：path 带 fill=currentColor 且无描边", () => {
+    const { container } = render(<Icon name="eye" />);
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    const path = svg?.querySelector("path");
+    expect(path).not.toBeNull();
+    expect(path).toHaveAttribute("fill", "currentColor");
+    expect(path).toHaveAttribute("stroke", "none");
+  });
+});
+
 // help 徽记（页头"？"按钮）的"一张图"不变量（.scratch/ui-help-legend/issues/01）：
 // 圆环、问号、点锁在同一个 viewBox 坐标系里等比缩放，问号恒在圆心。
 // 问号是几何路径而非 <text>：全角"？"墨迹在各中文字体字身框内系统性偏左，

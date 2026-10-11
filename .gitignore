@@ -20,3 +20,6 @@ client/dist/
 # curse e2e local runtime state (room code/host token) and server log
 .scratch/e2e-curse.json
 .scratch/e2e-curse-uvicorn.log
+# inspect e2e local runtime state (room code/host token) and server log
+.scratch/e2e-inspect/state.json
+.scratch/e2e-inspect/server.log

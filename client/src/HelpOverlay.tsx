@@ -105,8 +105,8 @@ function LegendRow({ item }: { item: HelpLegendItem }) {
   );
 }
 
-// 线索/徽记/真实阵营色短注的可视半边：三格槽示意（3｜玫｜？）、玫/兽色块对，
-// 或真实阵营色徽的三色圆点（玫/兽/灰=审判者）。
+// 线索/徽记/真实阵营色/检视标记短注的可视半边：三格槽示意（3｜玫｜？）、玫/兽色块对，
+// 真实阵营色徽的三色圆点（玫/兽/灰=审判者），或检视标记的眼睛圆徽（玫底数字 + 紫底「审」）。
 function ClueNoteVisual({ kind }: { kind: HelpClueNote["kind"] }) {
   if (kind === "slots") {
     return (
@@ -123,6 +123,14 @@ function ClueNoteVisual({ kind }: { kind: HelpClueNote["kind"] }) {
         <span className="true-color-badge rose" />
         <span className="true-color-badge beast" />
         <span className="true-color-badge order" />
+      </span>
+    );
+  }
+  if (kind === "inspect-badge") {
+    return (
+      <span className="inspect-badge-demo" aria-hidden="true">
+        <span className="fact-badge rose">5</span>
+        <span className="fact-badge order">审</span>
       </span>
     );
   }
