@@ -666,23 +666,32 @@ h2 {
   text-align: center;
 }
 
+/* 资源行金色药丸（spec 2026-10-11 Q4，原型方案 A 验证值）：图标+单字中文标签，
+   单行 nowrap，数量>1 才标 ×N；颜色之外还有文字，不靠悬浮救场 */
 .resources {
   display: flex;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--muted);
+  gap: 4px;
   flex-wrap: wrap;
 }
 
-.resources span {
+.resource-pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid rgba(240, 192, 96, 0.38);
+  border-radius: 999px;
+  background: var(--gold-dim-bg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
-.resources svg {
-  width: 14px;
-  height: 14px;
+.resource-pill svg {
+  width: 13px;
+  height: 13px;
   color: var(--gold-text);
 }
 
@@ -1282,8 +1291,9 @@ h2 {
     font-size: 11px;
   }
 
-  .table-area.size-xl .resources {
-    font-size: 12px;
+  /* 压缩档联动：药丸字号再收一档（对齐同档 .slot 11px），保住 xl 满员桌不溢出 */
+  .table-area.size-xl .resource-pill {
+    font-size: 11px;
   }
 }
 
