@@ -1336,6 +1336,37 @@ h2 {
   .table-area { --seat-w: 168px; }
   .table-area.size-lg { --seat-w: 144px; }
   .table-area.size-xl { --seat-w: 120px; }
+
+  /* 压缩档联动（镜像上方 ≥1020 档 .table-area.size-xl .resource-pill/.curse-pill
+     的结构）：窄档座位整体收窄，药丸与诅咒药丸同步压缩（旋钮按序：字号→图标→
+     内距→间距）。Chrome 实测（资源行真机验收 2026-10-11）：168px 档仅压字号时
+     盾×2＋剑＋杖需 160.6px > 146px 仍折行，压到 11px＋12px 图标＋1px 6px 内距＋
+     2px 行距后 141.6px ≤ 146px 单行；144px 档内容宽仅 122px，须再收一档（见下）；
+     120px 档 3 枚 11px 药丸最小 ~106px > 102px，物理放不下，同档压缩已是极限。 */
+  .table-area .resource-pill,
+  .table-area .curse-pill {
+    font-size: 11px;
+    padding: 1px 6px;
+  }
+
+  .table-area .resource-pill svg,
+  .table-area .curse-pill svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .table-area .resources {
+    gap: 2px;
+  }
+
+  /* 144px 档（size-lg）再收一档（字号守住 11px 可读下限）：实测最紧可读组合
+     padding 1px 4px + 图标间距 1px，盾×2＋剑＋杖 = 120.6px ≤ 122px，
+     3 枚（含 ×N 计数）单行不折行不横向溢出 */
+  .table-area.size-lg .resource-pill,
+  .table-area.size-lg .curse-pill {
+    gap: 1px;
+    padding: 1px 4px;
+  }
 }
 
 @media (max-width: 480px) {
