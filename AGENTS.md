@@ -8,6 +8,10 @@
 
 Issues and specs live as Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
 
+### Worktrees
+
+实现工作树里直接 `npm ci --prefix client`（热缓存约 3 秒），不为 node_modules 建 junction 指向主仓：`git worktree remove --force` 会穿透 junction 清空被指向的目录（2026-10-05 主仓依赖被这样清空过一次）。
+
 ### Triage labels
 
 Use the default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
