@@ -85,6 +85,8 @@ const descriptions: [string, GameEvent["payload"], string][] = [
   ["InterventionDeclined", { targetPlayerId: "p2", reason: "future-reason" }, "阿兽：攻击正常结算"],
   ["SkillUsed", { playerId: "p1", rank: 3 }, "阿玫 发动了等级3技能"],
   ["SkillUsed", { playerId: "p1", rank: "fleur-cross" }, "阿玫 分发了诅咒牌"],
+  // spec Q9 用户逐字拍板：「将诅咒卡交给了 某某」，无行为者主语、不含真假
+  ["CurseDistributed", { recipientPlayerId: "p2" }, "将诅咒卡交给了 阿兽"],
   ["SkillDeclined", { playerId: "p1" }, "阿玫 放弃了技能"],
   ["HarlequinInspected", { playerId: "p1", targetPlayerIds: ["p2", "p1"] }, "阿玫 检视了 阿兽、阿玫 的身份"],
   ["DamageHealed", { playerId: "p1" }, "阿玫 恢复了 1 点伤害"],

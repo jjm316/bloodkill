@@ -131,6 +131,12 @@ describe("事件日志阅读视图", () => {
     expect(screen.queryByText(/SomeFutureEvent|private-payload/)).not.toBeInTheDocument();
   });
 
+  it("CurseDistributed 日志行归技能类，渲染 spec Q9 逐字文案「将诅咒卡交给了 收件人名」且不含真假", () => {
+    render(<EventLog events={[event("CurseDistributed", { recipientPlayerId: "p2" })]} players={players} />);
+    openLog();
+    expect(rows().map((row) => row.textContent)).toEqual(["技能将诅咒卡交给了 阿兽"]);
+  });
+
   it("本机存储不可用时仍可筛选，在本次挂载中生效", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("unavailable"); });
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("unavailable"); });
