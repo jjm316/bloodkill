@@ -1,0 +1,18 @@
+# /etc/systemd/system/bloodkill.service —— 由 scripts/deploy-cloud.sh 自动安装
+# 两条硬约束：
+# 1. WebSocket 连接与 deadline 定时器都在进程内存，必须单进程，禁止 --workers（会状态分裂）。
+# 2. saves/ 相对工作目录解析（BLOOD_BOUND_SAVES_DIR 未设时），WorkingDirectory 必须指向部署根。
+[Unit]
+Description=Bloodkill game server (uvicorn, single process)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/bloodkill
+ExecStart=/opt/bloodkill/.venv/bin/uvicorn server.app:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=2
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
