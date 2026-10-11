@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Board } from "./Board";
+import { curseTruthOf } from "./curseReveal";
 import { useIntervention } from "./intervention";
 import { useDeadlineSeconds } from "./useDeadlineSeconds";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -57,11 +58,14 @@ function CurseSkillUse({ game, send }: { game: GameState; send: (c: string, p?: 
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
   const ready = curses.length > 0 && curses.every((id) => picks[id]);
-  const curseLabel = (id: string) => (id.startsWith("true-curse") ? "真诅咒交给：" : "假诅咒交给：");
+  // 分发选择器的字段标签：真假判定走共享的 curseTruthOf（./curseReveal 唯一前缀
+  // 嗅探点）；标签文案是本交互专属（「真/假诅咒交给：」），与座位药丸的
+  // 「真咒/假咒/咒」（cursePillLabel）是两个呈现，不再共用 curseLabel 这个名字。
+  const curseFieldLabel = (id: string) => (curseTruthOf(id) === "true" ? "真诅咒交给：" : "假诅咒交给：");
   return <div className="curse-skill">
     <button onClick={() => setExpanded((open) => !open)}>发动能力：分发诅咒牌</button>
     {expanded && <div className="curse-picker">
-      {curses.map((id) => <label key={id} className="field" htmlFor={`curse-${id}`}>{curseLabel(id)}<select id={`curse-${id}`} value={picks[id] ?? ""} onChange={(e) => setPicks({ ...picks, [id]: e.target.value })}><option value="">请选择</option>{recipients.map((p) => <option key={p.playerId} value={p.playerId}>{p.displayName}</option>)}</select></label>)}
+      {curses.map((id) => <label key={id} className="field" htmlFor={`curse-${id}`}>{curseFieldLabel(id)}<select id={`curse-${id}`} value={picks[id] ?? ""} onChange={(e) => setPicks({ ...picks, [id]: e.target.value })}><option value="">请选择</option>{recipients.map((p) => <option key={p.playerId} value={p.playerId}>{p.displayName}</option>)}</select></label>)}
       <button className="curse-confirm" disabled={!ready} onClick={() => setConfirming(true)}>分发</button>
     </div>}
     {confirming && <ConfirmDialog title="确认分发诅咒牌" body="分发后不可更改；持卡归属对全员公开（座位上出现紫色「咒」药丸），真/假之分仅你可知，终局全员翻开。" confirmText="确认分发" cancelText="取消" onConfirm={() => { send("choose-skill", { use: true, assignments: picks }); setConfirming(false); }} onCancel={() => setConfirming(false)} />}

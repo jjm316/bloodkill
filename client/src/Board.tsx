@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useState } from "react";
+import { curseAttributionOf, cursePillLabel, curseRevealOf } from "./curseReveal";
 import { Icon, type IconName } from "./icons";
 import { InterventionSummary } from "./intervention";
 import type { MemoApi, MemoColor, MemoEntry, MemoMark, MemoPatch } from "./memoMarkers";
 import { memoColorOf } from "./memoMarkers";
 import { seatPosition, seatTier, tableShape, type SeatTier } from "./tableSeats";
-import type { Action, GameState, Identity, PendingView, PlayerView, ViewerView } from "./types";
+import type { Action, GameState, Identity, PendingView, PlayerView } from "./types";
 import { displayClueIcon, displayFaction, displayRank, displayResource } from "./types";
 
 // The shared projection component: the live game and the replay render the
@@ -15,22 +16,9 @@ function nameOf(players: PlayerView[], playerId: string | null | undefined): str
   return player ? player.displayName : "?";
 }
 
-// 诅咒药丸标签解析（ADR 0014，spec seat-marker-visibility Part B）：返回
-// "true" / "false" / null（null＝保持暗置只显「咒」）。归属来源二选一：
-// 终局翻牌优先（result.curseAssignments，GameEnded 载荷全员可见，未分发为空
-// 对象时不生效）；其余对局查 viewer.curseAssignments（仅审判者视角携带此字段，
-// 投影驱动、重连不丢）。收件人＝该玩家且 curseId 以 "true-curse" 开头判真咒，
-// 否则假咒。
-function curseRevealOf(player: PlayerView, viewer: ViewerView | null, result: GameState["result"], ended: boolean): "true" | "false" | null {
-  // ?? {} 兜底旧存档回放：ruleset 0.7 之前的终局 result 没有 curseAssignments 键
-  const endedAssignments = ended && result ? result.curseAssignments ?? {} : {};
-  const assignments = endedAssignments && Object.keys(endedAssignments).length > 0 ? endedAssignments : viewer?.curseAssignments ?? {};
-  const entry = Object.entries(assignments).find(([, recipient]) => recipient === player.playerId);
-  if (!entry) return null;
-  return entry[0].startsWith("true-curse") ? "true" : "false";
-}
-
-const curseLabel = (reveal: "true" | "false" | null) => (reveal === "true" ? "真咒" : reveal === "false" ? "假咒" : "咒");
+// 诅咒真假/药丸/归属解析统一在 ./curseReveal（ADR 0014）：curseRevealOf 返回
+// "true"/"false"/null，cursePillLabel 渲染「真咒/假咒/咒」，curseAttributionOf
+// 出终局归属行。
 
 // 浮层通用关闭：Escape、尺寸或滚动变化（fixed 定位的浮层会脱离锚点）；点 backdrop 由调用方自备
 function useDismissOverlay(active: boolean, close: () => void) {
@@ -362,7 +350,7 @@ const Seat = memo(function Seat({
         {player.holdsCurseCard && (
           <span className="curse-pill" title="暗置诅咒卡：真/假仅审判者可知；终局全员翻开">
             <Icon name="curseCard" />
-            {curseLabel(curseReveal ?? null)}
+            {cursePillLabel(curseReveal ?? null)}
           </span>
         )}
       </Resources>
@@ -475,25 +463,8 @@ function PendingBanner({ pending, players }: { pending: PendingView; players: Pl
   return null;
 }
 
-// 诅咒归属行（ADR 0014）：终局 GameEnded 载荷带完整归属（未分发/放弃为空对象）。
-// 排在胜负判词上方；true-curse 触发独赢时（engine branch inquisitor-true-curse）
-// 措辞点明家族胜利被覆盖。归属视图与回放终局共用（同走 ResultBanner）。
-function curseAttributionOf(result: NonNullable<GameState["result"]>, players: PlayerView[]): string | null {
-  // ?? {} 兜底旧存档回放：ruleset 0.7 之前的终局 result 没有 curseAssignments 键
-  const entries = Object.entries(result.curseAssignments ?? {});
-  if (entries.length === 0) return null;
-  const holderOf = (prefix: string) => {
-    const entry = entries.find(([curseId]) => curseId.startsWith(prefix));
-    return entry ? nameOf(players, entry[1]) : null;
-  };
-  const truth = holderOf("true-curse");
-  const lie = holderOf("false-curse");
-  const stole = result.explanationKey === "game.end.inquisitor-true-curse";
-  const truthPart = truth ? (stole ? `真诅咒在 ${truth}（胜方领袖）→ 审判者独赢，家族胜利被覆盖` : `真诅咒在 ${truth}`) : null;
-  if (truthPart && lie) return `${truthPart}；假诅咒在 ${lie}`;
-  return truthPart ?? (lie ? `假诅咒在 ${lie}` : null);
-}
-
+// 诅咒归属行：终局 GameEnded 载荷带完整归属，解析在 ./curseReveal 的
+// curseAttributionOf（未分发为空对象时返回 null，不出行）。
 function ResultBanner({ result, players }: { result: NonNullable<GameState["result"]>; players: PlayerView[] }) {
   const explanation = ({
     "game.end.captured-leader": "敌方领袖被捕获",
