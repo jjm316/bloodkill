@@ -1,7 +1,7 @@
 # 客户端干涉决策模块深化
 
 Type: task
-Status: ready-for-human
+Status: resolved（2026-10-11 用户拍板直接销案；实现 00598a1 随 0968225 合入 master，收尾记录见末尾 Comments）
 Scope confirmed: 2026-10-06，本聊天中用户选择候选 ①，并确认保持现有行为的实施范围。
 Workflow: 用户指定 implement 技能；按规格与既定接缝验证，完成 Standards / Spec 双轴评审后提交当前分支。
 
@@ -52,3 +52,4 @@ Workflow: 用户指定 implement 技能；按规格与既定接缝验证，完�
 - 2026-10-06：实施完成。干涉模块提供实时入口 useIntervention 与纯公开提示 InterventionSummary，GameScreen / Board 接入；倒计时实现独立共享，未改变规则或协议。
 - 验收：单文件 `npm test -- --run src/interventionGate.test.tsx` 为 33/33；`npm exec -- tsc --noEmit` 通过；完整 `npm test` 为 114/114（12 文件）；`npm run build` 通过；暂存差异空白检查通过。
 - 评审基准由用户确认采用 `6b52a8523778f7e811050ecd075732cc3957de9a`，对完整暂存差异执行双轴评审：Standards 0 项实质发现；Spec 0 项实质发现。实现、规格和测试一并提交当前 master 分支。
+- 2026-10-11：用户拍板直接销案，免除额外人工冒烟。依据：自动化证据全绿（门控单测 33/33、全量 114/114、tsc / vite build 干净、双轴评审 0 项实质发现），且实现自 2026-10-06 起在 master 上实际运行、无异常反馈。
