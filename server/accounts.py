@@ -117,3 +117,14 @@ class AccountStore:
         if row is None or not hmac.compare_digest(password_digest(password, row["password_salt"]), row["password_hash"]):
             return None
         return Account(row["account_id"], row["username"])
+
+    def login(self, username: object, password: object) -> tuple[Account, str]:
+        account = self.verify_credentials(username, password)
+        if account is None:
+            raise AccountError("auth.invalid-credentials", "账号或密码不正确，请重新输入。", 401)
+        token = secrets.token_urlsafe(32)
+        now = time.time()
+        with self.connect() as db:
+            db.execute("INSERT INTO sessions (token_hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+                       (hashlib.sha256(token.encode()).hexdigest(), account.account_id, now, now + SESSION_SECONDS))
+        return account, token

@@ -36,7 +36,15 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 / `auth.invalid-input`，重名为 409 `auth.username-taken`，存储不可用为
 503 `auth.service-unavailable`；`message` 均为中文且不回显输入。
 
-本节为工单 07 注册切片；登录、退出和房间账号授权由后续账号工单扩展。
+`POST /api/auth/login` 接收 JSON `{username, password}`，用户名英文大小写变体登录同一账号，
+密码精确匹配原字符。成功返回 200 `{account: {accountId, username}}`，用户名保留注册写法，
+并建立新的固定 30 天 Cookie 会话；独立设备的既有会话仍有效，查询身份不会续期。
+未知账号、错误密码或缺失凭证均返回 401 `auth.invalid-credentials`，反馈为“账号或密码不正确”。
+非对象或无效 JSON 返回 400 `auth.invalid-input`，存储不可用返回 503 `auth.service-unavailable`。
+失败不设置或替换 Cookie，也不改变已有有效身份。注册与登录均拒绝非本站 Origin（403
+`auth.invalid-origin`）；密码只放 JSON 请求体，不进入 URL 或响应。
+
+本节为工单 07–08 注册、登录和身份恢复切片；退出和房间账号授权由后续账号工单扩展。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |

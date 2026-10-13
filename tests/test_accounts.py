@@ -175,3 +175,86 @@ class RegistrationHTTPTests(unittest.TestCase):
             db.execute("DROP TRIGGER fail_session")
             db.commit()
         self.assertEqual(self.register("失败后重试")[0], 201)
+
+    def test_login_case_variant_issues_a_new_persistent_session(self):
+        _, registered, registration_headers = self.register("Mixed_Alice", " Ab12 ")
+        status, body, headers = self.request("/api/auth/login", {"username": "MIXED_alice", "password": " Ab12 "})
+        self.assertEqual(status, 200)
+        self.assertEqual(body, registered)
+        cookie = headers["Set-Cookie"].split(";", 1)[0]
+        self.assertNotEqual(cookie, registration_headers["Set-Cookie"].split(";", 1)[0])
+        self.assertIn("HttpOnly", headers["Set-Cookie"])
+        self.assertIn("Max-Age=2592000", headers["Set-Cookie"])
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(self.request("/api/auth/session", cookie=cookie)[1], registered)
+        self.stop_server()
+        self.start_server()
+        restored = self.request("/api/auth/session", cookie=cookie)
+        self.assertEqual(restored[0], 200)
+        self.assertEqual(restored[1], registered)
+        self.assertIsNone(restored[2].get("Set-Cookie"))
+
+    def test_failed_login_does_not_create_or_replace_identity_or_echo_password(self):
+        _, original, headers = self.register("Mixed_Alice", " Ab12 ")
+        cookie = headers["Set-Cookie"].split(";", 1)[0]
+        failures = [
+            {"username": "unknown", "password": " Ab12 "},
+            {"username": "Mixed_Alice", "password": " ab12 "},
+            {"username": "Mixed_Alice", "password": "Ab12"},
+            {"username": "Mixed_Alice", "password": "wrong!"},
+            {"username": "Mixed_Alice"}, {},
+            {"username": ["Mixed_Alice"], "password": 123456},
+        ]
+        for payload in failures:
+            with self.subTest(payload=payload):
+                for existing in [None, cookie]:
+                    status, body, failed_headers = self.request("/api/auth/login", payload, cookie=existing)
+                    self.assertEqual(status, 401)
+                    self.assertEqual(body["code"], "auth.invalid-credentials")
+                    self.assertIn("账号或密码不正确", body["message"])
+                    self.assertIsNone(failed_headers.get("Set-Cookie"))
+                    self.assertNotIn("password", json.dumps(body))
+                self.assertEqual(self.request("/api/auth/session")[0], 401)
+                self.assertEqual(self.request("/api/auth/session", cookie=cookie)[1], original)
+        self.assertEqual(self.request("/api/auth/session", cookie="bloodbound_session=invalid")[0], 401)
+        self.stop_server()
+        output = self.log_path.read_text()
+        for secret in [" Ab12 ", " ab12 ", "wrong!", cookie.split("=", 1)[1]]:
+            self.assertNotIn(secret, output)
+        self.start_server()
+
+    def test_login_write_failure_does_not_replace_session_and_can_retry(self):
+        import sqlite3
+        from contextlib import closing
+        _, original, headers = self.register("Fault_Alice", "123456")
+        cookie = headers["Set-Cookie"].split(";", 1)[0]
+        path = Path(self.tmp.name) / "accounts" / "accounts.sqlite3"
+        with closing(sqlite3.connect(path)) as db:
+            db.execute("CREATE TRIGGER fail_login BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'test failure'); END")
+            db.commit()
+        status, body, headers = self.request("/api/auth/login", {"username": "fault_alice", "password": "123456"}, cookie=cookie)
+        self.assertEqual(status, 503)
+        self.assertIn("服务暂时不可用", body["message"])
+        self.assertIsNone(headers.get("Set-Cookie"))
+        self.assertEqual(self.request("/api/auth/session", cookie=cookie)[1], original)
+        with closing(sqlite3.connect(path)) as db:
+            db.execute("DROP TRIGGER fail_login")
+            db.commit()
+        status, body, headers = self.request("/api/auth/login", {"username": "fault_alice", "password": "123456"})
+        self.assertEqual(status, 200)
+        self.assertEqual(body, original)
+        self.assertEqual(self.request("/api/auth/session", cookie=headers["Set-Cookie"].split(";", 1)[0])[1], original)
+
+    def test_malformed_and_cross_origin_login_does_not_issue_a_session(self):
+        status, body, headers = self.request("/api/auth/login", ["private!"])
+        self.assertEqual(status, 400)
+        self.assertIn("格式", body["message"])
+        self.assertIsNone(headers.get("Set-Cookie"))
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/auth/login",
+                                         data=b'{"username":"Alice","password":"private!"}',
+                                         headers={"Origin": "http://other-site.invalid", "Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as rejected:
+            urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request)
+        self.assertEqual(rejected.exception.code, 403)
+        self.assertIsNone(rejected.exception.headers.get("Set-Cookie"))
+        rejected.exception.close()

@@ -225,6 +225,29 @@ async def register_account(request: Request) -> JSONResponse:
     return response
 
 
+@app.post("/api/auth/login")
+async def login_account(request: Request) -> JSONResponse:
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面提交登录。"), status_code=403)
+    try:
+        payload = await request.json()
+    except (ValueError, UnicodeError):
+        return JSONResponse(error_message("auth.invalid-input", "登录信息格式不正确，请重新填写。"), status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse(error_message("auth.invalid-input", "登录信息格式不正确，请重新填写。"), status_code=400)
+    try:
+        account, token = await run_in_threadpool(accounts.login, payload.get("username"), payload.get("password"))
+    except AccountError as error:
+        return JSONResponse(error_message(error.code, str(error)), status_code=error.status)
+    except sqlite3.Error:
+        return JSONResponse(error_message("auth.service-unavailable", "服务暂时不可用，请稍后重试。"), status_code=503)
+    response = JSONResponse({"account": account.public()})
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_SECONDS, httponly=True, samesite="strict", path="/")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.get("/api/auth/session")
 def current_account(request: Request) -> JSONResponse:
     account = accounts.get_session(request.cookies.get(SESSION_COOKIE))

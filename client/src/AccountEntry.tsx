@@ -42,7 +42,10 @@ export function AccountEntry({ onAuthenticated }: { onAuthenticated: (account: A
       <button type="button" aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? "隐藏密码" : "显示密码"}</button>
       {error && <div className="error" role="alert">{error}</div>}
       <div className="lobby-actions"><button type="submit" disabled={busy}>{busy ? "正在提交……" : registering ? "注册并进入大厅" : "登录并进入大厅"}</button>
-        <button type="button" disabled={busy} onClick={() => { setRegistering(!registering); setError(null); }}>{registering ? "返回登录" : "注册账号"}</button></div>
+        <button type="button" disabled={busy} onClick={() => {
+          setRegistering(!registering); setError(null);
+          setPassword(""); setConfirmation(""); setVisible(false);
+        }}>{registering ? "返回登录" : "注册账号"}</button></div>
     </form>
   </div>;
 }
