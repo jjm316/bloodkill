@@ -76,7 +76,10 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 同一座位被新连接接管 → 旧连接收到 `taken-over` 并关闭。
 - `clientRevision` 为客户端最后收到的 `game.revision`，只用于诊断；服务端始终以 `state` 全量投影完成恢复。
 - `protocolVersion` 与服务端不匹配或缺失时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本。
-- 当前账号没有本房座位：房间已开始 → `room.already-started`；已锁定 → `room.locked`。
+- 当前账号没有本房座位时按新人加入判断：房间已结束 → `room.ended`（对局已结束，不能加入；可观看回放）；
+  已开始 → `room.already-started`（游戏已开始，不能加入；若已在房间，返回原房间即可恢复座位）；
+  已锁定 → `room.locked`（房间已锁定，暂不能加入）；已满 12 人 → `room.full`（房间已满员，不能加入）。
+  拒绝均为中文 `message`，被拒连接随即关闭且不产生座位或占用。
 
 ```json
 {"type": "command", "command": "pass-dagger", "payload": {"targetPlayerId": "p-…"}, "commandId": "uuid", "expectedRevision": 12}
@@ -164,7 +167,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 | 类型 | 说明 |
 | --- | --- |
-| `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`，并附服务端墙钟 `serverTime`（倒计时对齐用）。 |
+| `state` | 每次命令/主持操作/进出后向房间内所有**已完成 hello** 的连接广播（未完成握手的连接不参与，不会收到空视角投影），每人收到按自己视角投影的 `game`，并附服务端墙钟 `serverTime`（倒计时对齐用）。 |
 | `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`（保留字）被过滤。诅咒归属已公开（ADR 0014）：`CurseDistributed` 为公开广播，payload 只含 `{"recipientPlayerId": "p-…"}`（每卡一条，不含 curseId，真/假之分不进公开事件流）。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉的请求门控事件（`InterventionGateOpened` / `InterventionGateAccepted` / `InterventionGateDeclined`）与投票表态事件（`InterventionResponded` 等）全部公开。 |
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
@@ -270,7 +273,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ### 错误码
 
 **服务器层**：`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
-`room.already-started`、`player.name-required`、`player.not-eligible`（旁观者操作）、
+`room.already-started`、`room.full`、`room.ended`、`player.name-required`、`player.not-eligible`（旁观者操作）、
 `command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`。
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、

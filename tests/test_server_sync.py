@@ -40,7 +40,8 @@ class WebSocketRecoveryTests(unittest.TestCase):
 
     def _connection(self, player_id):
         ws = FakeWebSocket()
-        conn = self.app.Conn(ws=ws, room=self.room, player_id=player_id, account=account_for_player(self.room, player_id))
+        # ready=True：fixture 模拟的是已完成 hello 的活跃连接（hello 后连接才参与广播）。
+        conn = self.app.Conn(ws=ws, room=self.room, player_id=player_id, account=account_for_player(self.room, player_id), ready=True)
         self.app.conns[f"test-{player_id}"] = conn
         return conn, ws
 

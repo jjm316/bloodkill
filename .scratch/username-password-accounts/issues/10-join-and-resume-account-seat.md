@@ -1,7 +1,7 @@
 # 10：按账号加入房间及跨设备恢复座位
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 09
 Parent: 02, 03
 Draft ID: 04

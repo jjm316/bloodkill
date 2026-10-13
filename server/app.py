@@ -46,6 +46,8 @@ class Conn:
     account: Account
     is_host: bool = False
     player_id: str | None = None
+    # hello 完成前连接没有座位/模式，不参与投影广播（避免空视角帧）。
+    ready: bool = False
 
 
 # connection id -> connection
@@ -60,7 +62,7 @@ metrics = {
 
 
 def room_conns(room: Room) -> list[Conn]:
-    return [conn for conn in conns.values() if conn.room is room]
+    return [conn for conn in conns.values() if conn.room is room and conn.ready]
 
 
 def build_state(conn: Conn) -> dict[str, Any]:
@@ -73,7 +75,7 @@ def build_state(conn: Conn) -> dict[str, Any]:
         # and single-player windows alike, issue 05 / ADR 0011).
         game["pending"]["deadline"] = room.window_deadline
     connected = {
-        player_id: any(c.room is room and c.player_id == player_id for c in conns.values())
+        player_id: any(c.room is room and c.ready and c.player_id == player_id for c in conns.values())
         for player_id in room.engine.state.players
     }
     return {
@@ -415,6 +417,7 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
                     pass
                 conns.pop(other_id, None)
                 metrics["seatTakeovers"] += 1
+    conn.ready = True
     await broadcast_state(room)
     return True
 

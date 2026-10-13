@@ -170,3 +170,92 @@ describe("进房失败态", () => {
     expect(screen.getByText("房间不存在，请核对房间号。")).toBeInTheDocument();
   });
 });
+
+// 工单 10：账号加入房间——加入阶段的房间错误帧必须终止初始重连并给出中文原因；
+// 已进入对局后的 error（如房主操作被拒）不影响断线重连。
+describe("账号加入拒绝", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    MockWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", MockWebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("锁定房间拒绝后停止初始重连：不再建立新的 WebSocket，只保留返回大厅入口", () => {
+    renderGameScreen();
+    const first = MockWebSocket.instances[0];
+    act(() => {
+      first.open();
+    });
+    act(() => {
+      first.receive({ type: "error", code: "room.locked", message: "房间已锁定，暂不能加入。", details: {} });
+      first.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText("房间已锁定。")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(120_000);
+    });
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it.each([
+    ["room.full", "房间已满员（12 人），不能加入。"],
+    ["room.ended", "对局已结束，不能加入；可观看回放。"],
+    ["account.room-occupied", "你已有未结束房间，请返回原房间。"],
+  ])("%s 显示中文原因并可返回大厅", (code, text) => {
+    renderGameScreen();
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive({ type: "error", code, message: text, details: {} });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText(text)).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it("对局中收到房主操作被拒的 error 不停止断线重连", () => {
+    renderGameScreen();
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive(makeState());
+    });
+    act(() => {
+      ws.receive({ type: "error", code: "room.not-host", message: "只有房主可以执行此操作。", details: {} });
+    });
+    expect(screen.getByText("操作未完成，请检查当前阶段和操作条件。")).toBeInTheDocument();
+    act(() => {
+      ws.drop();
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(MockWebSocket.instances.length).toBeGreaterThan(1);
+  });
+
+  it("座位被接管显示已在其他设备进入房间，而不是旧的姓名文案", () => {
+    renderGameScreen();
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive(makeState());
+      ws.receive({ type: "taken-over", reason: "seat taken over by a new connection" });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "座位已被接管" })).toBeInTheDocument();
+    expect(screen.getByText(/已在其他设备进入房间/)).toBeInTheDocument();
+    expect(screen.queryByText(/使用其他姓名/)).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+});

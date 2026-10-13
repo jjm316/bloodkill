@@ -119,7 +119,14 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
         } else if (typed.type === "error") {
           const failure = message as ServerError;
           setError(failure);
-          if (failure.code.startsWith("auth.") || failure.code.startsWith("protocol.")) {
+          // 加入阶段（尚未收到任何状态投影）的房间错误是终止性的：
+          // 锁定、开局、满员、结束、占用等拒绝后不再自动重连，避免反复撞墙。
+          // 已进入房间后的命令错误（如房主操作被拒）不影响断线重连。
+          if (
+            !stateRef.current ||
+            failure.code.startsWith("auth.") ||
+            failure.code.startsWith("protocol.")
+          ) {
             canReconnect = false;
             setFailed(true);
             ws.close();

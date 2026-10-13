@@ -155,14 +155,25 @@ class RoomManager:
     # ---- joining -------------------------------------------------------
 
     def join_or_resume(self, room: Room, account: Account) -> tuple[str, bool]:
-        """Join or restore only the seat bound to this authenticated account."""
+        """Join or restore only the seat bound to this authenticated account.
+
+        The account's own recovery and a newcomer's join are decided
+        separately: an account that already holds a seat may resume it even
+        when the room is locked or the game has started (or ended, to keep
+        browsing the result), while newcomers may only join an unlocked
+        waiting room that is not full.
+        """
         existing = room.player_id_for_account(account.account_id)
         if existing is not None:
             return existing, False
+        if room.status == "ended":
+            raise RuleError("room.ended", "对局已结束，不能加入；可观看回放。")
         if room.status != "waiting":
-            raise RuleError("room.already-started")
+            raise RuleError("room.already-started", "游戏已开始，不能加入；若你已在房间，返回原房间即可恢复座位。")
         if room.locked:
-            raise RuleError("room.locked")
+            raise RuleError("room.locked", "房间已锁定，暂不能加入。")
+        if len(room.engine.state.players) >= 12:
+            raise RuleError("room.full", "房间已满员（12 人），不能加入。")
         player_id = f"p-{secrets.token_hex(6)}"
         command = Command(
             f"join-{secrets.token_hex(4)}",
