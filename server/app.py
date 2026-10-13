@@ -11,19 +11,22 @@ curse assignment, or private events. See PROTOCOL.md and README.md.
 from __future__ import annotations
 
 import os
+import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
 import uuid
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from blood_bound import Command, RuleError, project_state
 
 from .deadlines import DeadlineScheduler
+from .accounts import AccountError, AccountStore, SESSION_COOKIE, SESSION_SECONDS
 from .protocol import PRIVATE_EVENT_TYPES, PROTOCOL_VERSION
 from .rooms import Room, RoomManager
 
@@ -33,6 +36,7 @@ SAVES_DIR = Path(os.environ.get("BLOOD_BOUND_SAVES_DIR", "saves"))
 app = FastAPI(title="Blood Bound server")
 manager = RoomManager(SAVES_DIR)
 manager.restore()
+accounts = AccountStore(SAVES_DIR)
 
 
 @dataclass
@@ -196,6 +200,40 @@ async def broadcast_state(room: Room) -> None:
 
 
 # ---- REST -------------------------------------------------------------
+
+
+@app.post("/api/auth/register")
+async def register_account(request: Request) -> JSONResponse:
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面提交注册。"), status_code=403)
+    try:
+        payload = await request.json()
+    except (ValueError, UnicodeError):
+        return JSONResponse(error_message("auth.invalid-input", "注册信息格式不正确，请重新填写。"), status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse(error_message("auth.invalid-input", "注册信息格式不正确，请重新填写。"), status_code=400)
+    try:
+        account, token = await run_in_threadpool(accounts.register, payload.get("username"), payload.get("password"), payload.get("confirmPassword"))
+    except AccountError as error:
+        return JSONResponse(error_message(error.code, str(error)), status_code=error.status)
+    except sqlite3.Error:
+        return JSONResponse(error_message("auth.service-unavailable", "服务暂时不可用，请稍后重试。"), status_code=503)
+    response = JSONResponse({"account": account.public()}, status_code=201)
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_SECONDS, httponly=True, samesite="strict", path="/")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/auth/session")
+def current_account(request: Request) -> JSONResponse:
+    account = accounts.get_session(request.cookies.get(SESSION_COOKIE))
+    if account is None:
+        response = JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
+    else:
+        response = JSONResponse({"account": account.public()})
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/health")

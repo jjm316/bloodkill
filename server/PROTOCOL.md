@@ -21,6 +21,23 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 ## REST API
 
+### 注册与登录身份
+
+`POST /api/auth/register` 接收 JSON `{username, password, confirmPassword}`。用户名为
+2–16 个中文、ASCII 英文字母、数字或下划线，英文字母不区分大小写，公开名字保留注册写法。
+密码为 6–12 个原字符，确认须完全相同，不截断、不去空白。
+成功返回 201 `{account: {accountId, username}}`，同时设置 `bloodbound_session` Cookie
+（HttpOnly、SameSite=strict、Path=/、Max-Age=2592000）。服务端固定 30 天到期，不滚动续期。
+账号与会话持久化在存档目录独立的 `accounts/accounts.sqlite3`，与房间清理隔离。
+
+`GET /api/auth/session` 使用 Cookie 恢复身份，成功返回相同公开账号对象，未登录或过期返回
+401 `auth.login-required`。响应不含密码摘要或会话凭证，身份响应禁用缓存。
+注册错误为 400 `auth.invalid-username` / `auth.invalid-password` / `auth.password-mismatch`
+/ `auth.invalid-input`，重名为 409 `auth.username-taken`，存储不可用为
+503 `auth.service-unavailable`；`message` 均为中文且不回显输入。
+
+本节为工单 07 注册切片；登录、退出和房间账号授权由后续账号工单扩展。
+
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/health` | `{"status": "ok"}` |

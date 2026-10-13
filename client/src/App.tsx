@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AccountEntry, type Account } from "./AccountEntry";
 import { GameScreen } from "./GameScreen";
 import { Lobby, type RoomCredentials } from "./Lobby";
 import { ReplayScreen } from "./ReplayScreen";
@@ -16,6 +17,15 @@ function autoJoinCredentials(): RoomCredentials | null {
 }
 
 export default function App() {
+  const [account, setAccount] = useState<Account | null>(null);
+  const [restoring, setRestoring] = useState(true);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/session", { credentials: "same-origin" }).then(async response => {
+      if (response.ok) { const body = await response.json(); if (active) setAccount(body.account); }
+    }).catch(() => {}).finally(() => { if (active) setRestoring(false); });
+    return () => { active = false; };
+  }, []);
   const [credentials, setCredentials] = useState<RoomCredentials | null>(autoJoinCredentials);
   const [screen, setScreen] = useState<Screen>(() => (credentials ? "room" : "lobby"));
 
@@ -23,8 +33,15 @@ export default function App() {
     <>
       <a className="skip-link" href="#main-content">跳转到主要内容</a>
       <main id="main-content">
+        {restoring ? <p role="status">正在恢复登录……</p> : !account ? <AccountEntry onAuthenticated={next => {
+          setAccount(next);
+          setCredentials(null);
+          setScreen("lobby");
+        }} /> : <>
+        <p className="current-account">当前账号：{account.username}</p>
         {screen === "lobby" ? (
       <Lobby
+        account={account}
         onJoin={(next) => {
           setCredentials(next);
           setScreen("room");
@@ -42,6 +59,7 @@ export default function App() {
         }}
       />
         ) : null}
+        </>}
       </main>
     </>
   );
