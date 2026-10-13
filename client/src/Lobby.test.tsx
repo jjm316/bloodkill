@@ -42,3 +42,28 @@ it("输入六位房号加入房间；非六位输入给中文提示不发起", a
   fireEvent.change(input, { target: { value: "1234567" } });
   expect(screen.getByLabelText("房间号")).toHaveValue("123456");
 });
+
+// 工单 16：前端限制——已有未结束房间的账号不能同时旁观；跨设备由服务端校验兜底。
+it("已有未结束房间时禁用旁观看守前端入口并说明原因；无房间时可旁观", async () => {
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ room: { code: "123456", status: "waiting" } }) })
+    .mockResolvedValue({ ok: true, json: async () => ({ room: null }) });
+  vi.stubGlobal("fetch", fetcher);
+  const onJoin = vi.fn();
+  const { unmount } = render(<Lobby account={{ accountId: "spectator-account", username: "旁观玩家" }} onJoin={onJoin} onReplay={() => {}} />);
+  const spectate = await screen.findByRole("button", { name: "旁观" });
+  expect(spectate).toBeDisabled();
+  expect(screen.getByText(/不能同时旁观/)).toBeInTheDocument();
+  const input = screen.getByLabelText("房间号");
+  fireEvent.change(input, { target: { value: "654321" } });
+  fireEvent.click(spectate);
+  expect(onJoin).not.toHaveBeenCalled();
+  unmount();
+
+  render(<Lobby account={{ accountId: "spectator-account", username: "旁观玩家" }} onJoin={onJoin} onReplay={() => {}} />);
+  const enabled = await screen.findByRole("button", { name: "旁观" });
+  expect(enabled).not.toBeDisabled();
+  fireEvent.change(screen.getByLabelText("房间号"), { target: { value: "654321" } });
+  fireEvent.click(enabled);
+  expect(onJoin).toHaveBeenCalledWith({ code: "654321", accountId: "spectator-account", mode: "spectator" });
+});

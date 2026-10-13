@@ -81,7 +81,16 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 会话过期或被退出撤销后：重连被 `auth.login-required` 拒绝；**此前已建立的连接**在发送任何
   消息或房间下一次广播时收到 `auth.session-expired`（过期）或 `auth.session-revoked`（退出撤销，
   工单 14）错误帧并关闭，不能再发送合法动作、收不到后续私有投影；同房其他有效会话不受影响。
-- `mode="spectator"` → 公开投影（`yourPlayerId = null`，不可发送玩家命令）。
+- `mode="spectator"` → 公开投影（`yourPlayerId = null`，不可发送玩家命令）。在线旁观必须登录；
+  旁观只针对未结束（等待/进行）房间。账号在**任何**未结束房间持有玩家座位时禁止同时旁观
+  （工单 16，服务端校验、跨设备一致）→ `spectator.seat-held`（你已有未结束房间的玩家座位，
+  不能同时旁观；请返回原房间），details.roomCode 提供返回原房入口；被拒账号在原房走玩家恢复
+  路径。房间已结束时 → `room.ended`（对局已结束，不能旁观；可观看回放）；已结束对局按房号
+  走公开回放入口，不受实时旁观限制影响。
+- **旁观中的账号成为玩家（加入或创建房间即占座）时，其已建立的旁观连接被停止**：收到
+  `spectator.became-player`（当前账号已作为玩家进入房间，本旁观连接已停止。）错误帧后关闭，
+  不再收到任何新帧，也不能再发送动作；同房其他账号的旁观连接不受影响。防止「先旁观、后加入」
+  绕过互斥。
 - 房主账号的稳定引用与房间 hostAccountId 相等 → `isHost`；其他账号不能开始或锁定。
 - `mode="player"` 按当前账号恢复或建立座位，不按客户端姓名认领；同账号已有座位在锁房/开局后可恢复。
 - hello 中出现旧 `name` 或 `token` 字段 → `protocol.legacy-identity`，中文提示刷新。
@@ -292,6 +301,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 **服务器层**：`auth.login-required`（未登录访问需要会话的接口，如回放）、`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
 `room.already-started`、`room.full`、`room.ended`、`seat.taken-over`（座位已被新连接接管后，
 旧连接迟到的命令/房主消息一律以此拒绝，命令拒绝仍带 ack）、`player.name-required`、`player.not-eligible`（旁观者操作）、
+`spectator.seat-held`（账号持有未结束玩家座位时旁观被拒，details.roomCode 给返回原房入口，工单 16）、
+`spectator.became-player`（旁观中的账号成为玩家，其已建立旁观连接被停止，工单 16）、
 `command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`、
 `auth.session-expired`（会话到期后已建立 WS 连接被终止，工单 14）、
 `auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14）。

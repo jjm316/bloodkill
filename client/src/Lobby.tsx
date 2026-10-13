@@ -51,7 +51,9 @@ export function Lobby({ onJoin, onReplay, account }: { onJoin: (c: RoomCredentia
       {existing && <button disabled={busy} onClick={() => enter(existing.code)}>返回房间 {existing.code}</button>}
       <button disabled={busy} onClick={createRoom}>创建房间</button>
       <label className="field" htmlFor="room-code">房间号<input id="room-code" value={joinCode} onChange={e => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6位数字房间号" inputMode="numeric" autoComplete="off" /></label>
-      <div className="lobby-actions"><button disabled={busy} onClick={() => joinRoom("player")}>加入房间</button><button disabled={busy} onClick={() => joinRoom("spectator")}>旁观</button></div>
+      {/* 工单 16：已有未结束房间的账号不能同时旁观（前端看守；跨设备由服务端校验兜底）。 */}
+      <div className="lobby-actions"><button disabled={busy} onClick={() => joinRoom("player")}>加入房间</button><button disabled={busy || !!existing} onClick={() => joinRoom("spectator")}>旁观</button></div>
+      {existing && <p className="hint" role="status">你已有未结束房间，不能同时旁观其他对局；可返回原房间，已结束的对局仍可观看回放。</p>}
       <button onClick={onReplay}>观看回放</button>
     </div>
     {error && <div className="error" role="alert" aria-live="assertive">{error}<button disabled={busy} onClick={() => void refreshRoom()}>查询已有房间</button></div>}
