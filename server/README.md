@@ -86,10 +86,32 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 - **经内网穿透/公网访问**：本次按 ADR 0016 继续 HTTP/WS。客户端按 `location.host`
   同源推导 WebSocket 地址，HTTPS 页面自动用 WSS；账号存储、会话与调试端点不公开。
 
+## 服务器管理命令（本机终端）
+
+运维用查看命令随服务端一起交付（`server/admin.py`），在部署根目录运行：
+
+```text
+.venv/Scripts/python.exe -m server.admin users   # 查看账号及当前房间占用
+.venv/Scripts/python.exe -m server.admin rooms   # 查看房间状态、房主与在线玩家
+```
+
+- 命令不直接读改存档：服务启动时在同一进程打开一个**只绑定 127.0.0.1** 的管理
+  监听，CLI 请求它读取实时状态（含在线连接）。公网应用不注册任何管理路由。
+- 独立管理凭证与实例记录存放在存档目录的 `admin/` 子目录（`admin-token`、
+  `installation.json`）；凭证不进命令行参数、不出现在输出中，普通账号或房主
+  身份拿不到管理权限。
+- `--saves-dir`（默认环境变量 `BLOOD_BOUND_SAVES_DIR` 或 `./saves`）与 `--port`
+  可显式指定；端口上若不是目标实例（安装标识/存档目录不符）会拒绝查询，
+  避免误连同一台机器上的另一个服务。
+- 服务未运行、配置缺失或凭证错误均有中文提示并非零退出。重置密码、关闭房间
+  等写操作由后续版本在同一入口扩展。
+
 ## 数据与存档
 
 - 存档目录默认 `saves/`，可用环境变量 `BLOOD_BOUND_SAVES_DIR` 覆盖。
 - 账号与会话位于独立的 `accounts/accounts.sqlite3`；回放清理不删除账号。
+- 管理安装记录与凭证位于 `admin/` 子目录，回放清理不触碰；`installation.json`
+  记录实例标识与当前管理端口，`admin-token` 仅服务器本机可用。
 - 每接受一条命令自动存档（gzip + meta 侧车文件）；服务器重启时自动恢复全部房间，
   进行中的对局可断线重连继续。
 - 已结束的对局保留最近 **20** 个（超出自动清理），用于回放页。
