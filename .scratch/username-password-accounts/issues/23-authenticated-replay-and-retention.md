@@ -1,7 +1,7 @@
 # 23：登录观看公开回放及保留规则
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 10
 Parent: 02, 05
 Draft ID: 17

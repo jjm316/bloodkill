@@ -226,6 +226,15 @@ def positive_count(value: str) -> int:
     return count
 
 
+def find_unused_code(base: str, created: str, timeout: float) -> str:
+    """取一个房间概览 404 的房号，用于未知房回放反例。"""
+    for offset in range(1, 11):
+        candidate = f"{(int(created) + offset) % 10 ** 6:06d}"
+        if candidate != created and request(f"{base}/api/rooms/{candidate}", timeout=timeout)[0] == 404:
+            return candidate
+    raise SmokeFailure("找不到不存在的房号用于未知房检查")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="鲜血盟约自托管发布 smoke 检查")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="服务地址")
@@ -242,15 +251,27 @@ def main() -> int:
         require(status == 200 and len(room.get("code", "")) == 6 and "hostToken" not in room, "创建房间失败")
         status, info = request(f"{base}/api/rooms/{room['code']}", timeout=args.timeout)
         require(status == 200 and info.get("status") == "waiting", "等待房间概览检查失败")
+        # 回放要求登录（工单 23）：匿名被拒，登录后按房号给出明确拒绝原因。
+        unknown = find_unused_code(base, room["code"], args.timeout)
         status, replay_error = request(f"{base}/api/rooms/{room['code']}/replay", timeout=args.timeout)
+        require(status == 401 and replay_error.get("code") == "auth.login-required", "未登录未拒绝回放")
+        status, replay_error = request(f"{base}/api/rooms/{unknown}/replay", timeout=args.timeout)
+        require(status == 401, "未登录请求未知房回放必须先拒登录")
+        status, replay_error = sessions[6].request(f"/api/rooms/{room['code']}/replay")
         require(status == 409 and replay_error.get("code") == "room.not-ended", "未结束房间未拒绝回放")
+        status, replay_error = sessions[6].request(f"/api/rooms/{unknown}/replay")
+        require(status == 404 and replay_error.get("code") == "room.not-found", "未知房间未给出明确原因")
         status, metrics = request(f"{base}/metrics", timeout=args.timeout)
         require(status == 200 and "hostToken" not in json.dumps(metrics), "运行指标检查失败")
         final = asyncio.run(websocket_smoke(base, room, sessions, timeout=args.timeout, game_timeout=args.game_timeout, max_commands=args.max_commands))
         status, info = request(f"{base}/api/rooms/{room['code']}", timeout=args.timeout)
         require(status == 200 and info.get("status") == "ended", "终局房间概览检查失败")
-        status, replay = request(f"{base}/api/rooms/{room['code']}/replay", timeout=args.timeout)
+        # 参与者与登录的非参与者账号都能读取同一份正常终局公开回放。
+        status, replay = sessions[0].request(f"/api/rooms/{room['code']}/replay")
         require(status == 200, f"终局回放请求失败（HTTP {status}）")
+        outsider = AccountClient(base, args.timeout).register_test_account()
+        status, outsider_replay = outsider.request(f"/api/rooms/{room['code']}/replay")
+        require(status == 200 and outsider_replay == replay, "非参与者登录后必须能读到相同回放")
         validate_replay(replay, final)
         print(f"smoke：公开回放成功（{len(replay['steps'])} 步，末尾与终局一致）")
     except (SmokeFailure, WebSocketException, KeyError, ValueError, OSError, RuntimeError) as error:
