@@ -209,6 +209,20 @@ h2 {
   color: var(--muted);
 }
 
+/* 大厅与房间内持续显示的当前账号行（工单 14：含退出登录入口） */
+
+.current-account {
+  max-width: var(--panel-max-width);
+  margin: 16px auto 0;
+}
+
+.current-account .logout-button {
+  margin-left: 12px;
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 14px;
+}
+
 /* lobby */
 
 .lobby {

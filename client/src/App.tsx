@@ -17,6 +17,7 @@ function autoJoinCredentials(account: Account): RoomCredentials | null {
 export default function App() {
   const [account, setAccount] = useState<Account | null>(null);
   const [restoring, setRestoring] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
   useEffect(() => {
     let active = true;
     fetch("/api/auth/session", { credentials: "same-origin" }).then(async response => {
@@ -31,6 +32,26 @@ export default function App() {
   const [credentials, setCredentials] = useState<RoomCredentials | null>(null);
   const [screen, setScreen] = useState<Screen>("lobby");
 
+  // 退出登录（工单 14）：撤销服务端当前登录并清除本机身份与房间状态。
+  // 服务端会停止该登录的房间连接；本地清理只影响显示，撤销以服务端为准。
+  const logout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+    } catch { /* 网络不可达时同样回到登录页；服务端会话最迟自然到期 */ }
+    setLoggingOut(false);
+    setAccount(null);
+    setCredentials(null);
+    setScreen("lobby");
+  };
+  // 会话在服务端失效（过期/撤销/接管后的登录要求）：回到登录页重新登录。
+  const authLost = () => {
+    setAccount(null);
+    setCredentials(null);
+    setScreen("lobby");
+  };
+
   return (
     <>
       <a className="skip-link" href="#main-content">跳转到主要内容</a>
@@ -40,9 +61,10 @@ export default function App() {
           setCredentials(null);
           setScreen("lobby");
         }} /> : <>
-        <p className="current-account">当前账号：{account.username}</p>
+        <p className="current-account">当前账号：{account.username}<button type="button" className="logout-button" disabled={loggingOut} onClick={() => { void logout(); }}>{loggingOut ? "正在退出……" : "退出登录"}</button></p>
         {screen === "lobby" ? (
       <Lobby
+        key={account.accountId}
         account={account}
         onJoin={(next) => {
           setCredentials(next);
@@ -54,6 +76,7 @@ export default function App() {
           <ReplayScreen onBack={() => setScreen("lobby")} />
         ) : credentials ? (
       <GameScreen
+        key={credentials.accountId}
         credentials={credentials}
         onLeave={() => {
           setCredentials(null);
@@ -63,6 +86,7 @@ export default function App() {
           setCredentials({ code, accountId: account.accountId, mode: "player" });
           setScreen("room");
         }}
+        onAuthLost={authLost}
       />
         ) : null}
         </>}
