@@ -44,6 +44,9 @@ class Conn:
     ws: WebSocket
     room: Room
     account: Account
+    # 会话凭证只在内存中把连接与其登录关联，用于退出/过期时停止该连接；
+    # 不进入日志、投影或 URL。
+    token: str = ""
     is_host: bool = False
     player_id: str | None = None
     # hello 完成前连接没有座位/模式，不参与投影广播（避免空视角帧）。
@@ -61,8 +64,28 @@ metrics = {
 }
 
 
-def room_conns(room: Room) -> list[Conn]:
-    return [conn for conn in conns.values() if conn.room is room and conn.ready]
+async def live_room_conns(room: Room) -> list[Conn]:
+    """Ready connections of this room whose login session is still valid.
+
+    An expired or revoked session is terminated here (lazy eviction at the
+    next room broadcast): the connection is told why in Chinese and closed,
+    so it receives no further private projections.
+    """
+    alive: list[Conn] = []
+    expired: list[Conn] = []
+    checked: dict[str, bool] = {}
+    for conn in list(conns.values()):
+        if conn.room is not room or not conn.ready:
+            continue
+        if conn.token not in checked:
+            checked[conn.token] = accounts.get_session(conn.token) is not None
+        if checked[conn.token]:
+            alive.append(conn)
+        else:
+            expired.append(conn)
+    for conn in expired:
+        await _terminate_conn(conn, "auth.session-expired", "登录已过期，请重新登录。")
+    return alive
 
 
 def build_state(conn: Conn) -> dict[str, Any]:
@@ -139,12 +162,28 @@ async def send_safe(ws: WebSocket, message: dict[str, Any]) -> None:
 
 
 async def broadcast(room: Room, message: dict[str, Any]) -> None:
-    for conn in room_conns(room):
+    for conn in await live_room_conns(room):
         await send_safe(conn.ws, message)
 
 
 async def send_state(conn: Conn) -> None:
     await send_safe(conn.ws, build_state(conn))
+
+
+async def _terminate_conn(conn: Conn, code: str, message: str) -> None:
+    """Stop an established connection whose session was revoked or expired.
+
+    The connection is dropped from the registry first so no later broadcast or
+    command can reach it, then it is told why in Chinese and closed.
+    """
+    for conn_id, candidate in list(conns.items()):
+        if candidate is conn:
+            conns.pop(conn_id, None)
+    await send_safe(conn.ws, error_message(code, message))
+    try:
+        await conn.ws.close()
+    except Exception:
+        pass
 
 
 async def send_command_ack(
@@ -198,7 +237,7 @@ deadline_scheduler = DeadlineScheduler(_expire_window)
 
 async def broadcast_state(room: Room) -> None:
     await deadline_scheduler.sync(room)
-    for conn in room_conns(room):
+    for conn in await live_room_conns(room):
         await send_safe(conn.ws, build_state(conn))
 
 
@@ -258,6 +297,28 @@ def current_account(request: Request) -> JSONResponse:
         response = JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
     else:
         response = JSONResponse({"account": account.public()})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/auth/logout")
+async def logout_account(request: Request) -> JSONResponse:
+    """Revoke the current login only: other devices' sessions stay valid.
+
+    The revoked session's established room connections are stopped (told why
+    in Chinese, then closed) without removing seats or host ownership.
+    """
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面退出登录。"), status_code=403)
+    token = request.cookies.get(SESSION_COOKIE)
+    account = accounts.get_session(token)
+    if account is None or not await run_in_threadpool(accounts.revoke_session, token):
+        return JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
+    for conn in [conn for conn in list(conns.values()) if conn.token == token]:
+        await _terminate_conn(conn, "auth.session-revoked", "当前登录已退出，请重新登录。")
+    response = JSONResponse({"account": account.public()})
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="strict")
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -339,7 +400,8 @@ async def _arm_restored_deadlines() -> None:
 @app.websocket("/ws/{code}")
 async def ws_endpoint(websocket: WebSocket, code: str) -> None:
     await websocket.accept()
-    account = accounts.get_session(websocket.cookies.get(SESSION_COOKIE))
+    token = websocket.cookies.get(SESSION_COOKIE)
+    account = accounts.get_session(token)
     if account is None:
         await send_safe(websocket, error_message("auth.login-required", "请先登录。"))
         await websocket.close()
@@ -352,7 +414,7 @@ async def ws_endpoint(websocket: WebSocket, code: str) -> None:
         return
 
     conn_id = uuid.uuid4().hex
-    conn = Conn(ws=websocket, room=room, account=account)
+    conn = Conn(ws=websocket, room=room, account=account, token=token or "")
     conns[conn_id] = conn
     metrics["websocketConnections"] += 1
     try:
@@ -360,6 +422,10 @@ async def ws_endpoint(websocket: WebSocket, code: str) -> None:
             return
         while True:
             raw = await websocket.receive_json()
+            if accounts.get_session(conn.token) is None:
+                # 过期/已撤销的登录：已建立的连接不能再发送任何合法动作。
+                await _terminate_conn(conn, "auth.session-expired", "登录已过期，请重新登录。")
+                return
             await _handle_message(conn, raw)
     except WebSocketDisconnect:
         pass
@@ -374,6 +440,10 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
     try:
         raw = await ws.receive_json()
     except Exception:
+        return False
+    if accounts.get_session(conn.token) is None:
+        # accept 与 hello 之间登录可能已过期/撤销：同样按未登录拒绝。
+        await send_safe(ws, error_message("auth.login-required", "请先登录。"))
         return False
     if not isinstance(raw, dict) or raw.get("type") != "hello":
         await send_safe(ws, error_message("command.invalid-shape", "First message must be hello."))

@@ -45,7 +45,16 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 失败不设置或替换 Cookie，也不改变已有有效身份。注册与登录均拒绝非本站 Origin（403
 `auth.invalid-origin`）；密码只放 JSON 请求体，不进入 URL 或响应。
 
-本节为工单 07–08 注册、登录和身份恢复切片；退出和房间账号授权由后续账号工单扩展。
+`POST /api/auth/logout` 撤销**当前设备**的登录会话：成功返回 200 `{account}` 并以 Max-Age=0
+清除浏览器 Cookie；其他设备的独立登录不受影响。退出同时停止该会话已建立的房间 WebSocket
+（连接收到 `auth.session-revoked` 错误帧后关闭），但不移除座位、不改变房主归属；重新登录
+同账号可恢复原座位。无会话或已退出的凭证返回 401 `auth.login-required`，重放不能恢复身份。
+
+会话到期（固定 30 天，不滚动续期）后所有 HTTP 请求视为未登录；**此前已建立的 WebSocket**
+在下一条消息或房间广播时被终止（`auth.session-expired` 错误帧 + 关闭），旧连接不能再发送
+合法动作、也收不到后续私有投影；同房其他有效会话的连接不受影响。
+
+本节覆盖工单 07–08 注册、登录、身份恢复与工单 14 退出/过期切片；修改密码与管理重置由后续账号工单扩展。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -69,6 +78,9 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ```
 
 - WebSocket 握手必须携带有效 `bloodbound_session` Cookie；身份不放 URL 或 hello。
+- 会话过期或被退出撤销后：重连被 `auth.login-required` 拒绝；**此前已建立的连接**在发送任何
+  消息或房间下一次广播时收到 `auth.session-expired`（过期）或 `auth.session-revoked`（退出撤销，
+  工单 14）错误帧并关闭，不能再发送合法动作、收不到后续私有投影；同房其他有效会话不受影响。
 - `mode="spectator"` → 公开投影（`yourPlayerId = null`，不可发送玩家命令）。
 - 房主账号的稳定引用与房间 hostAccountId 相等 → `isHost`；其他账号不能开始或锁定。
 - `mode="player"` 按当前账号恢复或建立座位，不按客户端姓名认领；同账号已有座位在锁房/开局后可恢复。
@@ -274,7 +286,9 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 **服务器层**：`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
 `room.already-started`、`room.full`、`room.ended`、`player.name-required`、`player.not-eligible`（旁观者操作）、
-`command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`。
+`command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`、
+`auth.session-expired`（会话到期后已建立 WS 连接被终止，工单 14）、
+`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14）。
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、
 `game.already-ended`、`command.unknown`、`game.not-setup`、`game.duplicate-player`、

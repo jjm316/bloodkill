@@ -1,7 +1,7 @@
 # 14：固定 30 天登录、退出与切换账号
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 10
 Parent: 01, 03
 Draft ID: 08

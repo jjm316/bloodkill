@@ -109,6 +109,17 @@ class AccountStore:
                 (hashlib.sha256(token.encode()).hexdigest(), time.time() if now is None else now)).fetchone()
         return Account(row["account_id"], row["username"]) if row else None
 
+    def revoke_session(self, token: str | None) -> bool:
+        """撤销一个登录会话；返回它是否确实处于有效状态被撤销。"""
+        if not token:
+            return False
+        with self.connect() as db:
+            cursor = db.execute(
+                "UPDATE sessions SET revoked = 1 WHERE token_hash = ? AND revoked = 0",
+                (hashlib.sha256(token.encode()).hexdigest(),),
+            )
+        return cursor.rowcount > 0
+
     def verify_credentials(self, username: object, password: object) -> Account | None:
         if not isinstance(username, str) or not isinstance(password, str):
             return None

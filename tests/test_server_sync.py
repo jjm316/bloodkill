@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
-from tests.account_fixtures import account, account_for_player, cookie, store
+from tests.account_fixtures import account, account_for_player, cookie, store, token, token_for_player
 from server.protocol import PROTOCOL_VERSION
 
 
@@ -41,7 +41,7 @@ class WebSocketRecoveryTests(unittest.TestCase):
     def _connection(self, player_id):
         ws = FakeWebSocket()
         # ready=True：fixture 模拟的是已完成 hello 的活跃连接（hello 后连接才参与广播）。
-        conn = self.app.Conn(ws=ws, room=self.room, player_id=player_id, account=account_for_player(self.room, player_id), ready=True)
+        conn = self.app.Conn(ws=ws, room=self.room, player_id=player_id, account=account_for_player(self.room, player_id), token=token_for_player(self.room, player_id), ready=True)
         self.app.conns[f"test-{player_id}"] = conn
         return conn, ws
 
@@ -109,14 +109,14 @@ class WebSocketRecoveryTests(unittest.TestCase):
 
     def test_host_reconnect_keeps_management_authority(self):
         first_ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": PROTOCOL_VERSION})
-        first = self.app.Conn(ws=first_ws, room=self.room, account=account("P0"))
+        first = self.app.Conn(ws=first_ws, room=self.room, account=account("P0"), token=token("P0"))
         self.app.conns["host-first"] = first
         asyncio.run(self.app._handle_hello(first, first_ws))
         self.assertTrue(first.is_host)
         first_state_hash = json.dumps(first_ws.sent[-1]["game"], sort_keys=True)
 
         resumed_ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": PROTOCOL_VERSION})
-        resumed = self.app.Conn(ws=resumed_ws, room=self.room, account=account("P0"))
+        resumed = self.app.Conn(ws=resumed_ws, room=self.room, account=account("P0"), token=token("P0"))
         self.app.conns["host-resumed"] = resumed
         asyncio.run(self.app._handle_hello(resumed, resumed_ws))
 
@@ -129,13 +129,13 @@ class WebSocketRecoveryTests(unittest.TestCase):
         room = self.app.manager.create_room(account("Host"))
         host_player = self.app.manager.join_or_resume(room, account("Host"))[0]
         host_ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": PROTOCOL_VERSION})
-        host_conn = self.app.Conn(ws=host_ws, room=room, account=account("Host"))
+        host_conn = self.app.Conn(ws=host_ws, room=room, account=account("Host"), token=token("Host"))
         self.app.conns["bind-host"] = host_conn
         asyncio.run(self.app._handle_hello(host_conn, host_ws))
         self.assertEqual(room.host_player_id, host_player)
 
         other_ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": PROTOCOL_VERSION})
-        other_conn = self.app.Conn(ws=other_ws, room=room, account=account("Guest"))
+        other_conn = self.app.Conn(ws=other_ws, room=room, account=account("Guest"), token=token("Guest"))
         self.app.conns["bind-other"] = other_conn
         asyncio.run(self.app._handle_hello(other_conn, other_ws))
 
@@ -146,7 +146,7 @@ class WebSocketRecoveryTests(unittest.TestCase):
 
     def test_version_mismatch_is_rejected_before_a_seat_is_resumed(self):
         ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": "obsolete"})
-        conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"))
+        conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"), token=token("P0"))
 
         accepted = asyncio.run(self.app._handle_hello(conn, ws))
 
@@ -158,7 +158,7 @@ class WebSocketRecoveryTests(unittest.TestCase):
         # pre-gate client actually sends) must be refused by the current
         # server before its seat is resumed.
         ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": "2"})
-        conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"))
+        conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"), token=token("P0"))
 
         accepted = asyncio.run(self.app._handle_hello(conn, ws))
 
@@ -172,7 +172,7 @@ class WebSocketRecoveryTests(unittest.TestCase):
 
     def test_current_version_hello_resumes_the_seat(self):
         ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": "4"})
-        conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"))
+        conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"), token=token("P0"))
         self.app.conns["hello-current"] = conn
 
         accepted = asyncio.run(self.app._handle_hello(conn, ws))
@@ -189,7 +189,7 @@ class WebSocketRecoveryTests(unittest.TestCase):
         self.app.PROTOCOL_VERSION = "2"
         try:
             ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": "4"})
-            conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"))
+            conn = self.app.Conn(ws=ws, room=self.room, account=account("P0"), token=token("P0"))
 
             accepted = asyncio.run(self.app._handle_hello(conn, ws))
 
@@ -289,7 +289,7 @@ class DeadlineWindowTests(unittest.TestCase):
 
     def test_state_projection_carries_the_deadline(self):
         _, _target = self._attack()
-        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=self.player_ids[0], account=account_for_player(self.room, self.player_ids[0]))
+        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=self.player_ids[0], account=account_for_player(self.room, self.player_ids[0]), token=token_for_player(self.room, self.player_ids[0]))
         state = self.app.build_state(conn)
         pending = state["game"]["pending"]
         self.assertEqual(pending["kind"], "intervention")
@@ -401,7 +401,7 @@ class DeadlineWindowTests(unittest.TestCase):
 
     def test_gate_projection_carries_deadline_and_eligibles(self):
         _, target = self._open_gate()
-        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=target, account=account_for_player(self.room, target))
+        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=target, account=account_for_player(self.room, target), token=token_for_player(self.room, target))
         state = self.app.build_state(conn)
         pending = state["game"]["pending"]
         self.assertEqual(pending["kind"], "intervention")
@@ -574,7 +574,7 @@ class SingleWindowDeadlineTests(unittest.TestCase):
     def test_state_projection_carries_the_single_window_deadline(self):
         victim = next(pid for pid in self.player_ids if pid != self.room.engine.state.dagger_holder_id)
         self._wound(victim)
-        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=victim, account=account_for_player(self.room, victim))
+        conn = self.app.Conn(ws=FakeWebSocket(), room=self.room, player_id=victim, account=account_for_player(self.room, victim), token=token_for_player(self.room, victim))
         state = self.app.build_state(conn)
         pending = state["game"]["pending"]
         self.assertEqual(pending["kind"], "reveal")
