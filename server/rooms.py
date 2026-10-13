@@ -230,20 +230,62 @@ class RoomManager:
         intervention_timeout_seconds: int | None = None,
         single_window_timeout_seconds: int | None = None,
     ) -> tuple[Event, ...]:
-        payload: dict[str, Any] = {}
-        if intervention_timeout_seconds is not None:
-            payload["interventionTimeoutSeconds"] = int(intervention_timeout_seconds)
-        if single_window_timeout_seconds is not None:
-            payload["singleWindowTimeoutSeconds"] = int(single_window_timeout_seconds)
-        command = Command(
-            f"start-{secrets.token_hex(4)}",
-            room.game_id,
-            None,
-            room.engine.state.revision,
-            "start-game",
-            payload,
-        )
-        return self.apply_command(room, command)
+        # 与 exit_seat 共用占用锁（工单 13）：开局读取的玩家集合与等待玩家
+        # 的退座互斥，退座/开局并发竞争最终只有一种合法状态。
+        with self._seats_lock:
+            payload: dict[str, Any] = {}
+            if intervention_timeout_seconds is not None:
+                payload["interventionTimeoutSeconds"] = int(intervention_timeout_seconds)
+            if single_window_timeout_seconds is not None:
+                payload["singleWindowTimeoutSeconds"] = int(single_window_timeout_seconds)
+            command = Command(
+                f"start-{secrets.token_hex(4)}",
+                room.game_id,
+                None,
+                room.engine.state.revision,
+                "start-game",
+                payload,
+            )
+            return self.apply_command(room, command)
+
+    def exit_seat(self, room: Room, account: Account) -> tuple[Event, ...]:
+        """等待阶段普通玩家的主动退座（工单 13）：真正释放座位与占用。
+
+        只覆盖这一条路径——房主返回大厅、对局中离开、断线/刷新/退出登录
+        都不走这里：那些情形保留座位，只是断开连接。退座经引擎 leave-game
+        命令产生 PlayerLeft 事件（ADR 0001），持久化后重启重放一致；座位
+        映射与占用在引擎命令成功的同一临界区内提交。
+        """
+        with self._seats_lock:
+            player_id = room.player_id_for_account(account.account_id)
+            if player_id is None:
+                raise RuleError("seat.not-held", "你在此房间没有座位。")
+            if account.account_id == room.host_account_id:
+                raise RuleError(
+                    "room.host-seat-kept",
+                    "房主返回大厅不会退座；你的座位和房主身份会保留，可随时返回本房间。",
+                    roomCode=room.code,
+                )
+            if room.status != "waiting":
+                raise RuleError(
+                    "room.in-progress",
+                    "对局进行中不能退出座位；返回大厅仅断开连接，你的座位会保留。",
+                    roomCode=room.code,
+                )
+            command = Command(
+                f"leave-{secrets.token_hex(4)}",
+                room.game_id,
+                player_id,
+                room.engine.state.revision,
+                "leave-game",
+                {"playerId": player_id},
+            )
+            room.seat_accounts.pop(account.account_id, None)
+            try:
+                return self.apply_command(room, command)
+            except RuleError:
+                room.seat_accounts[account.account_id] = player_id
+                raise
 
     def set_locked(self, room: Room, locked: bool) -> None:
         room.locked = locked

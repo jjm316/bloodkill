@@ -29,7 +29,7 @@ const expectedCategories: Record<EventCategoryId, string[]> = {
   ],
   reveal: ["ClueRevealed", "RevealWindowOpened"],
   resource: ["ResourceGranted", "ResourceSpent", "ResourceReturned"],
-  flow: ["PlayerJoined", "GameStarted", "GameEnded", "PhaseChanged", "ClueIconsShown"],
+  flow: ["PlayerJoined", "PlayerLeft", "GameStarted", "GameEnded", "PhaseChanged", "ClueIconsShown"],
 };
 
 describe("事件日志完整性", () => {

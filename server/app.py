@@ -547,6 +547,8 @@ async def _handle_message(conn: Conn, raw: Any) -> None:
         await _handle_command(conn, raw)
     elif kind == "host":
         await _handle_host(conn, raw)
+    elif kind == "leave":
+        await _handle_leave(conn)
     else:
         await send_safe(conn.ws, error_message("command.invalid-shape", "Unknown message type."))
 
@@ -561,6 +563,7 @@ async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
     if command_type in (
         "start-game",
         "join-game",
+        "leave-game",
         "timeout-intervention",
         "timeout-reveal",
         "timeout-skill",
@@ -607,6 +610,40 @@ async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
         # A retransmission is acknowledged without replaying its public events.
         await send_state(conn)
         return
+    events_view = public_events(events)
+    if events_view:
+        await broadcast(room, {"type": "event", "events": events_view})
+    await broadcast_state(room)
+
+
+async def _handle_leave(conn: Conn) -> None:
+    """工单 13：等待普通玩家的主动退座（真释放座位与占用）。
+
+    房主与对局中的离开由 manager.exit_seat 明确拒绝（那些路径只断开连接，
+    保留座位）；成功退座时全员收到 PlayerLeft 事件与更新名册，退座者得到
+    `left` 确认帧后由服务端关闭连接——客户端不等关闭事件即可回大厅。
+    """
+    room = conn.room
+    if conn.player_id is None:
+        # 旁观者没有座位可退（旁观范围属工单 16）：按无座位明确拒绝。
+        error = RuleError("seat.not-held", "你在此房间没有座位。")
+        await send_safe(conn.ws, rule_error_message(error))
+        return
+    try:
+        events = manager.exit_seat(room, conn.account)
+    except RuleError as error:
+        await send_safe(conn.ws, rule_error_message(error))
+        return
+    # 先确认退座者并移出连接注册表，再向剩余成员广播退座事件与名册；
+    # 退座者不需要收到自己的 PlayerLeft 事件。
+    for conn_id, candidate in list(conns.items()):
+        if candidate is conn:
+            conns.pop(conn_id, None)
+    await send_safe(conn.ws, {"type": "left", "roomCode": room.code})
+    try:
+        await conn.ws.close()
+    except Exception:
+        pass
     events_view = public_events(events)
     if events_view:
         await broadcast(room, {"type": "event", "events": events_view})

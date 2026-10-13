@@ -90,6 +90,7 @@ const EVENT_DEFINITIONS: Record<string, EventDefinition> = {
   ResourceReturned: { category: "resource", describe: (p, n) => `${n(p.playerId)} 的${displayResource(String(p.resource))}已归还` },
 
   PlayerJoined: { category: "flow", describe: (p, n) => `${n(p.playerId)} 加入了房间` },
+  PlayerLeft: { category: "flow", describe: (p, n) => `${n(p.playerId)} 退出了房间` },
   GameStarted: { category: "flow", describe: (p) => `对局开始，共 ${p.playerCount} 名玩家` },
   GameEnded: {
     category: "flow",

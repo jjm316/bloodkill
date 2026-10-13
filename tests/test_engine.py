@@ -101,6 +101,57 @@ class RulesEngineTests(unittest.TestCase):
             self.assertEqual(set(pair), {"fromPlayerId", "toPlayerId"})
             self.assertTrue(set(pair.values()) <= set(engine.state.players))
 
+    def test_waiting_leave_removes_player_via_event_and_frees_the_seat(self):
+        # 工单 13：等待阶段主动退座走事件（ADR 0001），不直接删引擎玩家字段。
+        engine = RulesEngine.new_game("g1", "leave-seed", clock=FixedClock())
+        for index in range(6):
+            engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}"))
+        freed_seat = engine.state.players["p3"].seat
+        events = engine.apply(command(engine, "leave-p3", "p3", "leave-game"))
+        self.assertEqual([event.event_type for event in events], ["PlayerLeft"])
+        self.assertEqual(events[0].payload["playerId"], "p3")
+        self.assertEqual(events[0].payload["seat"], freed_seat)
+        self.assertNotIn("p3", engine.state.players, "退座后引擎玩家集合立即收缩")
+        # 退出的座位号被释放：后续加入的玩家可以复用该座位。
+        engine.apply(command(engine, "join-new", None, "join-game", playerId="p6", displayName="P6", seat=freed_seat))
+        self.assertEqual(engine.state.players["p6"].seat, freed_seat)
+        # 开局使用当时的实际玩家集合：p3 不在局中，p6 在。
+        engine.apply(command(engine, "start", None, "start-game"))
+        self.assertEqual(sorted(engine.state.players), ["p0", "p1", "p2", "p4", "p5", "p6"])
+
+    def test_leave_rejects_unknown_player_active_game_and_duplicate_leave(self):
+        engine = RulesEngine.new_game("g1", "leave-negative", clock=FixedClock())
+        engine.apply(command(engine, "join-0", None, "join-game", playerId="p0"))
+        # setup 阶段退一个不在此局的玩家 → target.not-found。
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "leave-unknown", None, "leave-game", playerId="p99"))
+        self.assertEqual(error.exception.code, "target.not-found")
+        # 对局进行中退座 → game.not-setup（等待阶段之外没有主动退座）。
+        started = self.started(6)
+        with self.assertRaises(RuleError) as error:
+            started.apply(command(started, "leave-active", "p0", "leave-game"))
+        self.assertEqual(error.exception.code, "game.not-setup")
+        # 重复退座（同 playerId 再退）同样按不在此局拒绝。
+        engine.apply(command(engine, "leave-0", "p0", "leave-game"))
+        with self.assertRaises(RuleError) as error:
+            engine.apply(command(engine, "leave-again", "p0", "leave-game"))
+        self.assertEqual(error.exception.code, "target.not-found")
+
+    def test_leave_survives_save_replay_round_trip(self):
+        # 退座必须持久化并重放一致：save → load 后名册不含已退出玩家、无重复座位。
+        import io
+        engine = RulesEngine.new_game("g1", "leave-replay", clock=FixedClock())
+        for index in range(6):
+            engine.apply(command(engine, f"join-{index}", None, "join-game", playerId=f"p{index}", displayName=f"P{index}"))
+        engine.apply(command(engine, "leave-p2", "p2", "leave-game"))
+        engine.apply(command(engine, "join-back", None, "join-game", playerId="p6", displayName="P6"))
+        buffer = io.BytesIO(dump_game(engine, compressed=True))
+        restored = load_game_bytes(buffer.getvalue())
+        self.assertEqual(sorted(restored.state.players), ["p0", "p1", "p3", "p4", "p5", "p6"])
+        seats = [player.seat for player in restored.state.players.values()]
+        self.assertEqual(len(seats), len(set(seats)), "重放后座位不得重复")
+        self.assertIn("PlayerLeft", [event.event_type for event in restored.state.events], "事件历史保留退座记录")
+
     def test_rank_three_icon_is_hostile_and_inquisitor_icon_contradicts_affiliation(self):
         saw_rank_three = False
         for seed_index in range(20):

@@ -67,6 +67,111 @@ class RoomManagerTests(unittest.TestCase):
         self.assertFalse(is_new)
         self.assertEqual(player_id, first.player_id_for_account(migrant.account_id))
 
+    def test_exit_seat_releases_occupancy_and_next_join_is_a_new_player(self):
+        # 工单 13：等待普通玩家主动退座——真释放，与断线保留座位区分。
+        room = self.create_room()
+        leaver = account("退座玩家")
+        old_player_id, _ = self.manager.join_or_resume(room, leaver)
+        events = self.manager.exit_seat(room, leaver)
+        self.assertEqual([event.event_type for event in events], ["PlayerLeft"])
+        self.assertIsNone(room.player_id_for_account(leaver.account_id), "退座后座位映射移除")
+        self.assertNotIn(old_player_id, room.engine.state.players, "引擎玩家集合收缩")
+        self.assertIsNone(self.manager.room_for_account(leaver.account_id), "占用释放")
+        self.assertIn("PlayerLeft", [event.event_type for event in room.engine.state.events], "事件历史保留退座")
+        # 重新加入生成新的玩家引用，且可加入别的房间。
+        new_player_id, is_new = self.manager.join_or_resume(room, leaver)
+        self.assertTrue(is_new)
+        self.assertNotEqual(new_player_id, old_player_id)
+        other = self.create_room()
+        self.manager.exit_seat(room, leaver)
+        self.manager.join_or_resume(other, leaver)
+        self.assertIsNotNone(other.player_id_for_account(leaver.account_id), "释放后可加入别的房间")
+
+    def test_exit_seat_rejects_host_playing_and_seatless_callers(self):
+        host = account("退座房主")
+        room = self.manager.create_room(host)
+        with self.assertRaises(RuleError) as error:
+            self.manager.exit_seat(room, host)
+        self.assertEqual(error.exception.code, "room.host-seat-kept", "房主返回大厅不是退座")
+        self.assertIn("房主", str(error.exception))
+        self.assertIsNotNone(room.player_id_for_account(host.account_id), "房主座位保留")
+        member = account("在局玩家")
+        self.manager.join_or_resume(room, member)
+        with self.assertRaises(RuleError) as error:
+            self.manager.exit_seat(room, account("无座玩家"))
+        self.assertEqual(error.exception.code, "seat.not-held")
+        for index in range(4):
+            self.manager.join_or_resume(room, account(f"补位{index}"))
+        self.manager.start_game(room)
+        with self.assertRaises(RuleError) as error:
+            self.manager.exit_seat(room, member)
+        self.assertEqual(error.exception.code, "room.in-progress", "对局中不能退座，仅断开连接")
+        self.assertIsNotNone(room.player_id_for_account(member.account_id), "对局中座位保留")
+        self.assertIsNotNone(self.manager.room_for_account(member.account_id), "对局中占用保留")
+
+    def test_exit_seat_survives_restore_with_consistent_seat_map(self):
+        room = self.create_room()
+        leaver = account("重启退座")
+        self.manager.join_or_resume(room, leaver)
+        stayer = account("重启留座")
+        self.manager.join_or_resume(room, stayer)
+        self.manager.exit_seat(room, leaver)
+        restored_manager = RoomManager(Path(self._tmp.name))
+        restored_manager.restore()
+        restored = restored_manager.get_room(room.code)
+        self.assertIsNone(restored.player_id_for_account(leaver.account_id), "重启后不残留已退出账号")
+        self.assertIsNotNone(restored.player_id_for_account(stayer.account_id), "留座账号不受影响")
+        self.assertEqual(
+            sorted(restored.seat_accounts.values()),
+            sorted(restored.engine.state.players),
+            "seat_accounts 与引擎玩家集合一致，无重复座位",
+        )
+        self.assertNotIn(leaver.account_id, {a for a in restored.seat_accounts})
+
+    def test_concurrent_exit_and_start_race_ends_in_one_legal_state(self):
+        # 工单 13 / V07.04：退座与开局竞争，最终只有一种合法状态。
+        room = self.create_room()
+        leaver = account("竞争退座")
+        self.manager.join_or_resume(room, leaver)
+        for index in range(4):
+            self.manager.join_or_resume(room, account(f"竞争补位{index}"))
+        self.assertEqual(len(room.engine.state.players), 6)
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        barrier = Barrier(2)
+        outcomes: dict[str, object] = {}
+
+        def exit_attempt():
+            barrier.wait(timeout=5)
+            try:
+                outcomes["exit"] = self.manager.exit_seat(room, leaver)
+            except RuleError as error:
+                outcomes["exit_error"] = error
+
+        def start_attempt():
+            barrier.wait(timeout=5)
+            try:
+                outcomes["start"] = self.manager.start_game(room)
+            except RuleError as error:
+                outcomes["start_error"] = error
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pool.submit(exit_attempt)
+            pool.submit(start_attempt)
+        exited = "exit" in outcomes
+        started = "start" in outcomes
+        self.assertNotEqual(exited, started, "退座与开局竞争最终恰好一个成功，不允许都成或都败")
+        if exited:
+            # 退座先落：5 人开局被拒，账号已释放、不在局中。
+            self.assertEqual(outcomes["start_error"].code, "game.player-count")
+            self.assertEqual(room.status, "waiting")
+            self.assertIsNone(self.manager.room_for_account(leaver.account_id))
+        else:
+            # 开局先落：退座被拒（已不是等待房），座位与占用保留。
+            self.assertEqual(outcomes["exit_error"].code, "room.in-progress")
+            self.assertEqual(room.status, "playing")
+            self.assertIsNotNone(self.manager.room_for_account(leaver.account_id))
+
     def test_concurrent_create_attempts_allocate_one_room_per_account(self):
         from concurrent.futures import ThreadPoolExecutor
         from threading import Barrier

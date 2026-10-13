@@ -22,8 +22,12 @@ export interface SocketHandle {
   takenOver: boolean;
   /** 初始进房超时：从未收到状态且 10 秒无应答，已停止重连，只能返回大厅。 */
   failed: boolean;
+  /** 服务端已确认退座（工单 13）：连接终止、不再重连，界面回大厅。 */
+  left: boolean;
   send: (command: string, payload?: Record<string, unknown>) => void;
   sendHost: (action: string, payload?: Record<string, unknown>) => void;
+  /** 等待普通玩家的主动退座：发 leave，等服务端 left 确认（拒绝则显示原因）。 */
+  sendLeave: () => void;
 }
 
 /**
@@ -39,6 +43,7 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
   const [reconnecting, setReconnecting] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [left, setLeft] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const stateRef = useRef<RoomState | null>(null);
   // 工单 11：座位被新设备接管后，本连接的一切活动终止——不再重连、不再
@@ -57,6 +62,7 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
     let canReconnect = true;
     takenOverRef.current = false;
     setTakenOver(false);
+    setLeft(false);
 
     const flushPendingCommands = () => {
       const ws = wsRef.current;
@@ -101,6 +107,14 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
           return;
         }
         if (takenOverRef.current) return; // 旧 socket 的迟到帧不得污染接管后的状态
+        if (typed.type === "left") {
+          // 工单 13：服务端确认退座——终止性事件：停止重连并主动关闭，
+          // 后续 close 不触发退避重连；界面据 left 状态回大厅。
+          canReconnect = false;
+          setLeft(true);
+          ws.close();
+          return;
+        }
         if (typed.type === "state") {
           const next = message as RoomState;
           if (joinTimer !== undefined) {
@@ -200,5 +214,12 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
     wsRef.current?.send(JSON.stringify({ type: "host", action, ...payload }));
   }, []);
 
-  return { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost };
+  // 工单 13：等待普通玩家的主动退座。没有命令载荷/确认重传语义：服务端
+  // 以 left 帧确认或错误帧拒绝（拒绝时 error 已显示，界面停留在房间）。
+  const sendLeave = useCallback(() => {
+    if (takenOverRef.current) return; // 座位已被接管：本连接没有资格退座
+    wsRef.current?.send(JSON.stringify({ type: "leave" }));
+  }, []);
+
+  return { state, events, error, closed, reconnecting, takenOver, failed, left, send, sendHost, sendLeave };
 }

@@ -115,6 +115,14 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 仅 `isHost` 连接可用；否则 → `room.not-host`。
 - `start` 需要 6–12 名玩家，不足 → 引擎 `game.player-count`；`start` 可在消息上附带 `interventionTimeoutSeconds`（干涉投票时限）与 `singleWindowTimeoutSeconds`（单人窗口超时，ADR 0011）两个字段（各自在开局接受一次，可选 30/60/90/120/180，缺省 90）。整数但不在可选集 → `game.invalid-timeout`；非整数类型 → `command.invalid-shape`。开始后固定。
 
+```json
+{"type": "leave"}
+```
+
+- 等待阶段**普通玩家**的主动退座（工单 13）：服务端经引擎 `leave-game` 命令移除座位（公开事件 `PlayerLeft {playerId, seat}` 广播全房），释放该账号的未结束占用；成功后发送 `{"type": "left", "roomCode"}` 确认帧并关闭该连接。客户端收到 `left` 才回大厅（真退座，不是本地离开）。
+- 房主发送 → 拒绝 `room.host-seat-kept`（房主返回大厅不退座，座位/房主身份/占用保留；界面上的「返回大厅」是直接断开，不发本消息）；对局进行中 → 拒绝 `room.in-progress`（返回大厅仅断开连接，座位保留，正常结束或管理员关闭前不能加入新房间）；旁观者或无座位连接 → `seat.not-held`。拒绝时连接保持并显示中文原因。
+- `leave-game` 引擎命令由服务器托管，客户端直接发送 → `command.server-managed`；断线、刷新、退出登录、临时关闭页面都不构成退座（座位保留），重进生成新的玩家引用。
+
 **命令清单**（其余全部由引擎拒绝）：
 
 | 命令 | payload | 说明 |
@@ -131,7 +139,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 规则版本 0.4 起（ADR 0003），旧的全时段常驻 `distribute-curse` 命令已移除：
 诅咒分发只由审判者技能窗口内的 `choose-skill` 承载，旧命令将得到 `command.unknown`。
 
-`start-game`、`join-game`、`timeout-intervention`、`timeout-reveal`、`timeout-skill`、
+`start-game`、`join-game`、`leave-game`（工单 13，经 `{"type":"leave"}` 消息托管）、`timeout-intervention`、`timeout-reveal`、`timeout-skill`、
 `timeout-return` 由服务器托管：直接发送会得到 `command.server-managed`。
 `timeout-intervention` 是干涉三段窗口到期时由服务端定时器（`server/deadlines.py`，可复用抽象）
 代为提交的系统命令，payload 为 `{"stage": "gate"|"poll"|"choice"}`；门控阶段到期未确认
@@ -189,6 +197,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
 | `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭；旧连接不再收到任何后续帧，客户端必须停止操作与自动重连（与普通断线的退避重连是不同路径）。 |
+| `left` | `{"roomCode": "123456"}`：退座确认（工单 13）。仅等待普通玩家的 `leave` 成功后发送，随后连接被服务端关闭；客户端停止重连并回大厅。 |
 
 ### `state` 消息形状
 
@@ -290,7 +299,9 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ### 错误码
 
 **服务器层**：`auth.login-required`（未登录访问需要会话的接口，如回放）、`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
-`room.already-started`、`room.full`、`room.ended`、`seat.taken-over`（座位已被新连接接管后，
+`room.already-started`、`room.full`、`room.ended`、`room.host-seat-kept`（房主退座请求被拒：返回大厅保留座位/身份/占用，工单 13）、
+`room.in-progress`（对局中退座请求被拒：仅断开连接保留座位，工单 13）、`seat.not-held`（无座位连接的退座请求被拒，工单 13）、
+`seat.taken-over`（座位已被新连接接管后，
 旧连接迟到的命令/房主消息一律以此拒绝，命令拒绝仍带 ack）、`player.name-required`、`player.not-eligible`（旁观者操作）、
 `command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`、
 `auth.session-expired`（会话到期后已建立 WS 连接被终止，工单 14）、

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Board } from "./Board";
 import { curseTruthOf } from "./curseReveal";
 import { useIntervention } from "./intervention";
@@ -87,7 +87,7 @@ export function WaitingRoom({ state, sendHost, spectating }: { state: RoomState;
 function Banner({ title, detail, onBack, returnTo, actionText = "返回大厅" }: { title: string; detail: string; onBack: () => void; returnTo?: { code: string; onReturn: (code: string) => void }; actionText?: string }) {
   return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p>{returnTo && <button onClick={() => returnTo.onReturn(returnTo.code)}>返回房间 {returnTo.code}</button>}<button onClick={onBack}>{actionText}</button></section>;
 }
-const errorText = (code: string, _message: string) => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "room.full": "房间已满员（12 人），不能加入。", "room.ended": "对局已结束，不能加入；可观看回放。", "account.room-occupied": "你已有未结束房间，请返回原房间。", "game.player-count": "玩家人数必须为 6–12 人。", "auth.login-required": "请先登录后进入房间。", "auth.session-expired": "登录已过期，请重新登录。", "auth.session-revoked": "当前登录已退出，请重新登录。", "protocol.version-mismatch": "客户端版本已更新，请刷新页面。", "protocol.legacy-identity": "请刷新页面，房间使用当前登录账号。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
+const errorText = (code: string, _message: string) => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "room.full": "房间已满员（12 人），不能加入。", "room.ended": "对局已结束，不能加入；可观看回放。", "account.room-occupied": "你已有未结束房间，请返回原房间。", "game.player-count": "玩家人数必须为 6–12 人。", "auth.login-required": "请先登录后进入房间。", "auth.session-expired": "登录已过期，请重新登录。", "auth.session-revoked": "当前登录已退出，请重新登录。", "protocol.version-mismatch": "客户端版本已更新，请刷新页面。", "protocol.legacy-identity": "请刷新页面，房间使用当前登录账号。", "room.host-seat-kept": "房主返回大厅不会退座；你的座位和房主身份会保留，可随时返回本房间。", "room.in-progress": "对局进行中不能退出座位；返回大厅仅断开连接，你的座位会保留。", "seat.not-held": "你在此房间没有座位。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
 
 // 单人窗口（亮牌/技能/退牌）等待横幅（ADR 0011）：带服务端倒计时，
 // 并直接告知"超时会替你做什么"，当事人与旁观者看到同一句话。
@@ -111,12 +111,19 @@ export function SingleWindowLayer({ game, serverTime }: { game: GameState; serve
 }
 
 export function GameScreen({ credentials, onLeave, onReturnToRoom, onAuthLost }: { credentials: RoomCredentials; onLeave: () => void; onReturnToRoom?: (code: string) => void; onAuthLost?: () => void }) {
-  const { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost } = useGameSocket(credentials.code, credentials.accountId, credentials.mode);
+  const { state, events, error, closed, reconnecting, takenOver, failed, left, send, sendHost, sendLeave } = useGameSocket(credentials.code, credentials.accountId, credentials.mode);
   const intervention = useIntervention({ game: state?.game, events, serverTime: state?.serverTime, send });
   const [rulesOpen, setRulesOpen] = useState(false);
 
   // 备忘标记（ADR 0004）：纯本机私有状态，Hook 必须位于所有条件 return 之前。
   const memos = useMemoMarkers(credentials.code, state?.game);
+
+  // 工单 13：服务端确认退座（left 帧）后才回大厅——真退座不伪装成本地离开。
+  const onLeaveRef = useRef(onLeave);
+  onLeaveRef.current = onLeave;
+  useEffect(() => {
+    if (left) onLeaveRef.current();
+  }, [left]);
 
   // 标签页标题：进房后带房间号，多窗口/手机多标签可区分；卸载（离开房间）还原。
   // 同样必须位于条件 return 之前。
@@ -153,5 +160,9 @@ export function GameScreen({ credentials, onLeave, onReturnToRoom, onAuthLost }:
     send(c.command, c.payload);
   };
 
-  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && intervention.preferences}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{intervention.prompt}<SingleWindowLayer game={game} serverTime={state.serverTime} /><ActionsPanel game={game} intervention={intervention} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
+  // 工单 13：只有「等待阶段的普通玩家」退出房间是真退座（服务端释放座位）；
+  // 房主与对局中/旁观的离开都是「返回大厅」——仅断开连接，座位与占用保留。
+  const seatExit = state.roomStatus === "waiting" && !spectating && !state.isHost;
+
+  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && intervention.preferences}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={seatExit ? sendLeave : onLeave}>{seatExit ? "退出房间" : "返回大厅"}</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{intervention.prompt}<SingleWindowLayer game={game} serverTime={state.serverTime} /><ActionsPanel game={game} intervention={intervention} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
 }
