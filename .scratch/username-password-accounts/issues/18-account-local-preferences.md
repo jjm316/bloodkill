@@ -1,7 +1,7 @@
 # 18：切换账号隔离本地备忘及行动偏好
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 14
 Parent: 03
 Draft ID: 12

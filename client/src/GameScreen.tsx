@@ -112,11 +112,14 @@ export function SingleWindowLayer({ game, serverTime }: { game: GameState; serve
 
 export function GameScreen({ credentials, onLeave, onReturnToRoom, onAuthLost }: { credentials: RoomCredentials; onLeave: () => void; onReturnToRoom?: (code: string) => void; onAuthLost?: () => void }) {
   const { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost } = useGameSocket(credentials.code, credentials.accountId, credentials.mode);
-  const intervention = useIntervention({ game: state?.game, events, serverTime: state?.serverTime, send });
+  // 干预偏好按账号隔离（工单 18）：A 的偏好不得驱动 B 的自动挡刀命令。
+  const intervention = useIntervention({ accountId: credentials.accountId, game: state?.game, events, serverTime: state?.serverTime, send });
   const [rulesOpen, setRulesOpen] = useState(false);
 
   // 备忘标记（ADR 0004）：纯本机私有状态，Hook 必须位于所有条件 return 之前。
-  const memos = useMemoMarkers(credentials.code, state?.game);
+  // 按账号隔离（工单 18）：存储键含 credentials.accountId，App 层以 accountId
+  // 为 key 重挂载，切账号后各读各的，互不继承。
+  const memos = useMemoMarkers(credentials.accountId, credentials.code, state?.game);
 
   // 标签页标题：进房后带房间号，多窗口/手机多标签可区分；卸载（离开房间）还原。
   // 同样必须位于条件 return 之前。
@@ -153,5 +156,5 @@ export function GameScreen({ credentials, onLeave, onReturnToRoom, onAuthLost }:
     send(c.command, c.payload);
   };
 
-  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && intervention.preferences}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{intervention.prompt}<SingleWindowLayer game={game} serverTime={state.serverTime} /><ActionsPanel game={game} intervention={intervention} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog events={events} players={game?.players} /></div>;
+  return <div className="room"><header className="room-header"><span>房间 <strong>{state.roomCode}</strong>{state.locked && <span className="room-lock" title="房间已锁定"><Icon name="lock" /></span>} {state.isHost ? "（房主）" : ""}</span><span className="status" role="status" aria-live="polite">{displayStatus(state.roomStatus)}</span>{reconnecting && <span className="hint" role="status" aria-live="polite">正在重新连接……</span>}{showTable && !spectating && intervention.preferences}<button className="help-button" onClick={() => setRulesOpen(true)} title="规则与图例" aria-label="规则与图例"><Icon name="help" /></button><button onClick={onLeave}>离开</button></header>{error && <div className="action-error" role="alert" aria-live="assertive">{errorText(error.code, error.message)}</div>}{showTable && game ? <><Board game={game} onSlotAction={sendSlotAction} memos={memos} />{intervention.prompt}<SingleWindowLayer game={game} serverTime={state.serverTime} /><ActionsPanel game={game} intervention={intervention} hostActions={state.hostActions} send={send} sendHost={sendHost} /></> : <WaitingRoom state={state} sendHost={sendHost} spectating={spectating} />}{rulesOpen && <RulesOverlay onClose={() => setRulesOpen(false)} />}<EventLog accountId={credentials.accountId} events={events} players={game?.players} /></div>;
 }

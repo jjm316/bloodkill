@@ -127,12 +127,14 @@ export function describeEvent(event: GameEvent, players?: PlayerView[]): string 
   return definitionOf(event.eventType).describe(event.payload, name);
 }
 
-// 屏蔽偏好：设备级全局阅读偏好，跨房间、跨对局保留（与备忘标记按对局清空刻意不同）。
-const PREF_KEY = "bloodbound:event-log-filter";
+// 屏蔽偏好：本设备、按账号隔离的阅读偏好（工单 18），跨房间、跨对局保留
+// （与备忘标记按对局清空刻意不同）。键含稳定账号引用；旧的无账号全局键
+// （bloodbound:event-log-filter）不读取、不迁移，新账号从全选默认开始。
+const prefKey = (accountId: string) => `bloodbound:account:${accountId}:event-log-filter`;
 
-export function loadMutedCategories(): Set<EventCategoryId> {
+export function loadMutedCategories(accountId: string): Set<EventCategoryId> {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(PREF_KEY) ?? "[]");
+    const parsed: unknown = JSON.parse(localStorage.getItem(prefKey(accountId)) ?? "[]");
     if (!Array.isArray(parsed)) return new Set();
     const known = new Set(EVENT_CATEGORIES.map((c) => c.id));
     return new Set(parsed.filter((x): x is EventCategoryId => typeof x === "string" && known.has(x as EventCategoryId)));
@@ -141,9 +143,9 @@ export function loadMutedCategories(): Set<EventCategoryId> {
   }
 }
 
-export function saveMutedCategories(muted: Iterable<EventCategoryId>): void {
+export function saveMutedCategories(accountId: string, muted: Iterable<EventCategoryId>): void {
   try {
-    localStorage.setItem(PREF_KEY, JSON.stringify([...muted]));
+    localStorage.setItem(prefKey(accountId), JSON.stringify([...muted]));
   } catch {
     // 隐私模式等存储不可用场景：屏蔽仅在本次会话生效
   }
