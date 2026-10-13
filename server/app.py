@@ -410,15 +410,31 @@ async def _arm_restored_deadlines() -> None:
         await deadline_scheduler.sync(room)
 
 
+async def _stop_account_connections(account_id: str) -> int:
+    """停止某账号全部已建立的房间连接（管理重置密码后，工单 20）。
+
+    与退出登录同一终止管线（中文说明帧后关闭），不撤销座位、不改房主归属；
+    返回停止的连接数。会话已在存储层撤销：即使此处遗漏，消息级校验与广播
+    惰性踢出也会兜底停止旧连接。
+    """
+    stopped = 0
+    for conn in [conn for conn in list(conns.values()) if conn.account.account_id == account_id]:
+        await _terminate_conn(
+            conn, "auth.session-revoked", "管理员已重置该账号密码，请用新密码重新登录。")
+        stopped += 1
+    return stopped
+
+
 @app.on_event("startup")
 async def _start_admin_listener() -> None:
-    # 管理工具（工单 19）走同一进程的回环监听：共享内存状态（含在线连接），
+    # 管理工具（工单 19/20）走同一进程的回环监听：共享内存状态（含在线连接），
     # 只绑定 127.0.0.1；公网应用不注册任何管理路由。安装标识与管理凭证在
     # 存档目录的 admin/ 子目录，端口每次启动后写回，供 server.admin CLI 核对。
     global admin_server
     installation = admin_api.AdminInstallation(SAVES_DIR, create=True)
     endpoint = admin_api.AdminEndpoint(
         accounts=accounts, manager=manager, conns=conns, installation=installation,
+        stop_account_connections=_stop_account_connections,
     )
     admin_server = await admin_api.start_admin_server(endpoint)
     installation.record_port(admin_server.sockets[0].getsockname()[1])

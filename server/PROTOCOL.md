@@ -294,7 +294,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 旧连接迟到的命令/房主消息一律以此拒绝，命令拒绝仍带 ack）、`player.name-required`、`player.not-eligible`（旁观者操作）、
 `command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`、
 `auth.session-expired`（会话到期后已建立 WS 连接被终止，工单 14）、
-`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14）。
+`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14；管理员重置密码撤销该账号
+全部登录并停止其全部已建立连接时同样使用，工单 20）。
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、
 `game.already-ended`、`command.unknown`、`game.not-setup`、`game.duplicate-player`、

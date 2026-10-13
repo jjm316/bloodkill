@@ -18,6 +18,7 @@ import unittest
 import websockets
 
 from tests import test_accounts as account_tests
+from tests import test_account_sessions as account_sessions
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _CLI_POOL = ThreadPoolExecutor(max_workers=1)
@@ -34,6 +35,23 @@ class AdminCLITests(unittest.TestCase):
         status, body, headers = self.register(name, password)
         self.assertEqual(status, 201)
         return body["account"], headers["Set-Cookie"].split(";", 1)[0]
+
+    def login(self, name, password="123456"):
+        status, body, headers = self.request("/api/auth/login", {"username": name, "password": password})
+        self.assertEqual(status, 200, body)
+        return body["account"], headers["Set-Cookie"].split(";", 1)[0]
+
+    # 借用工单 14 的真实开局场景（同一 HTTP/WS helper 形状）：把匕首交到目标手里，
+    # 使其在重置前持有原本合法的动作与私有投影。适配点：本类的 create_room 额外
+    # 返回 gameId，临时降维成 sessions 场景期望的单 code 形状。
+    async def _prepare_playing_room_with_dagger_on(self, host_cookie, target_cookie, extra_cookies):
+        original = account_sessions.AccountSessionHTTPTests._prepare_playing_room_with_dagger_on
+        create_room = self.create_room
+        self.create_room = lambda cookie: create_room(cookie)[0]
+        try:
+            return await original(self, host_cookie, target_cookie, extra_cookies)
+        finally:
+            self.create_room = create_room
 
     def create_room(self, cookie):
         status, room, _ = self.request("/api/rooms", {}, cookie)
@@ -68,7 +86,7 @@ class AdminCLITests(unittest.TestCase):
 
     # ---- admin tooling helpers -------------------------------------------
 
-    def run_cli_in(self, saves_dir, *arguments, timeout=120, environment_extra=None):
+    def run_cli_in(self, saves_dir, *arguments, timeout=120, environment_extra=None, input=None):
         """Run the real CLI subprocess; saves_dir=None 让 CLI 走环境变量默认解析。"""
         command = [sys.executable, "-m", "server.admin", *map(str, arguments)]
         if saves_dir is not None:
@@ -77,15 +95,16 @@ class AdminCLITests(unittest.TestCase):
                        **(environment_extra or {})}
         return subprocess.run(command, cwd=str(REPO_ROOT), env=environment,
                               capture_output=True, text=True, encoding="utf-8",
-                              timeout=timeout)
+                              timeout=timeout, input=input)
 
-    def run_cli(self, *arguments, timeout=120):
-        return self.run_cli_in(self.tmp.name, *arguments, timeout=timeout)
+    def run_cli(self, *arguments, timeout=120, input=None):
+        return self.run_cli_in(self.tmp.name, *arguments, timeout=timeout, input=input)
 
-    async def run_cli_online(self, *arguments):
+    async def run_cli_online(self, *arguments, input=None):
         """Run the CLI while this coroutine's event loop keeps serving WS pings."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(_CLI_POOL, self.run_cli, *arguments)
+        return await loop.run_in_executor(
+            _CLI_POOL, lambda: self.run_cli(*arguments, input=input))
 
     def lines_with(self, output, needle):
         return [line for line in output.splitlines() if needle in line]
@@ -109,6 +128,27 @@ class AdminCLITests(unittest.TestCase):
         if cookie is not None:
             headers["Cookie"] = cookie
         request = urllib.request.Request(f"http://127.0.0.1:{self.admin_port()}{path}", headers=headers)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            response = opener.open(request, timeout=10)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            return response.status, json.load(response)
+
+    def admin_post(self, path, payload, token=None, cookie=None, extra_headers=None):
+        """对管理端口发真实 POST（重置密码的写路径）；密码只在请求体中。"""
+        import urllib.error
+        import urllib.request
+        headers = {"Content-Type": "application/json; charset=utf-8"}
+        if token is not None:
+            headers["X-Admin-Token"] = token
+        if cookie is not None:
+            headers["Cookie"] = cookie
+        headers.update(extra_headers or {})
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.admin_port()}{path}",
+            data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         try:
             response = opener.open(request, timeout=10)
@@ -444,3 +484,295 @@ class AdminCLITests(unittest.TestCase):
         self.assertEqual((pending["kind"], pending.get("stage")),
                          (windowed["game"]["pending"]["kind"], windowed["game"]["pending"].get("stage")),
                          "查看不得重置或改变决策窗口")
+
+    # ---- 工单 20：管理工具重置密码并撤销全部登录 --------------------------
+
+    def test_v14_01_real_cli_reset_revokes_all_logins_and_stops_established_connections(self):
+        """V14.01: 目标账号两台设备登录（其一建立进行中对局连接）；真实 CLI 重置后
+        全部登录与会话失效、已建立连接停止；新密码可登录，旧密码与旧会话不可用。"""
+        _, host_cookie = self.signup("重置房主")
+        _, device_a = self.signup("重置玩家")
+        _, device_b = self.login("重置玩家")  # 第二台设备的独立登录
+        extras = [self.signup(f"重置补位{i}") for i in range(4)]
+        new_password = "New9Pass1"
+
+        async def scenario():
+            sockets, target_socket, host_socket, target_state, code = await self._prepare_playing_room_with_dagger_on(
+                host_cookie, device_a, [cookie for _, cookie in extras])
+            try:
+                target_id = target_state["yourPlayerId"]
+                reset = await self.run_cli_online(
+                    "reset-password", "重置玩家", input=f"{new_password}\n{new_password}\n")
+                self.assertEqual(reset.returncode, 0, reset.stderr + reset.stdout)
+                self.assertIn("重置玩家", reset.stdout, "成功输出必须说明处理的用户名")
+                self.assertIn("已撤销", reset.stdout, "成功输出必须说明撤销范围")
+                self.assertIn("2", reset.stdout, "两台设备的登录会话都必须计入撤销")
+                self.assertIn("1", reset.stdout, "一条已建立连接被停止")
+                for secret in (new_password, "123456"):
+                    self.assertNotIn(secret, reset.stdout + reset.stderr, "输出不得回显密码")
+
+                # 已建立的游戏 WS 连接停止：收到撤销说明（中文）后被关闭。
+                message = json.loads(await asyncio.wait_for(target_socket.recv(), 3))
+                self.assertEqual(message["type"], "error")
+                self.assertEqual(message["code"], "auth.session-revoked")
+                self.assertIn("重新登录", message["message"], "撤销原因必须是简体中文")
+                with self.assertRaises(websockets.ConnectionClosed):
+                    await asyncio.wait_for(target_socket.recv(), 3)
+                # 后续动作失败：连接已停止，原本合法的房主操作发不出去。
+                with self.assertRaises(websockets.ConnectionClosed):
+                    await target_socket.send(json.dumps({"type": "host", "action": "lock"}))
+
+                # 对照组：房主连接照常操作；目标旧连接收不到这次广播（私有帧停止）。
+                await host_socket.send(json.dumps({"type": "host", "action": "lock"}))
+                while True:
+                    message = json.loads(await asyncio.wait_for(host_socket.recv(), 5))
+                    if message.get("type") == "state" and message.get("locked"):
+                        break
+                with self.assertRaises(websockets.ConnectionClosed):
+                    await asyncio.wait_for(target_socket.recv(), 1)
+
+                # 全部设备登录失效：设备 B 的独立 HTTP 会话同时 401。
+                self.assertEqual(self.request("/api/auth/session", cookie=device_b)[0], 401)
+                # 旧密码不可登录；新密码可登录。
+                self.assertEqual(
+                    self.request("/api/auth/login", {"username": "重置玩家", "password": "123456"})[0], 401)
+                _, new_cookie = self.login("重置玩家", new_password)
+                # 座位/占用保留：新登录恢复原座位，不新建重复玩家。
+                room = self.request("/api/account/room", cookie=new_cookie)[1]["room"]
+                self.assertEqual(room["code"], code, "重置不能释放座位占用")
+                async with self.connect(code, new_cookie) as resumed_socket:
+                    resumed = await self.hello(resumed_socket)
+                self.assertEqual(resumed["yourPlayerId"], target_id, "重登必须恢复原座位")
+                self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6)
+                # 其他账号不受影响：补位玩家登录仍有效，房主仍能操作。
+                self.assertEqual(self.request("/api/auth/session", cookie=extras[0][1])[0], 200)
+                await host_socket.send(json.dumps({"type": "host", "action": "unlock"}))
+                while True:
+                    message = json.loads(await asyncio.wait_for(host_socket.recv(), 5))
+                    if message.get("type") == "state" and not message.get("locked"):
+                        break
+            finally:
+                await asyncio.gather(*(socket.close() for socket in sockets), return_exceptions=True)
+
+        asyncio.run(scenario())
+
+    def test_v14_02_interaction_boundaries_exit_status_and_no_side_effects(self):
+        """V14.02: 5/6/12/13 字符、确认不一致、取消输入与未知账号逐项验证退出
+        状态与无副作用；非法输入不修改任何账号。"""
+        def login_status(password):
+            return self.request("/api/auth/login", {"username": "边界玩家", "password": password})[0]
+
+        self.signup("边界玩家")
+        # 5 字符 → 中文报错后重试 → 合法 8 字符成功；密码随即生效。
+        five_then_ok = self.run_cli("reset-password", "边界玩家",
+                                    input="12345\nNew9Pass\nNew9Pass\n")
+        self.assertEqual(five_then_ok.returncode, 0, five_then_ok.stderr + five_then_ok.stdout)
+        self.assertIn("6–12", five_then_ok.stdout, "长度不符的中文提示")
+        self.assertEqual(login_status("New9Pass"), 200)
+        self.assertEqual(login_status("123456"), 401, "旧密码必须立即失效")
+
+        # 12 字符上界成功；6 字符下界成功。
+        twelve = self.run_cli("reset-password", "边界玩家", input="Twelve9Chars\nTwelve9Chars\n")
+        self.assertEqual(twelve.returncode, 0, twelve.stderr + twelve.stdout)
+        self.assertEqual(login_status("Twelve9Chars"), 200)
+        six = self.run_cli("reset-password", "边界玩家", input="Six9Ch\nSix9Ch\n")
+        self.assertEqual(six.returncode, 0, six.stderr + six.stdout)
+        self.assertEqual(login_status("Six9Ch"), 200)
+
+        # 13 字符 → 报错 → 空输入取消：非零退出、无副作用。
+        thirteen_then_cancel = self.run_cli("reset-password", "边界玩家",
+                                            input="Thirteen9Char\n\n")
+        self.assertNotEqual(thirteen_then_cancel.returncode, 0)
+        self.assertIn("6–12", thirteen_then_cancel.stdout)
+        combined = thirteen_then_cancel.stdout + thirteen_then_cancel.stderr
+        self.assertIn("已取消", combined)
+        self.assertEqual(login_status("Six9Ch"), 200, "取消不得修改密码")
+
+        # 确认不一致 → 报错 → 输入流结束（EOF）按取消：非零退出、无副作用。
+        mismatch = self.run_cli("reset-password", "边界玩家", input="Six9C1\nSix9C2\n")
+        self.assertNotEqual(mismatch.returncode, 0)
+        self.assertIn("不一致", mismatch.stdout)
+        self.assertIn("已取消", mismatch.stdout + mismatch.stderr)
+        self.assertEqual(login_status("Six9Ch"), 200, "确认不一致不得修改密码")
+
+        # 无任何输入（stdin 立即 EOF）：按取消处理。
+        immediate_eof = self.run_cli("reset-password", "边界玩家", input="")
+        self.assertNotEqual(immediate_eof.returncode, 0)
+        self.assertIn("已取消", immediate_eof.stdout + immediate_eof.stderr)
+        self.assertEqual(login_status("Six9Ch"), 200)
+
+        # 未知账号：明确中文报错、非零退出、不自动创建账号。
+        unknown = self.run_cli("reset-password", "不存在的账号", input="New9Pass\nNew9Pass\n")
+        self.assertNotEqual(unknown.returncode, 0)
+        self.assertIn("不存在", unknown.stderr)
+        self.assertIn("不存在的账号", unknown.stderr)
+        users = self.run_cli("users")
+        self.assertEqual(users.returncode, 0, users.stderr)
+        self.assertNotIn("不存在的账号", users.stdout, "重置不得自动创建账号")
+
+    def test_v14_03_reset_preserves_host_ownership_across_restart(self):
+        """V14.03: 重置进行中房间的房主：座位/房主归属不变，重启后用新密码恢复
+        原房原身份；其他账号的既有登录与座位不受影响、继续操作。"""
+        _, host_cookie = self.signup("重启房主")
+        _, guest_cookie = self.signup("重启玩家")
+        code, _ = self.create_room(host_cookie)
+
+        async def scenario():
+            async with self.connect(code, host_cookie) as host_socket, \
+                    self.connect(code, guest_cookie) as guest_socket:
+                guest_state = await self.hello(guest_socket)
+                await self.hello(host_socket)
+                guest_id = guest_state["yourPlayerId"]
+                reset = await self.run_cli_online(
+                    "reset-password", "重启房主", input="Restart9\nRestart9\n")
+                self.assertEqual(reset.returncode, 0, reset.stderr + reset.stdout)
+                # 目标（房主）的已建立连接收到撤销说明并被关闭。
+                message = json.loads(await asyncio.wait_for(host_socket.recv(), 3))
+                self.assertEqual(message["code"], "auth.session-revoked")
+                with self.assertRaises(websockets.ConnectionClosed):
+                    await asyncio.wait_for(host_socket.recv(), 3)
+                # 对照：另一账号的连接照常，还收到房主被踢触发的状态广播。
+                message = json.loads(await asyncio.wait_for(guest_socket.recv(), 3))
+                self.assertEqual(message["type"], "state")
+                self.assertEqual(message["roomCode"], code)
+                return guest_id
+        guest_id = asyncio.run(scenario())
+
+        # 座位与占用保留。
+        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 2)
+
+        # 服务重启（同一存档目录）后：房主用新密码恢复原房与房主身份。
+        self.stop_server()
+        self.start_server()
+        self.assertEqual(
+            self.request("/api/auth/login", {"username": "重启房主", "password": "Restart9"})[0], 200)
+        self.assertEqual(
+            self.request("/api/auth/login", {"username": "重启房主", "password": "123456"})[0], 401,
+            "旧密码在重启后同样不可用")
+        _, host_new = self.login("重启房主", "Restart9")
+        room = self.request("/api/account/room", cookie=host_new)[1]["room"]
+        self.assertEqual((room or {}).get("code"), code, "重启后房主归属不得丢失")
+
+        # 其他账号继续操作：既有登录跨重启仍有效，恢复原座位并收到房主操作。
+        self.assertEqual(self.request("/api/auth/session", cookie=guest_cookie)[0], 200)
+        guest_room = self.request("/api/account/room", cookie=guest_cookie)[1]["room"]
+        self.assertEqual((guest_room or {}).get("code"), code)
+
+        async def resume_and_operate():
+            async with self.connect(code, host_new) as host_socket, \
+                    self.connect(code, guest_cookie) as guest_socket:
+                host_state = await self.hello(host_socket)
+                guest_state = await self.hello(guest_socket)
+                await host_socket.send(json.dumps({"type": "host", "action": "lock"}))
+                while True:
+                    message = json.loads(await asyncio.wait_for(guest_socket.recv(), 5))
+                    if message.get("type") == "state" and message.get("locked"):
+                        return host_state, guest_state
+        host_state, guest_state = asyncio.run(resume_and_operate())
+        self.assertTrue(host_state["isHost"], "重启后新密码重登必须恢复房主身份")
+        self.assertTrue(any(action["type"] in ("lock", "unlock") for action in host_state["hostActions"]),
+                        "房主操作权必须随归属恢复")
+        self.assertEqual(guest_state["yourPlayerId"], guest_id, "其他账号恢复原座位")
+
+    def test_v14_04_reset_leaks_nothing_and_grants_only_local_admin(self):
+        """V14.04: 密码不出现在命令行、输出、日志或帮助；普通账号与错误管理
+        凭证不能重置；写操作只有本机独立管理凭证可用。"""
+        token = self.admin_token()
+        self.assertTrue(token)
+        old_password = "Secret9A"
+        _, target_cookie = self.signup("泄漏玩家", password=old_password)
+        _, guest_cookie = self.signup("泄漏路人")
+        attempt = {"username": "泄漏玩家", "password": "Hacked9Px"}
+
+        def login_status(password):
+            return self.request("/api/auth/login", {"username": "泄漏玩家", "password": password})[0]
+
+        # 管理端口写路径反例：无凭证 / 错误凭证 / 普通账号会话 / 伪造转发头 → 401。
+        self.assertEqual(self.admin_post("/admin/reset-password", attempt)[0], 401)
+        self.assertEqual(self.admin_post("/admin/reset-password", attempt, token="wrong-token")[0], 401)
+        self.assertEqual(self.admin_post("/admin/reset-password", attempt, cookie=guest_cookie)[0], 401,
+                         "普通账号登录会话不能执行管理写操作")
+        forged = {"X-Forwarded-For": "127.0.0.1", "X-Real-IP": "127.0.0.1",
+                  "Forwarded": "for=127.0.0.1"}
+        self.assertEqual(
+            self.admin_post("/admin/reset-password", attempt, token="wrong-token",
+                            extra_headers=forged)[0], 401)
+        # GET 方式访问写端点被拒。
+        self.assertEqual(self.admin_http("/admin/reset-password", token=token)[0], 405)
+        # 公网入口没有任何管理路由：伪造本机转发头 + 正确管理凭证也不能重置。
+        self.assertEqual(self.public_http("/admin/reset-password", {**forged, "X-Admin-Token": token})[0], 404,
+                         "公网入口不得暴露管理写操作")
+        # 错误凭证不得造成任何修改。
+        self.assertEqual(login_status(old_password), 200)
+
+        # 正确凭证 + 未知账号：明确拒绝且不自动创建。
+        status, body = self.admin_post("/admin/reset-password",
+                                       {"username": "幽灵账号", "password": "Hacked9Px"}, token=token)
+        self.assertEqual(status, 404)
+        self.assertIn("不存在", body["message"])
+        users = self.run_cli("users")
+        self.assertNotIn("幽灵账号", users.stdout)
+
+        # CLI 成功重置：新密码、旧密码、管理凭证、会话值都不出现在任何输出。
+        new_password = "Fresh9Pwd"
+        reset = self.run_cli("reset-password", "泄漏玩家",
+                             input=f"{new_password}\n{new_password}\n")
+        self.assertEqual(reset.returncode, 0, reset.stderr + reset.stdout)
+        session_value = target_cookie.split("=", 1)[1]
+        combined = reset.stdout + reset.stderr
+        for secret, label in ((old_password, "旧密码"), (new_password, "新密码"),
+                              (token, "管理凭证"), (session_value, "登录会话")):
+            self.assertNotIn(secret, combined, f"CLI 输出不得包含{label}")
+        log = (Path(self.tmp.name) / "server.log").read_text(encoding="utf-8", errors="replace")
+        for secret, label in ((old_password, "旧密码"), (new_password, "新密码"), (token, "管理凭证")):
+            self.assertNotIn(secret, log, f"服务日志不得包含{label}")
+        self.assertEqual(login_status(new_password), 200)
+        self.assertEqual(login_status(old_password), 401)
+
+        # 帮助不提供明文密码参数；密码作为多余位置参数会被拒绝且不发生重置。
+        help_output = self.run_cli("reset-password", "--help")
+        self.assertEqual(help_output.returncode, 0)
+        self.assertNotIn("--password", help_output.stdout)
+        positional = self.run_cli("reset-password", "泄漏玩家", "Ghost9Pwd", input="")
+        self.assertNotEqual(positional.returncode, 0)
+        self.assertEqual(
+            self.request("/api/auth/login", {"username": "泄漏玩家", "password": "Ghost9Pwd"})[0], 401,
+            "命令行上塞密码不得触发重置")
+        self.assertEqual(login_status(new_password), 200, "既有密码不受被拒绝的调用影响")
+
+    def test_v14_05_persistence_failure_reports_failure_and_keeps_state_consistent(self):
+        """V14.05: 账号库持久化被注入只读故障时重置不返回成功；恢复后重新查询
+        与重启的结果都与实际状态一致。"""
+        import stat
+        _, cookie_a = self.signup("注入玩家")
+        _, cookie_b = self.login("注入玩家")
+        database = Path(self.tmp.name) / "accounts" / "accounts.sqlite3"
+
+        os.chmod(database, stat.S_IREAD)  # 注入：账号库不可写（密码更新与全部撤销同事务）
+        try:
+            failed = self.run_cli("reset-password", "注入玩家", input="Inject9P\nInject9P\n")
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("失败", failed.stderr)
+            self.assertIn("重置未完成", failed.stderr, "失败必须明确说明重置未完成")
+            for secret in ("Inject9P", self.admin_token()):
+                self.assertNotIn(secret, failed.stdout + failed.stderr)
+        finally:
+            os.chmod(database, stat.S_IREAD | stat.S_IWRITE)
+
+        # 失败后无副作用：旧密码仍可登录、两台设备的会话都未被部分撤销。
+        self.assertEqual(self.request("/api/auth/session", cookie=cookie_a)[0], 200)
+        self.assertEqual(self.request("/api/auth/session", cookie=cookie_b)[0], 200)
+        self.assertEqual(
+            self.request("/api/auth/login", {"username": "注入玩家", "password": "123456"})[0], 200)
+
+        # 恢复后重置成功；重启服务后重新查询与实际一致。
+        ok = self.run_cli("reset-password", "注入玩家", input="Inject9P\nInject9P\n")
+        self.assertEqual(ok.returncode, 0, ok.stderr + ok.stdout)
+        self.stop_server()
+        self.start_server()
+        self.assertEqual(self.request("/api/auth/session", cookie=cookie_a)[0], 401)
+        self.assertEqual(self.request("/api/auth/session", cookie=cookie_b)[0], 401)
+        self.assertEqual(
+            self.request("/api/auth/login", {"username": "注入玩家", "password": "123456"})[0], 401)
+        _, new_cookie = self.login("注入玩家", "Inject9P")
+        self.assertEqual(self.request("/api/auth/session", cookie=new_cookie)[0], 200)
