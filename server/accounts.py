@@ -120,6 +120,14 @@ class AccountStore:
             )
         return cursor.rowcount > 0
 
+    def list_accounts(self) -> list[Account]:
+        """All registered accounts ordered by case-folded username (admin view)."""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT account_id, username FROM accounts ORDER BY username_key"
+            ).fetchall()
+        return [Account(row["account_id"], row["username"]) for row in rows]
+
     def verify_credentials(self, username: object, password: object) -> Account | None:
         if not isinstance(username, str) or not isinstance(password, str):
             return None

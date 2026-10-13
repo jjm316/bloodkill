@@ -10,6 +10,7 @@ curse assignment, or private events. See PROTOCOL.md and README.md.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sqlite3
 import time
@@ -25,6 +26,7 @@ from starlette.concurrency import run_in_threadpool
 
 from blood_bound import Command, RuleError, SaveError, project_state
 
+from . import admin_api
 from .deadlines import DeadlineScheduler
 from .accounts import Account, AccountError, AccountStore, SESSION_COOKIE, SESSION_SECONDS
 from .protocol import PRIVATE_EVENT_TYPES, PROTOCOL_VERSION
@@ -66,6 +68,9 @@ metrics = {
     "commandsAccepted": 0,
     "commandsRejected": 0,
 }
+
+# 管理工具的回环监听（工单 19），startup 启动、shutdown 关闭。
+admin_server: asyncio.AbstractServer | None = None
 
 
 async def live_room_conns(room: Room) -> list[Conn]:
@@ -399,6 +404,27 @@ async def _arm_restored_deadlines() -> None:
     # arms it with delay 0 so the timeout lands through the normal pipeline.
     for room in manager.rooms.values():
         await deadline_scheduler.sync(room)
+
+
+@app.on_event("startup")
+async def _start_admin_listener() -> None:
+    # 管理工具（工单 19）走同一进程的回环监听：共享内存状态（含在线连接），
+    # 只绑定 127.0.0.1；公网应用不注册任何管理路由。安装标识与管理凭证在
+    # 存档目录的 admin/ 子目录，端口每次启动后写回，供 server.admin CLI 核对。
+    global admin_server
+    installation = admin_api.AdminInstallation(SAVES_DIR, create=True)
+    endpoint = admin_api.AdminEndpoint(
+        accounts=accounts, manager=manager, conns=conns, installation=installation,
+    )
+    admin_server = await admin_api.start_admin_server(endpoint)
+    installation.record_port(admin_server.sockets[0].getsockname()[1])
+
+
+@app.on_event("shutdown")
+async def _stop_admin_listener() -> None:
+    if admin_server is not None:
+        admin_server.close()
+        await admin_server.wait_closed()
 
 
 @app.websocket("/ws/{code}")
