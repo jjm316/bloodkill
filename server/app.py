@@ -48,6 +48,10 @@ class Conn:
     player_id: str | None = None
     # hello 完成前连接没有座位/模式，不参与投影广播（避免空视角帧）。
     ready: bool = False
+    # 工单 11：座位被新连接接管后置位。旧连接被 pop 出 conns 后，其
+    # ws_endpoint 循环仍可能在关闭竞态窗口里取到已入队消息；此标志保证
+    # 这些迟到消息（玩家命令或房主操作）一律被拒，不再影响引擎状态。
+    taken_over: bool = False
 
 
 # connection id -> connection
@@ -410,6 +414,7 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
             metrics["seatResumptions"] += 1
         for other_id, other in list(conns.items()):
             if other is not conn and other.room is room and other.player_id == player_id:
+                other.taken_over = True
                 await send_safe(other.ws, {"type": "taken-over", "reason": "seat taken over by a new connection"})
                 try:
                     await other.ws.close()
@@ -425,6 +430,17 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
 async def _handle_message(conn: Conn, raw: Any) -> None:
     if not isinstance(raw, dict):
         await send_safe(conn.ws, error_message("command.invalid-shape", "Messages must be JSON objects."))
+        return
+    if conn.taken_over:
+        # 工单 11：被接管的旧连接不再有任何操作权。迟到消息一律拒绝；
+        # 命令拒绝仍带 ack，客户端发件箱不会卡住（连接本身已被关闭）。
+        error = RuleError("seat.taken-over", "座位已由其他设备进入，本连接已停止操作。")
+        await send_safe(conn.ws, rule_error_message(error))
+        if raw.get("type") == "command":
+            raw_command_id = raw.get("commandId")
+            command_id = raw_command_id if isinstance(raw_command_id, str) and raw_command_id else uuid.uuid4().hex
+            await send_command_ack(conn, command_id, "rejected", error=error)
+            metrics["commandsRejected"] += 1
         return
     kind = raw.get("type")
     if kind == "command":

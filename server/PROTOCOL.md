@@ -73,7 +73,10 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 房主账号的稳定引用与房间 hostAccountId 相等 → `isHost`；其他账号不能开始或锁定。
 - `mode="player"` 按当前账号恢复或建立座位，不按客户端姓名认领；同账号已有座位在锁房/开局后可恢复。
 - hello 中出现旧 `name` 或 `token` 字段 → `protocol.legacy-identity`，中文提示刷新。
-- 同一座位被新连接接管 → 旧连接收到 `taken-over` 并关闭。
+- 同一座位只允许一个活动玩家连接：新设备/新会话以 player 进入后接管座位，旧连接收到
+  `taken-over` 并被关闭，不再有后续投影、事件或私有帧；接管不撤销旧设备的账号登录，
+  旧设备返回大厅后可再进入（再次接管）。旧连接在关闭竞态窗口内挤入的命令或房主消息
+  一律收到 `seat.taken-over` 拒绝（命令拒绝仍带 ack），不改变引擎状态。
 - `clientRevision` 为客户端最后收到的 `game.revision`，只用于诊断；服务端始终以 `state` 全量投影完成恢复。
 - `protocolVersion` 与服务端不匹配或缺失时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本。
 - 当前账号没有本房座位时按新人加入判断：房间已结束 → `room.ended`（对局已结束，不能加入；可观看回放）；
@@ -171,7 +174,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 | `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`（保留字）被过滤。诅咒归属已公开（ADR 0014）：`CurseDistributed` 为公开广播，payload 只含 `{"recipientPlayerId": "p-…"}`（每卡一条，不含 curseId，真/假之分不进公开事件流）。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉的请求门控事件（`InterventionGateOpened` / `InterventionGateAccepted` / `InterventionGateDeclined`）与投票表态事件（`InterventionResponded` 等）全部公开。 |
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
-| `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭。 |
+| `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭；旧连接不再收到任何后续帧，客户端必须停止操作与自动重连（与普通断线的退避重连是不同路径）。 |
 
 ### `state` 消息形状
 
@@ -273,7 +276,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ### 错误码
 
 **服务器层**：`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
-`room.already-started`、`room.full`、`room.ended`、`player.name-required`、`player.not-eligible`（旁观者操作）、
+`room.already-started`、`room.full`、`room.ended`、`seat.taken-over`（座位已被新连接接管后，
+旧连接迟到的命令/房主消息一律以此拒绝，命令拒绝仍带 ack）、`player.name-required`、`player.not-eligible`（旁观者操作）、
 `command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`。
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、

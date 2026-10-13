@@ -125,6 +125,52 @@ class WebSocketRecoveryTests(unittest.TestCase):
         self.assertTrue(any(message["type"] == "taken-over" for message in first_ws.sent))
         self.assertEqual(json.dumps(resumed_ws.sent[-1]["game"], sort_keys=True), first_state_hash)
 
+    def test_taken_over_connection_cannot_apply_late_commands_or_host_actions(self):
+        """工单 11：被接管的旧连接即便有消息挤进关闭竞态窗口，也必须被明确拒绝。
+
+        服务端先 pop 旧 Conn 再关 socket；旧连接的 ws_endpoint 循环仍可能
+        在收到 disconnect 前取到一条已入队消息。此时旧连接必须失去全部
+        操作能力（玩家命令与房主操作），引擎状态不得改变。
+        """
+        first_ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": PROTOCOL_VERSION})
+        first = self.app.Conn(ws=first_ws, room=self.room, account=account("P0"))
+        self.app.conns["late-first"] = first
+        asyncio.run(self.app._handle_hello(first, first_ws))
+
+        resumed_ws = FakeWebSocket({"type": "hello", "mode": "player", "protocolVersion": PROTOCOL_VERSION})
+        resumed = self.app.Conn(ws=resumed_ws, room=self.room, account=account("P0"))
+        self.app.conns["late-resumed"] = resumed
+        asyncio.run(self.app._handle_hello(resumed, resumed_ws))
+        self.assertTrue(any(message["type"] == "taken-over" for message in first_ws.sent))
+
+        actor = resumed.player_id
+        target = next(player_id for player_id in self.player_ids if player_id != actor)
+        revision = self.room.engine.state.revision
+        late_command = {
+            "type": "command",
+            "commandId": "late-attack",
+            "command": "attack",
+            "payload": {"targetPlayerId": target},
+            "expectedRevision": revision,
+        }
+        asyncio.run(self.app._handle_message(first, late_command))
+        self.assertEqual(self.room.engine.state.revision, revision, "被接管连接的迟到命令不得改变引擎状态")
+        rejection = next(message for message in first_ws.sent if message.get("type") == "error")
+        self.assertEqual(rejection["code"], "seat.taken-over")
+        self.assertIn("其他设备", rejection["message"], "拒绝原因必须是简体中文")
+        ack = next(message for message in first_ws.sent if message.get("type") == "ack")
+        self.assertEqual(ack["status"], "rejected")
+
+        first_ws.sent.clear()
+        asyncio.run(self.app._handle_message(first, {"type": "host", "action": "lock"}))
+        self.assertEqual(
+            [message for message in first_ws.sent if message.get("type") not in ("state",)],
+            [{"type": "error", "code": "seat.taken-over", "message": rejection["message"], "details": {}}],
+            "被接管连接的房主操作同样必须被拒",
+        )
+        self.assertFalse(self.room.locked)
+        self.assertEqual(self.room.engine.state.revision, revision)
+
     def test_host_hello_records_seat_for_every_viewer(self):
         room = self.app.manager.create_room(account("Host"))
         host_player = self.app.manager.join_or_resume(room, account("Host"))[0]

@@ -7,7 +7,7 @@ import type { GameState, PlayerView, RoomState } from "./types";
 // 初始连接 10 秒无状态应答 → 失败 Banner + 可返回大厅；已收到过状态的断线只重连、
 // 永不进入失败态；服务端 room.not-found 错误帧 → 立即显示具体原因。
 
-class MockWebSocket {
+export class MockWebSocket {
   static CONNECTING = 0 as const;
   static OPEN = 1 as const;
   static CLOSING = 2 as const;
@@ -51,7 +51,7 @@ class MockWebSocket {
   }
 }
 
-function makeState(): RoomState {
+export function makeState(): RoomState {
   const player: PlayerView = {
     playerId: "p1",
     seat: 0,

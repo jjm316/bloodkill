@@ -41,6 +41,9 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
   const [failed, setFailed] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const stateRef = useRef<RoomState | null>(null);
+  // 工单 11：座位被新设备接管后，本连接的一切活动终止——不再重连、不再
+  // 补发待确认命令、迟到的旧 socket 帧一律忽略，避免污染接管后的状态。
+  const takenOverRef = useRef(false);
   const pendingCommandsRef = useRef(
     new Map<string, { command: string; payload: Record<string, unknown>; expectedRevision: number }>(),
   );
@@ -52,6 +55,8 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
     let joinTimer: number | undefined;
     let reconnectAttempt = 0;
     let canReconnect = true;
+    takenOverRef.current = false;
+    setTakenOver(false);
 
     const flushPendingCommands = () => {
       const ws = wsRef.current;
@@ -87,6 +92,15 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
         }
         if (typeof message !== "object" || message === null) return;
         const typed = message as { type?: string };
+        if (typed.type === "taken-over") {
+          // 接管是终止性的：丢弃待确认命令（旧连接没有资格补发），停止重连。
+          canReconnect = false;
+          takenOverRef.current = true;
+          pendingCommandsRef.current.clear();
+          setTakenOver(true);
+          return;
+        }
+        if (takenOverRef.current) return; // 旧 socket 的迟到帧不得污染接管后的状态
         if (typed.type === "state") {
           const next = message as RoomState;
           if (joinTimer !== undefined) {
@@ -131,9 +145,6 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
             setFailed(true);
             ws.close();
           }
-        } else if (typed.type === "taken-over") {
-          canReconnect = false;
-          setTakenOver(true);
         }
       };
       ws.onclose = () => {
@@ -170,6 +181,7 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
   }, [code, accountId, mode]);
 
   const send = useCallback((command: string, payload: Record<string, unknown> = {}) => {
+    if (takenOverRef.current) return; // 座位已被接管：本连接没有资格再发命令
     const commandId = newCommandId();
     pendingCommandsRef.current.set(commandId, {
       command,
@@ -184,6 +196,7 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
   }, []);
 
   const sendHost = useCallback((action: string, payload: Record<string, unknown> = {}) => {
+    if (takenOverRef.current) return; // 座位已被接管：房主操作同样停止
     wsRef.current?.send(JSON.stringify({ type: "host", action, ...payload }));
   }, []);
 
