@@ -250,6 +250,62 @@ async def broadcast_state(room: Room) -> None:
         await send_safe(conn.ws, build_state(conn))
 
 
+
+# ---- 管理关闭（工单 21） --------------------------------------------------
+
+
+async def admin_close_room(code: str, expected_game_id: str | None,
+                           expected_revision: int | None) -> dict[str, Any]:
+    """close-room 执行器：同进程内校验、备份、停用、取消计时并断开连接。
+
+    校验在 :meth:`RoomManager.admin_close` 的锁内再次发生，这里的早期校验
+    只负责给出可操作的中文错误（不存在/已结束/已关闭/目标变化）。目标变
+    化用预览时记下的对局引用与修订号双重核对，防止把确认落到预览之后变
+    化的房间（或复用了同一房号的新房间）上。
+    """
+    import time as time_module
+    from .admin_api import AdminCloseError
+
+    def close_error(status: int, error_code: str, message: str, **details: Any) -> AdminCloseError:
+        return AdminCloseError(status, error_code, message, details)
+
+    room = manager.get_room(code)
+    if room is None:
+        record = manager.closed_room_record(code)
+        if record is not None:
+            closed_at = record.get("closedAt")
+            when = (time_module.strftime("%Y-%m-%d %H:%M:%S", time_module.localtime(closed_at))
+                    if isinstance(closed_at, (int, float)) else "时间未知")
+            raise close_error(409, "room.admin-closed",
+                              f"房间 {code} 已于 {when} 被管理关闭，无需重复处理。",
+                              backupPath=record.get("backupPath"))
+        raise close_error(404, "room.not-found", f"房间 {code} 不存在，请核对房间号。")
+    if room.status == "ended":
+        raise close_error(409, "room.ended", f"房间 {code} 已正常结束，无需管理关闭；回放照常保留。")
+    if room.status not in {"waiting", "playing"}:
+        raise close_error(409, "room.admin-closed", f"房间 {code} 已被管理关闭，无需重复处理。")
+    if expected_game_id is not None and room.game_id != expected_game_id:
+        raise close_error(409, "admin.target-changed",
+                          f"房间 {code} 的当前对局（{room.game_id}）与预览时（{expected_game_id}）不一致，"
+                          "房号可能已被新房间使用；已拒绝关闭，请重新预览确认。")
+    if expected_revision is not None and room.engine.state.revision != expected_revision:
+        raise close_error(409, "admin.target-changed",
+                          f"房间 {code} 在预览后已发生变化（修订号 {expected_revision} → "
+                          f"{room.engine.state.revision}）；已拒绝关闭，请重新预览确认。")
+    try:
+        result = manager.admin_close(room)
+    except RuleError as error:
+        status = 503 if error.code in {"admin.backup-failed", "admin.close-failed"} else 409
+        raise close_error(status, error.code, str(error), **error.details) from None
+    # 计时器走既有调度器机制：窗口已被清空，sync 即取消该房已武装的定时。
+    await deadline_scheduler.sync(room)
+    # 通知并断开该房全部连接（含真实决策窗口内的）：每条连接先收到中文
+    # 关闭原因再被关闭，与撤销登录的终止管线一致。
+    for conn in [conn for conn in list(conns.values()) if conn.room is room]:
+        await _terminate_conn(conn, "room.admin-closed", "房间已被管理员关闭，请返回大厅创建或加入新的房间。")
+    return result
+
+
 # ---- REST -------------------------------------------------------------
 
 
@@ -419,6 +475,7 @@ async def _start_admin_listener() -> None:
     installation = admin_api.AdminInstallation(SAVES_DIR, create=True)
     endpoint = admin_api.AdminEndpoint(
         accounts=accounts, manager=manager, conns=conns, installation=installation,
+        close_executor=admin_close_room,
     )
     admin_server = await admin_api.start_admin_server(endpoint)
     installation.record_port(admin_server.sockets[0].getsockname()[1])
@@ -456,6 +513,11 @@ async def ws_endpoint(websocket: WebSocket, code: str) -> None:
             return
         while True:
             raw = await websocket.receive_json()
+            if conn.room.status == "closed":
+                # 管理关闭的竞态窗口里的迟到消息：连接已被终止流程关闭，
+                # 这里保证它不再进入任何处理路径。
+                await _terminate_conn(conn, "room.admin-closed", "房间已被管理员关闭，请返回大厅创建或加入新的房间。")
+                return
             if accounts.get_session(conn.token) is None:
                 # 过期/已撤销的登录：已建立的连接不能再发送任何合法动作。
                 await _terminate_conn(conn, "auth.session-expired", "登录已过期，请重新登录。")
@@ -641,7 +703,11 @@ async def _handle_host(conn: Conn, raw: dict[str, Any]) -> None:
         if events_view:
             await broadcast(room, {"type": "event", "events": events_view})
     elif action in ("lock", "unlock"):
-        manager.set_locked(room, action == "lock")
+        try:
+            manager.set_locked(room, action == "lock")
+        except RuleError as error:
+            await send_safe(conn.ws, rule_error_message(error))
+            return
     else:
         await send_safe(conn.ws, error_message("command.invalid-shape", "Unknown host action."))
         return

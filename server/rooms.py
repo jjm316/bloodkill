@@ -33,6 +33,9 @@ from .deadlines import SINGLE_WINDOW_KINDS
 from .accounts import Account
 
 FINISHED_GAMES_TO_KEEP = 20
+# 管理关闭（工单 21）的隔离备份目录：与活动房间恢复扫描（存档根目录）和
+# 「最近 N 个正常终局」清理互不相干，清理绝不触碰这个子目录。
+ADMIN_BACKUP_DIRECTORY = "admin-backup"
 
 
 @dataclass
@@ -210,6 +213,10 @@ class RoomManager:
     # ---- commands ------------------------------------------------------
 
     def apply_command(self, room: Room, command: Command) -> tuple[Event, ...]:
+        if room.status == "closed":
+            # 管理关闭后的房间不再接受任何命令（含调度器迟到的超时代发），
+            # 持久化也随之停止，活动存档不会被重建。
+            raise RuleError("room.admin-closed", "房间已被管理员关闭，不能再操作。")
         events = room.engine.apply(command)
         room.sync_window_deadline()
         status = room.engine.state.status
@@ -246,6 +253,9 @@ class RoomManager:
         return self.apply_command(room, command)
 
     def set_locked(self, room: Room, locked: bool) -> None:
+        if room.status == "closed":
+            # 已关闭房间的任何持久化路径都不得再写（防活动存档被重建）。
+            raise RuleError("room.admin-closed", "房间已被管理员关闭，不能再操作。")
         room.locked = locked
         self._persist(room)
 
@@ -279,6 +289,100 @@ class RoomManager:
 
     def _meta_path(self, room: Room) -> Path:
         return self.saves_dir / f"{room.game_id}.meta.json"
+
+    # ---- admin close (issue 21) ----------------------------------------
+
+    def admin_close(self, room: Room) -> dict[str, Any]:
+        """管理关闭一个未结束房间：先备份，成功后才停用并释放占用。
+
+        顺序保证「备份失败则不关闭」：存档、元数据（含座位归属记录）先写
+        入隔离的 ``admin-backup/<gameId>/`` 目录并落关闭事实；随后才把该房
+        的活动存档移出存档根目录、把房间停用并移出活跃注册表。任何一步失
+        败都以 :class:`RuleError` 报告，房间保持可用，已写入的备份无害
+        （下次重试整目录重写）。
+        """
+        with self._seats_lock:
+            if self.rooms.get(room.code) is not room:
+                raise RuleError("room.admin-closed", f"房间 {room.code} 已被管理员关闭，无需重复处理。")
+            if room.status not in {"waiting", "playing"}:
+                raise RuleError("room.ended", f"房间 {room.code} 已正常结束，无需管理关闭。")
+            backup_dir = self.saves_dir / ADMIN_BACKUP_DIRECTORY / room.game_id
+            affected = [
+                room.engine.state.players[player_id].display_name
+                for player_id in room.seat_accounts.values()
+            ]
+            closure = {
+                "code": room.code,
+                "gameId": room.game_id,
+                "status": "closed",
+                "closedAt": time.time(),
+                "affectedPlayers": affected,
+                "seatAccounts": dict(room.seat_accounts),
+                "backupPath": str(backup_dir.resolve()),
+            }
+            try:
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                self._copy_into_backup(self._save_path(room), backup_dir / "game.json.gz")
+                self._copy_into_backup(self._meta_path(room), backup_dir / "meta.json")
+                self._write_backup_json(backup_dir / "closure.json", closure)
+            except OSError as error:
+                raise RuleError(
+                    "admin.backup-failed",
+                    f"备份失败（{error}）。房间 {room.code} 未关闭，保持可用；请处理备份目录后重试。",
+                ) from None
+            try:
+                self._meta_path(room).unlink(missing_ok=True)
+                self._save_path(room).unlink(missing_ok=True)
+            except OSError as error:
+                raise RuleError(
+                    "admin.close-failed",
+                    f"备份已完成，但移出活动存档失败（{error}）。房间 {room.code} 关闭未完成，"
+                    "仍保持可用；请处理后重试（重试会覆盖同一备份目录）。",
+                ) from None
+            # 提交内存关闭：停用、清空决策窗口（调度器随后的 sync 会取消计
+            # 时器）、移出注册表即释放全部座位占用。closed 不是正常终局，
+            # 引擎状态原样留在备份里（无胜负、无身份揭晓）。
+            room.status = "closed"
+            room.window_deadline = None
+            room.window_stage = None
+            del self.rooms[room.code]
+        return {
+            "code": room.code,
+            "gameId": room.game_id,
+            "affectedPlayers": affected,
+            "backupPath": str(backup_dir.resolve()),
+        }
+
+    def closed_room_record(self, code: str) -> dict[str, Any] | None:
+        """某房号最近一次管理关闭记录；没有则 None（重复处理时明确报告）。"""
+        backup_root = self.saves_dir / ADMIN_BACKUP_DIRECTORY
+        try:
+            closure_paths = list(backup_root.glob("*/closure.json"))
+        except OSError:
+            return None
+        records: list[dict[str, Any]] = []
+        for path in closure_paths:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                continue
+            if isinstance(data, dict) and data.get("code") == code:
+                records.append(data)
+        if not records:
+            return None
+        return max(records, key=lambda item: item.get("closedAt") or 0.0)
+
+    @staticmethod
+    def _copy_into_backup(source: Path, target: Path) -> None:
+        temporary = target.with_suffix(target.suffix + ".tmp")
+        temporary.write_bytes(source.read_bytes())
+        temporary.replace(target)
+
+    @staticmethod
+    def _write_backup_json(path: Path, data: dict[str, Any]) -> None:
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+        temporary.replace(path)
 
     # ---- recovery & retention -----------------------------------------
 
