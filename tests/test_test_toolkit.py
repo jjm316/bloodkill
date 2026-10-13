@@ -87,6 +87,29 @@ class GridPositionsTest(unittest.TestCase):
         )
 
 
+class IsolatedToolkitTests(unittest.TestCase):
+    def test_default_data_directory_is_separate_from_real_saves(self):
+        self.assertEqual(test_toolkit.SAVES_DIR, test_toolkit.REPO_ROOT / ".scratch" / "toolkit-saves")
+
+    def test_unowned_listener_is_rejected_before_accounts_are_registered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(test_toolkit, "SAVES_DIR", Path(directory)):
+                with self.assertRaisesRegex(RuntimeError, "不属于当前隔离工具箱"):
+                    test_toolkit.require_owned_server(18909)
+
+    def test_cleanup_preserves_account_store_and_ownership_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "accounts").mkdir()
+            (root / "accounts" / "accounts.sqlite3").write_bytes(b"persistent account fixture")
+            (root / "server.json").write_text("owned server fixture")
+            (root / "g-game.meta.json").write_text("room fixture")
+            with mock.patch.object(test_toolkit, "SAVES_DIR", root):
+                self.assertEqual(test_toolkit.clear_saves(), 1)
+            self.assertEqual((root / "accounts" / "accounts.sqlite3").read_bytes(), b"persistent account fixture")
+            self.assertEqual((root / "server.json").read_text(), "owned server fixture")
+
+
 class StaleServerWarningTest(unittest.TestCase):
     """陈旧服务端告警的纯判定逻辑（不查进程、不触网）。"""
 

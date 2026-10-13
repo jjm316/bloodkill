@@ -91,7 +91,7 @@ function makeState(): RoomState {
 }
 
 function renderGameScreen(onLeave = vi.fn()) {
-  render(<GameScreen credentials={{ code: "123456", name: "阿玫", token: null }} onLeave={onLeave} />);
+  render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={onLeave} />);
   return onLeave;
 }
 

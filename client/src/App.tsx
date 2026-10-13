@@ -6,14 +6,12 @@ import { ReplayScreen } from "./ReplayScreen";
 
 type Screen = "lobby" | "room" | "replay";
 
-// 一键进房链接（?room=&name=&token=），供 scripts/launch_test_env.py 批量开窗和
-// 局域网分享加入链接使用；缺少合法房间号或姓名时回退到普通大厅。
-function autoJoinCredentials(): RoomCredentials | null {
+// 房号是加入意图，身份始终来自当前登录；URL 中的旧姓名/令牌不参与授权。
+function autoJoinCredentials(account: Account): RoomCredentials | null {
   const params = new URLSearchParams(window.location.search);
   const code = (params.get("room") ?? "").trim();
-  const name = (params.get("name") ?? "").trim().slice(0, 32);
-  if (!/^\d{6}$/.test(code) || !name) return null;
-  return { code, name, token: params.get("token") };
+  if (!/^\d{6}$/.test(code)) return null;
+  return { code, accountId: account.accountId, mode: "player" };
 }
 
 export default function App() {
@@ -22,12 +20,16 @@ export default function App() {
   useEffect(() => {
     let active = true;
     fetch("/api/auth/session", { credentials: "same-origin" }).then(async response => {
-      if (response.ok) { const body = await response.json(); if (active) setAccount(body.account); }
+      if (response.ok) { const body = await response.json(); if (active) {
+        setAccount(body.account);
+        const room = autoJoinCredentials(body.account);
+        if (room) { setCredentials(room); setScreen("room"); }
+      } }
     }).catch(() => {}).finally(() => { if (active) setRestoring(false); });
     return () => { active = false; };
   }, []);
-  const [credentials, setCredentials] = useState<RoomCredentials | null>(autoJoinCredentials);
-  const [screen, setScreen] = useState<Screen>(() => (credentials ? "room" : "lobby"));
+  const [credentials, setCredentials] = useState<RoomCredentials | null>(null);
+  const [screen, setScreen] = useState<Screen>("lobby");
 
   return (
     <>

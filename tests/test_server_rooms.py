@@ -2,6 +2,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from tests.account_fixtures import account, account_for_player, cookie, store
+from server.protocol import PROTOCOL_VERSION
 
 from blood_bound import Command, RuleError, RulesEngine, project_state
 
@@ -29,30 +31,29 @@ class RoomManagerTests(unittest.TestCase):
         self.manager = RoomManager(Path(self._tmp.name))
 
     def create_room(self):
-        return self.manager.create_room()
+        return self.manager.create_room(account(f"Host{len(self.manager.rooms)}"))
 
     def test_create_room_allocates_six_digit_code_and_persists(self):
         room = self.create_room()
         self.assertEqual(len(room.code), 6)
         self.assertTrue(room.code.isdigit())
         self.assertEqual(room.status, "waiting")
-        self.assertTrue(room.host_token)
+        self.assertTrue(room.host_account_id)
         self.assertTrue((self.manager.saves_dir / f"{room.game_id}.json.gz").exists())
 
-    def test_join_then_resume_by_name(self):
+    def test_join_then_resume_by_account(self):
         room = self.create_room()
-        player_id, is_new = self.manager.join_or_resume(room, "Alice")
+        player_id, is_new = self.manager.join_or_resume(room, account("Alice"))
         self.assertTrue(is_new)
-        self.assertEqual(room.player_id_for_name("Alice"), player_id)
-        resumed, is_new = self.manager.join_or_resume(room, "Alice")
+        self.assertEqual(room.player_id_for_account(account("Alice").account_id), player_id)
+        resumed, is_new = self.manager.join_or_resume(room, account("Alice"))
         self.assertFalse(is_new)
         self.assertEqual(resumed, player_id)
 
-    def test_bind_host_records_seat_and_survives_restore(self):
+    def test_created_host_seat_survives_restore(self):
         room = self.create_room()
-        self.assertIsNone(room.host_player_id)
-        player_id, _ = self.manager.join_or_resume(room, "Alice")
-        self.manager.bind_host(room, player_id)
+        player_id = room.host_player_id
+        self.assertIsNotNone(player_id)
         self.assertEqual(room.host_player_id, player_id)
         restored_manager = RoomManager(Path(self._tmp.name))
         restored_manager.restore()
@@ -61,36 +62,36 @@ class RoomManagerTests(unittest.TestCase):
 
     def test_join_after_start_is_rejected(self):
         room = self.create_room()
-        for index in range(6):
-            self.manager.join_or_resume(room, f"P{index}")
+        for index in range(5):
+            self.manager.join_or_resume(room, account(f"P{index}"))
         self.manager.start_game(room)
         self.assertEqual(room.status, "playing")
         with self.assertRaises(RuleError) as error:
-            self.manager.join_or_resume(room, "Latecomer")
+            self.manager.join_or_resume(room, account("Latecomer"))
         self.assertEqual(error.exception.code, "room.already-started")
 
     def test_locked_room_rejects_new_players_but_lets_known_resume(self):
         room = self.create_room()
-        self.manager.join_or_resume(room, "Alice")
+        self.manager.join_or_resume(room, account("Alice"))
         self.manager.set_locked(room, True)
         with self.assertRaises(RuleError) as error:
-            self.manager.join_or_resume(room, "Bob")
+            self.manager.join_or_resume(room, account("Bob"))
         self.assertEqual(error.exception.code, "room.locked")
-        player_id, is_new = self.manager.join_or_resume(room, "Alice")
+        player_id, is_new = self.manager.join_or_resume(room, account("Alice"))
         self.assertFalse(is_new)
 
     def test_start_requires_six_players(self):
         room = self.create_room()
-        for index in range(5):
-            self.manager.join_or_resume(room, f"P{index}")
+        for index in range(4):
+            self.manager.join_or_resume(room, account(f"P{index}"))
         with self.assertRaises(RuleError) as error:
             self.manager.start_game(room)
         self.assertEqual(error.exception.code, "game.player-count")
 
     def test_auto_save_updates_after_each_command_and_restore_recovers(self):
         room = self.create_room()
-        for index in range(6):
-            self.manager.join_or_resume(room, f"P{index}")
+        for index in range(5):
+            self.manager.join_or_resume(room, account(f"P{index}"))
         self.manager.start_game(room)
         holder = room.engine.state.dagger_holder_id
         target = next(pid for pid in room.engine.state.players if pid != holder)
@@ -104,14 +105,14 @@ class RoomManagerTests(unittest.TestCase):
         self.assertIsNotNone(restored)
         self.assertEqual(restored.engine.state.revision, room.engine.state.revision)
         self.assertEqual(restored.engine.state.dagger_holder_id, room.engine.state.dagger_holder_id)
-        self.assertEqual(restored.host_token, room.host_token)
+        self.assertEqual(restored.host_account_id, room.host_account_id)
 
     def test_finished_games_are_retained_to_cap(self):
         # create, fill, and end more rooms than the cap
         for _ in range(FINISHED_GAMES_TO_KEEP + 3):
             room = self.create_room()
-            for index in range(6):
-                self.manager.join_or_resume(room, f"P{index}")
+            for index in range(5):
+                self.manager.join_or_resume(room, account(f"P{index}"))
             self.manager.start_game(room)
             # finish deterministically: keep attacking the same victim until ended
             holder = room.engine.state.dagger_holder_id
@@ -155,8 +156,8 @@ class RoomManagerTests(unittest.TestCase):
 
     def test_replay_returns_public_spectator_steps(self):
         room = self.create_room()
-        for index in range(6):
-            self.manager.join_or_resume(room, f"P{index}")
+        for index in range(5):
+            self.manager.join_or_resume(room, account(f"P{index}"))
         self.manager.start_game(room)
         holder = room.engine.state.dagger_holder_id
         victim = next(pid for pid in room.engine.state.players if pid != holder)

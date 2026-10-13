@@ -8,7 +8,7 @@ unit-tested without a running server.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import secrets
 import time
@@ -29,6 +29,7 @@ from blood_bound import (
 )
 
 from .deadlines import SINGLE_WINDOW_KINDS
+from .accounts import Account
 
 FINISHED_GAMES_TO_KEEP = 20
 
@@ -37,13 +38,14 @@ FINISHED_GAMES_TO_KEEP = 20
 class Room:
     code: str
     game_id: str
-    host_token: str
+    host_account_id: str
     locked: bool
     status: str  # waiting | playing | ended
     engine: RulesEngine
     created_at: float
     finished_at: float | None = None
     host_player_id: str | None = None
+    seat_accounts: dict[str, str] = field(default_factory=dict)
     # Wall-clock expiry of the engine's current decision window (intervention
     # gate/poll/choice or one of the single-player windows). The engine stays
     # deterministic (no real time in state); the room owns the countdown and
@@ -51,11 +53,8 @@ class Room:
     window_deadline: float | None = None
     window_stage: str | None = None
 
-    def player_id_for_name(self, name: str) -> str | None:
-        for player_id, player in self.engine.state.players.items():
-            if player.display_name == name:
-                return player_id
-        return None
+    def player_id_for_account(self, account_id: str) -> str | None:
+        return self.seat_accounts.get(account_id)
 
     def sync_window_deadline(self) -> None:
         """Track the current decision window's expiry; re-arms per window change."""
@@ -111,22 +110,43 @@ class RoomManager:
 
     # ---- creation ------------------------------------------------------
 
-    def create_room(self) -> Room:
+    def room_for_account(self, account_id: str) -> Room | None:
+        return next((room for room in self.rooms.values()
+                     if room.status in {"waiting", "playing"} and account_id in room.seat_accounts), None)
+
+    def create_room(self, account: Account) -> Room:
+        existing = self.room_for_account(account.account_id)
+        if existing is not None:
+            if existing.host_account_id != account.account_id:
+                raise RuleError("account.room-occupied", "你已有未结束房间，请返回原房间。", roomCode=existing.code)
+            return existing
         code = self._new_code()
         game_id = f"g-{secrets.token_hex(6)}"
-        host_token = secrets.token_urlsafe(24)
         engine = RulesEngine.new_game(game_id, secrets.token_hex(16))
+        player_id = f"p-{secrets.token_hex(6)}"
+        engine.apply(Command(f"join-{secrets.token_hex(4)}", game_id, None, engine.state.revision,
+                             "join-game", {"playerId": player_id, "displayName": account.username}))
         room = Room(
             code=code,
             game_id=game_id,
-            host_token=host_token,
+            host_account_id=account.account_id,
             locked=False,
             status="waiting",
             engine=engine,
             created_at=time.time(),
+            host_player_id=player_id,
+            seat_accounts={account.account_id: player_id},
         )
+        try:
+            self._persist(room)
+        except (OSError, SaveError):
+            for path in (self._save_path(room), self._meta_path(room), self._meta_path(room).with_suffix(".tmp")):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            raise
         self.rooms[code] = room
-        self._persist(room)
         return room
 
     def get_room(self, code: str) -> Room | None:
@@ -134,12 +154,9 @@ class RoomManager:
 
     # ---- joining -------------------------------------------------------
 
-    def join_or_resume(self, room: Room, name: str) -> tuple[str, bool]:
-        """Return ``(player_id, is_new)`` for a name, joining or resuming a seat."""
-        name = name.strip()
-        if not name:
-            raise RuleError("player.name-required")
-        existing = room.player_id_for_name(name)
+    def join_or_resume(self, room: Room, account: Account) -> tuple[str, bool]:
+        """Join or restore only the seat bound to this authenticated account."""
+        existing = room.player_id_for_account(account.account_id)
         if existing is not None:
             return existing, False
         if room.status != "waiting":
@@ -153,9 +170,14 @@ class RoomManager:
             None,
             room.engine.state.revision,
             "join-game",
-            {"playerId": player_id, "displayName": name},
+            {"playerId": player_id, "displayName": account.username},
         )
-        self.apply_command(room, command)
+        room.seat_accounts[account.account_id] = player_id
+        try:
+            self.apply_command(room, command)
+        except RuleError:
+            room.seat_accounts.pop(account.account_id, None)
+            raise
         return player_id, True
 
     # ---- commands ------------------------------------------------------
@@ -200,13 +222,6 @@ class RoomManager:
         room.locked = locked
         self._persist(room)
 
-    def bind_host(self, room: Room, player_id: str) -> None:
-        """Record the seat held by the host-token bearer so every client can label it."""
-        if room.host_player_id == player_id:
-            return
-        room.host_player_id = player_id
-        self._write_meta(room)
-
     # ---- persistence ---------------------------------------------------
 
     def _persist(self, room: Room) -> None:
@@ -217,7 +232,8 @@ class RoomManager:
         meta = {
             "code": room.code,
             "gameId": room.game_id,
-            "hostToken": room.host_token,
+            "hostAccountId": room.host_account_id,
+            "seatAccounts": room.seat_accounts,
             "hostPlayerId": room.host_player_id,
             "locked": room.locked,
             "status": room.status,
@@ -226,7 +242,10 @@ class RoomManager:
             "windowDeadline": room.window_deadline,
             "windowStage": room.window_stage,
         }
-        self._meta_path(room).write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
+        path = self._meta_path(room)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
+        temporary.replace(path)
 
     def _save_path(self, room: Room) -> Path:
         return self.saves_dir / f"{room.game_id}.json.gz"
@@ -253,7 +272,8 @@ class RoomManager:
             self.rooms[code] = Room(
                 code=code,
                 game_id=game_id,
-                host_token=meta.get("hostToken", ""),
+                host_account_id=meta.get("hostAccountId", ""),
+                seat_accounts=meta.get("seatAccounts", {}),
                 locked=bool(meta.get("locked", False)),
                 status=meta.get("status", "waiting"),
                 engine=engine,

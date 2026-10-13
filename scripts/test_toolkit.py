@@ -28,8 +28,8 @@ scripts/ 目录下另有同名中文双击 bat 薄壳（测试工具箱-*.bat）
   日志固定在 .scratch/uvicorn.log。
 - status 与 up/serve 复用运行中的服务端时，若 server/ 与 blood_bound/
   下的代码比进程新，会提示 restart（不自动重启）。
-- 每次运行 up 都会创建一个新房间；玩家 1 是房主（窗口位于左上角），由它点"开始游戏"。
-- 自动进房依赖客户端的 URL 参数入口（?room=&name=&token=），见 client/src/App.tsx。
+- 每次运行 up 注册独立测试账号，玩家 1 创建房间并立即占座；它位于左上角，由它点"开始游戏"。
+- 测试数据固定在 .scratch/toolkit-saves，与真实 saves 隔离；账号凭证只经本地 CDP 安装为 HttpOnly Cookie，URL 仅带 ?room=。
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ import ctypes
 import json
 import math
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -48,12 +49,14 @@ from urllib.request import Request, urlopen
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_DIST = REPO_ROOT / "client" / "dist"
-SAVES_DIR = REPO_ROOT / "saves"
+SAVES_DIR = REPO_ROOT / ".scratch" / "toolkit-saves"
 DEFAULT_PROFILE_ROOT = REPO_ROOT / ".scratch" / "chrome-profiles"
 SERVER_CODE_ROOTS = (REPO_ROOT / "server", REPO_ROOT / "blood_bound")
 STALE_TOLERANCE_SECONDS = 2.0
 TASKBAR_LOGICAL_HEIGHT = 48
 LAUNCH_STAGGER_SECONDS = 0.4
+sys.path.insert(0, str(REPO_ROOT))
+from scripts.account_client import AccountClient
 
 
 def log(message: str) -> None:
@@ -167,21 +170,37 @@ def port_listener_pids(port: int) -> set[int]:
 
 
 def find_server_pids(port: int) -> list[int]:
-    """PIDs of the run-server.cmd wrapper, the uvicorn process, and the port listener."""
-    script = (
-        "Get-CimInstance Win32_Process | "
-        "Where-Object { $_.ProcessId -ne $PID -and "
-        "($_.CommandLine -like '*run-server.cmd*' "
-        "-or $_.CommandLine -like '*uvicorn server.app:app*') } | "
-        "Select-Object -ExpandProperty ProcessId"
-    )
-    result = powershell(script)
-    pids: set[int] = set()
-    for token in result.stdout.split():
-        if token.isdigit():
-            pids.add(int(token))
-    pids |= port_listener_pids(port)
+    pids = port_listener_pids(port)
+    if not pids:
+        return []
+    require_owned_server(port)
     return sorted(pids)
+
+
+def require_owned_server(port: int) -> None:
+    try:
+        marker = json.loads((SAVES_DIR / "server.json").read_text(encoding="utf-8"))
+        pid = marker["pid"]
+        valid = (marker["port"] == port and marker["savesDir"] == str(SAVES_DIR.resolve())
+                 and marker["repoRoot"] == str(REPO_ROOT.resolve())
+                 and pid in port_listener_pids(port)
+                 and marker["started"] == process_start_time(pid))
+    except (OSError, ValueError, KeyError):
+        valid = False
+    if not valid:
+        raise RuntimeError("此端口的服务不属于当前隔离工具箱，拒绝注册账号或修改服务；请换端口启动工具箱。")
+
+
+def record_server_owner(port: int) -> None:
+    pids = port_listener_pids(port)
+    if len(pids) != 1:
+        raise RuntimeError("无法确认工具箱监听进程归属。")
+    pid = next(iter(pids))
+    started = process_start_time(pid)
+    if started is None:
+        raise RuntimeError("无法确认工具箱进程启动时间。")
+    (SAVES_DIR / "server.json").write_text(json.dumps({"port": port, "pid": pid, "started": started,
+        "savesDir": str(SAVES_DIR.resolve()), "repoRoot": str(REPO_ROOT.resolve())}), encoding="utf-8")
 
 
 def newest_server_code_mtime() -> tuple[float, Path] | None:
@@ -280,11 +299,18 @@ def start_server_detached(port: int) -> None:
     """Start uvicorn via WMI so it survives this terminal/agent session."""
     script_dir = REPO_ROOT / ".scratch"
     script_dir.mkdir(exist_ok=True)
+    SAVES_DIR.mkdir(parents=True, exist_ok=True)
+    marker_path = SAVES_DIR / "server.json"
+    if marker_path.exists():
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        if marker.get("port") != port and port_listener_pids(marker["port"]):
+            raise RuntimeError("隔离数据目录已有其他工具箱服务使用，请先停止该工具箱服务。")
     log_path = script_dir / "uvicorn.log"
     cmd_path = script_dir / "run-server.cmd"
     cmd_path.write_text(
         "@echo off\r\n"
         "rem Detached game server launched by scripts/test_toolkit.py\r\n"
+        f'set "BLOOD_BOUND_SAVES_DIR={SAVES_DIR}"\r\n'
         f"cd /d {REPO_ROOT}\r\n"
         f"{python_server_executable()} -m uvicorn server.app:app "
         f"--host 127.0.0.1 --port {port} > {log_path} 2>&1\r\n",
@@ -310,12 +336,14 @@ def wait_server_ready(port: int, timeout: float = 25.0) -> None:
 def ensure_server(port: int) -> None:
     base_url = f"http://127.0.0.1:{port}"
     if server_health(base_url):
+        require_owned_server(port)
         log(f"[3/5] 服务端已在运行（{base_url}），直接复用。")
         report_stale_server(port)
         return
     log(f"[3/5] 启动服务端（独立进程，端口 {port}）……")
     start_server_detached(port)
     wait_server_ready(port)
+    record_server_owner(port)
     log(f"[3/5] 服务端就绪：{base_url}（日志 .scratch/uvicorn.log）")
 
 
@@ -335,9 +363,41 @@ def run_build() -> None:
         raise RuntimeError(f"前端构建失败：\n{result.stdout[-2000:]}\n{result.stderr[-2000:]}")
 
 
-def create_room(port: int) -> tuple[str, str]:
-    room = http_json(f"http://127.0.0.1:{port}/api/rooms", method="POST")
-    return str(room["code"]), str(room["hostToken"])
+def create_room(port: int, session: AccountClient) -> str:
+    require_owned_server(port)
+    status, room = session.request("/api/rooms", method="POST")
+    if status != 200:
+        raise RuntimeError(f"创建测试房间失败（HTTP {status}）")
+    return str(room["code"])
+
+
+def install_browser_session(debug_port: int, session: AccountClient, room_code: str) -> None:
+    from websockets.sync.client import connect
+    deadline = time.monotonic() + 10
+    targets = []
+    while time.monotonic() < deadline:
+        try:
+            targets = http_json(f"http://127.0.0.1:{debug_port}/json/list")
+            if targets:
+                break
+        except (URLError, OSError, ValueError):
+            pass
+        time.sleep(.1)
+    target = next((target for target in targets if target.get("type") == "page"), None)
+    if target is None:
+        raise RuntimeError("测试浏览器未就绪。")
+    with connect(target["webSocketDebuggerUrl"], proxy=None) as channel:
+        name, value = session.cookie_header.split("=", 1)
+        for index, method, params in [(1, "Network.setCookie", {"name": name, "value": value,
+                "url": session.base, "path": "/", "httpOnly": True, "sameSite": "Strict"}),
+                (2, "Page.navigate", {"url": f"{session.base}/?room={room_code}"})]:
+            channel.send(json.dumps({"id": index, "method": method, "params": params}))
+            while True:
+                result = json.loads(channel.recv(timeout=5))
+                if result.get("id") == index:
+                    if "error" in result or result.get("result", {}).get("success") is False:
+                        raise RuntimeError("测试浏览器登录初始化失败。")
+                    break
 
 
 def logical_screen_size() -> tuple[int, int]:
@@ -369,7 +429,7 @@ def launch_windows(
     count: int,
     cols: int,
     room_code: str,
-    host_token: str,
+    sessions: list[AccountClient],
     port: int,
 ) -> None:
     screen_w, screen_h = logical_screen_size()
@@ -379,16 +439,18 @@ def launch_windows(
     log(f"[5/5] 平铺打开 {count} 个窗口（{cols} 列 × {rows} 行，每格 {cell_w}×{cell_h}）……")
     for index in range(1, count + 1):
         x, y = grid_positions(count, cols, cell_w, cell_h)[index - 1]
-        url = f"http://127.0.0.1:{port}/?room={room_code}&name={index}"
-        if index == 1:
-            url += f"&token={host_token}"
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            debug_port = listener.getsockname()[1]
         command_line = (
             f'"{browser}" --user-data-dir={profile_root / f"p{index}"} '
             "--no-first-run --no-default-browser-check "
+            f"--remote-debugging-address=127.0.0.1 --remote-debugging-port={debug_port} "
             "--disable-features=Translate,TranslateUI,TranslateMessageUI "
-            f"--window-position={x},{y} --window-size={cell_w},{cell_h} --app={url}"
+            f"--window-position={x},{y} --window-size={cell_w},{cell_h} --app=about:blank"
         )
         wmi_spawn(command_line)
+        install_browser_session(debug_port, sessions[index - 1], room_code)
         time.sleep(LAUNCH_STAGGER_SECONDS)
 
 
@@ -450,14 +512,16 @@ def cmd_up(args: argparse.Namespace) -> int:
         return 1
 
     log("[4/5] 创建新房间……")
-    room_code, host_token = create_room(args.port)
+    require_owned_server(args.port)
+    sessions = [AccountClient(f"http://127.0.0.1:{args.port}").register_test_account() for _ in range(args.players)]
+    room_code = create_room(args.port, sessions[0])
 
     browsers = browser_candidates()
     if not browsers:
         log("错误：未找到 Chrome/Edge，无法打开测试窗口。")
         return 1
 
-    launch_windows(browsers[0], profile_root, args.players, cols, room_code, host_token, args.port)
+    launch_windows(browsers[0], profile_root, args.players, cols, room_code, sessions, args.port)
 
     join_timeout = 40.0
     joined = wait_until_all_joined(args.port, room_code, args.players, timeout=join_timeout)
@@ -473,6 +537,7 @@ def cmd_up(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     base_url = f"http://127.0.0.1:{args.port}"
     if server_health(base_url):
+        require_owned_server(args.port)
         log(f"服务端已在运行（{base_url}），无需重复启动。")
         report_stale_server(args.port)
         return 0
@@ -480,10 +545,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
     try:
         start_server_detached(args.port)
         wait_server_ready(args.port)
+        record_server_owner(args.port)
     except (RuntimeError, OSError) as error:
         log(f"错误：{error}")
         return 1
-    log(f"完成：服务端就绪 {base_url}（日志 .scratch/uvicorn.log）。房间将从 saves/ 自动恢复。")
+    log(f"完成：服务端就绪 {base_url}（日志 .scratch/uvicorn.log）。隔离房间将从 {SAVES_DIR} 自动恢复。")
     return 0
 
 
@@ -497,6 +563,7 @@ def cmd_restart(args: argparse.Namespace) -> int:
     try:
         start_server_detached(args.port)
         wait_server_ready(args.port)
+        record_server_owner(args.port)
     except (RuntimeError, OSError) as error:
         log(f"错误：{error}")
         return 1
@@ -512,7 +579,7 @@ def cmd_down(args: argparse.Namespace) -> int:
         log("服务端本来就没在跑。")
     if args.clear_saves:
         removed = clear_saves()
-        log(f"已清空存档：删除 saves/ 下 {removed} 个文件（房间重启后不再恢复）。")
+        log(f"已清空隔离房间存档：删除 {SAVES_DIR} 下 {removed} 个文件（账号与服务归属记录保留）。")
     return 0
 
 
@@ -536,7 +603,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         report_stale_server(args.port, pids)
     else:
         log(f"服务端：未运行（端口 {args.port}）")
-    log(f"存档房间：{count_saved_rooms()} 个（saves/，服务端重启后自动恢复）")
+    log(f"隔离存档房间：{count_saved_rooms()} 个（{SAVES_DIR}，服务端重启后自动恢复）")
     log(f"测试浏览器窗口：{count_test_windows(DEFAULT_PROFILE_ROOT)} 个（profile：.scratch/chrome-profiles）")
     return 0
 
@@ -572,7 +639,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     down = sub.add_parser("down", help="关闭服务端")
     _add_port(down)
-    down.add_argument("--clear-saves", action="store_true", help="顺带清空 saves/ 存档")
+    down.add_argument("--clear-saves", action="store_true", help="顺带清空隔离工具箱的房间存档，保留账号")
     down.set_defaults(func=cmd_down)
 
     build = sub.add_parser("build", help="只构建前端")
@@ -598,7 +665,11 @@ def normalize_argv(argv: list[str]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(normalize_argv(list(sys.argv[1:] if argv is None else argv)))
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (RuntimeError, OSError, ValueError) as error:
+        log(f"错误：{error}")
+        return 1
 
 
 if __name__ == "__main__":

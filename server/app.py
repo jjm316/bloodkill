@@ -23,10 +23,10 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from blood_bound import Command, RuleError, project_state
+from blood_bound import Command, RuleError, SaveError, project_state
 
 from .deadlines import DeadlineScheduler
-from .accounts import AccountError, AccountStore, SESSION_COOKIE, SESSION_SECONDS
+from .accounts import Account, AccountError, AccountStore, SESSION_COOKIE, SESSION_SECONDS
 from .protocol import PRIVATE_EVENT_TYPES, PROTOCOL_VERSION
 from .rooms import Room, RoomManager
 
@@ -43,6 +43,7 @@ accounts = AccountStore(SAVES_DIR)
 class Conn:
     ws: WebSocket
     room: Room
+    account: Account
     is_host: bool = False
     player_id: str | None = None
 
@@ -271,9 +272,32 @@ async def operational_metrics() -> dict[str, int]:
 
 
 @app.post("/api/rooms")
-async def create_room() -> dict[str, str]:
-    room = manager.create_room()
-    return {"code": room.code, "hostToken": room.host_token, "gameId": room.game_id}
+async def create_room(request: Request) -> Any:
+    account = accounts.get_session(request.cookies.get(SESSION_COOKIE))
+    if account is None:
+        return JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面创建房间。"), status_code=403)
+    body = await request.body()
+    if body and body.strip() != b"{}":
+        return JSONResponse(error_message("protocol.legacy-identity", "请刷新页面，房间使用当前登录账号。"), status_code=400)
+    try:
+        room = manager.create_room(account)
+    except RuleError as error:
+        return JSONResponse(rule_error_message(error), status_code=409)
+    except (OSError, SaveError):
+        return JSONResponse(error_message("room.create-failed", "创建房间失败，请稍后重试。"), status_code=503)
+    return {"code": room.code, "gameId": room.game_id}
+
+
+@app.get("/api/account/room")
+async def account_room(request: Request) -> Any:
+    account = accounts.get_session(request.cookies.get(SESSION_COOKIE))
+    if account is None:
+        return JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
+    room = manager.room_for_account(account.account_id)
+    return {"room": {"code": room.code, "status": room.status} if room else None}
 
 
 @app.get("/api/rooms/{code}")
@@ -313,6 +337,11 @@ async def _arm_restored_deadlines() -> None:
 @app.websocket("/ws/{code}")
 async def ws_endpoint(websocket: WebSocket, code: str) -> None:
     await websocket.accept()
+    account = accounts.get_session(websocket.cookies.get(SESSION_COOKIE))
+    if account is None:
+        await send_safe(websocket, error_message("auth.login-required", "请先登录。"))
+        await websocket.close()
+        return
     room = manager.get_room(code)
     if room is None:
         # details 键名不能是 code：error_message 首参同名，关键字传参会 TypeError。
@@ -321,7 +350,7 @@ async def ws_endpoint(websocket: WebSocket, code: str) -> None:
         return
 
     conn_id = uuid.uuid4().hex
-    conn = Conn(ws=websocket, room=room)
+    conn = Conn(ws=websocket, room=room, account=account)
     conns[conn_id] = conn
     metrics["websocketConnections"] += 1
     try:
@@ -348,7 +377,7 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
         await send_safe(ws, error_message("command.invalid-shape", "First message must be hello."))
         return False
     version = raw.get("protocolVersion")
-    if version is not None and version != PROTOCOL_VERSION:
+    if version != PROTOCOL_VERSION:
         await send_safe(
             ws,
             error_message(
@@ -360,12 +389,17 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
         )
         return False
     room = conn.room
-    name = str(raw.get("name") or "").strip()
-    token = raw.get("token")
-    conn.is_host = bool(token and token == room.host_token)
-    if name:
+    if "name" in raw or "token" in raw:
+        await send_safe(ws, error_message("protocol.legacy-identity", "请刷新页面，房间使用当前登录账号。"))
+        return False
+    mode = raw.get("mode")
+    if mode not in {"player", "spectator"}:
+        await send_safe(ws, error_message("command.invalid-shape", "请选择加入房间或旁观。"))
+        return False
+    conn.is_host = conn.account.account_id == room.host_account_id
+    if mode == "player":
         try:
-            player_id, is_new = manager.join_or_resume(room, name)
+            player_id, is_new = manager.join_or_resume(room, conn.account)
         except RuleError as error:
             await send_safe(ws, rule_error_message(error))
             return False
@@ -381,8 +415,6 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
                     pass
                 conns.pop(other_id, None)
                 metrics["seatTakeovers"] += 1
-        if conn.is_host:
-            manager.bind_host(room, player_id)
     await broadcast_state(room)
     return True
 
@@ -464,8 +496,8 @@ async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
 
 async def _handle_host(conn: Conn, raw: dict[str, Any]) -> None:
     room = conn.room
-    if not conn.is_host:
-        await send_safe(conn.ws, error_message("room.not-host", "Only the host can perform this action."))
+    if conn.account.account_id != room.host_account_id:
+        await send_safe(conn.ws, error_message("room.not-host", "只有房主可以执行此操作。"))
         return
     action = raw.get("action")
     if action == "start":

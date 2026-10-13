@@ -17,6 +17,7 @@ from websockets.exceptions import WebSocketException
 # 同时支持从任意目录直接运行和作为模块导入。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from server.protocol import PROTOCOL_VERSION
+from scripts.account_client import AccountClient
 
 
 class SmokeFailure(Exception):
@@ -90,16 +91,15 @@ def next_action(states: list[dict]) -> tuple[int, dict]:
     raise SmokeFailure("对局无法推进：当前投影没有可用的合法动作")
 
 
-async def websocket_smoke(base: str, room: dict, *, timeout: float = 5, game_timeout: float = 60, max_commands: int = 100) -> dict:
-    code, host_token = room["code"], room["hostToken"]
+async def websocket_smoke(base: str, room: dict, sessions: list[AccountClient], *, timeout: float = 5, game_timeout: float = 60, max_commands: int = 100) -> dict:
+    code = room["code"]
     endpoint = base.replace("https://", "wss://").replace("http://", "ws://")
     sockets = []
-    names = ["验收房主", *[f"验收玩家{index}" for index in range(2, 7)]]
 
-    async def connect(name, token=None):
-        socket = await websockets.connect(f"{endpoint}/ws/{code}", open_timeout=timeout, close_timeout=timeout)
+    async def connect(session, mode="player"):
+        socket = await websockets.connect(f"{endpoint}/ws/{code}", additional_headers={"Cookie": session.cookie_header}, open_timeout=timeout, close_timeout=timeout)
         sockets.append(socket)
-        await socket.send(json.dumps({"type": "hello", "name": name, "token": token, "protocolVersion": PROTOCOL_VERSION}))
+        await socket.send(json.dumps({"type": "hello", "mode": mode, "protocolVersion": PROTOCOL_VERSION}))
         return socket
 
     async def state(socket, *, status=None, revision=0):
@@ -114,12 +114,12 @@ async def websocket_smoke(base: str, room: dict, *, timeout: float = 5, game_tim
     try:
         async with asyncio.timeout(game_timeout):
             players = []
-            for index, name in enumerate(names):
-                socket = await connect(name, host_token if index == 0 else None)
+            for session in sessions[:6]:
+                socket = await connect(session)
                 joined = await state(socket, status="waiting")
                 require(bool(joined["yourPlayerId"]), "首次握手未获得玩家座位")
                 players.append(socket)
-            spectator = await connect("")
+            spectator = await connect(sessions[6], "spectator")
             require((await state(spectator))["yourPlayerId"] is None, "旁观者握手错误")
             print(f"smoke：首次握手成功（协议 v{PROTOCOL_VERSION}，6 名玩家与旁观者）")
             await players[0].send(json.dumps({"type": "host", "action": "start"}))
@@ -152,11 +152,11 @@ async def websocket_smoke(base: str, room: dict, *, timeout: float = 5, game_tim
             print("smoke：命令确认成功（传递匕首）")
             before = states[index]
             await players[index].close()
-            players[index] = await connect(names[index], host_token if index == 0 else None)
+            players[index] = await connect(sessions[index])
             resumed = await state(players[index], status="playing", revision=before["game"]["revision"])
-            require(resumed["yourPlayerId"] == holder and resumed["game"] == before["game"] and resumed["isHost"] == before["isHost"], "同名重连未恢复座位、权限或完整状态")
+            require(resumed["yourPlayerId"] == holder and resumed["game"] == before["game"] and resumed["isHost"] == before["isHost"], "账号重连未恢复座位、权限或完整状态")
             states[index] = resumed
-            print("smoke：同名重连成功（座位与状态一致）")
+            print("smoke：账号重连成功（座位与状态一致）")
             while public["roomStatus"] != "ended":
                 index, action = next_action(states)
                 await command(index, action)
@@ -237,22 +237,23 @@ def main() -> int:
     try:
         status, health = request(f"{base}/health", timeout=args.timeout)
         require(status == 200 and health.get("status") == "ok", "健康检查失败")
-        status, room = request(f"{base}/api/rooms", method="POST", timeout=args.timeout)
-        require(status == 200 and len(room.get("code", "")) == 6 and bool(room.get("hostToken")), "创建房间失败")
+        sessions = [AccountClient(base, args.timeout).register_test_account() for _ in range(7)]
+        status, room = sessions[0].request("/api/rooms", method="POST")
+        require(status == 200 and len(room.get("code", "")) == 6 and "hostToken" not in room, "创建房间失败")
         status, info = request(f"{base}/api/rooms/{room['code']}", timeout=args.timeout)
         require(status == 200 and info.get("status") == "waiting", "等待房间概览检查失败")
         status, replay_error = request(f"{base}/api/rooms/{room['code']}/replay", timeout=args.timeout)
         require(status == 409 and replay_error.get("code") == "room.not-ended", "未结束房间未拒绝回放")
         status, metrics = request(f"{base}/metrics", timeout=args.timeout)
         require(status == 200 and "hostToken" not in json.dumps(metrics), "运行指标检查失败")
-        final = asyncio.run(websocket_smoke(base, room, timeout=args.timeout, game_timeout=args.game_timeout, max_commands=args.max_commands))
+        final = asyncio.run(websocket_smoke(base, room, sessions, timeout=args.timeout, game_timeout=args.game_timeout, max_commands=args.max_commands))
         status, info = request(f"{base}/api/rooms/{room['code']}", timeout=args.timeout)
         require(status == 200 and info.get("status") == "ended", "终局房间概览检查失败")
         status, replay = request(f"{base}/api/rooms/{room['code']}/replay", timeout=args.timeout)
         require(status == 200, f"终局回放请求失败（HTTP {status}）")
         validate_replay(replay, final)
         print(f"smoke：公开回放成功（{len(replay['steps'])} 步，末尾与终局一致）")
-    except (SmokeFailure, WebSocketException, KeyError, ValueError, OSError) as error:
+    except (SmokeFailure, WebSocketException, KeyError, ValueError, OSError, RuntimeError) as error:
         print(f"smoke 失败：{error}", file=sys.stderr)
         return 1
     print(f"smoke 通过：房间 {room['code']}")

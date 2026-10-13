@@ -231,7 +231,7 @@ function makeGateRoomState(revision: number, deadline: number, viewerIsTarget = 
 }
 
 function renderGame() {
-  return render(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+  return render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
 }
 
 function makePollRoomState(revision: number, deadline: number): RoomState {
@@ -272,11 +272,11 @@ describe("「默认不让他人挡刀」偏好（Q7/Q10:A）", () => {
     expect(gateSends()).toHaveLength(1);
     // 服务器重播同一窗口（状态对象全新、键不变）
     socketMock.state = makeGateRoomState(12, deadline);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(gateSends()).toHaveLength(1);
     // 下一次攻击开出新门控窗（revision 与 deadline 都变了）
     socketMock.state = makeGateRoomState(20, deadline + 95);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(gateSends()).toHaveLength(2);
     expect(gateSends()[1]).toEqual(["answer-intervention-request", { need: false }]);
   });
@@ -361,10 +361,10 @@ describe("干涉投票的操作与本机偏好", () => {
     expect(view.container.querySelector(".modal")).toBeNull();
     expect(socketMock.send.mock.calls).toEqual([["respond-intervention", { volunteer: false }]]);
     socketMock.state = makePollRoomState(13, deadline);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(socketMock.send).toHaveBeenCalledTimes(1);
     socketMock.state = makePollRoomState(24, deadline + 95);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(socketMock.send.mock.calls).toEqual([
       ["respond-intervention", { volunteer: false }],
       ["respond-intervention", { volunteer: false }],
@@ -398,7 +398,7 @@ describe("干涉投票的操作与本机偏好", () => {
     const view = renderGame();
     expect(socketMock.send.mock.calls).toEqual([["answer-intervention-request", { need: false }]]);
     socketMock.state = makePollRoomState(13, deadline + 90);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(socketMock.send.mock.calls).toEqual([
       ["answer-intervention-request", { need: false }],
       ["respond-intervention", { volunteer: false }],
@@ -412,7 +412,7 @@ describe("干涉投票的操作与本机偏好", () => {
     const view = renderGame();
     expect(view.getByRole("status").textContent).toBe("正在连接……");
     socketMock.state = makePollRoomState(13, deadline);
-    const rerender = () => view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    const rerender = () => view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     rerender();
     expect(socketMock.send).toHaveBeenCalledTimes(1);
     socketMock.state = null;

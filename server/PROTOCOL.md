@@ -14,7 +14,8 @@
 此字段。个人胜负读取 `result.ranking[].score`（1 胜、0 负），`place` 是排序序号，
 不是角色等级。新增字段不改变存档或胜负规则。
 
-协议版本：当前 v3（2026-10-04，ADR 0012）。v2 → v3 硬切：干涉投票前新增被攻击者
+协议版本：当前 v4（2026-10-13，ADR 0016）。v3 → v4 切换到 Cookie 账号会话，
+旧姓名/房主令牌握手及缺失版本均须刷新客户端。此前 v2 → v3（ADR 0012）在干涉投票前新增被攻击者
 挡刀请求门控（`answer-intervention-request` 命令、`InterventionGate*` 三个事件、
 pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-target`），
 旧版本客户端与旧服务端互拒。
@@ -50,7 +51,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 | --- | --- | --- |
 | `GET` | `/health` | `{"status": "ok"}` |
 | `GET` | `/metrics` | 无身份信息的进程内运行指标，见“运行指标与公开部署边界”。 |
-| `POST` | `/api/rooms` | 创建房间 → `{"code", "hostToken", "gameId"}`。`code` 为 6 位数字房号；`hostToken` 由房主浏览器保存在 localStorage。 |
+| `POST` | `/api/rooms` | 当前登录账号创建房间并立即成为房主、占据自己的座位 → `{"code", "gameId"}`。`code` 为 6 位数字房号；同一房主重试返回既有未结束房间。没有会话 → 401 `auth.login-required`；已有普通玩家占用 → 409 `account.room-occupied`，details.roomCode 提供恢复目标。 |
+| `GET` | `/api/account/room` | 当前登录账号的未结束占用 → `{"room": {"code", "status"} | null}`；用于刷新及创建回复丢失后的恢复。没有会话 → 401。 |
 | `GET` | `/api/rooms/{code}` | 房间概览 → `{"code", "status": "waiting|playing|ended", "locked", "playerCount"}`。不存在 → 404 `room.not-found`。 |
 | `GET` | `/api/rooms/{code}/replay` | 终局回放 → `{"gameId", "steps": [GameState]}`，每步都是旁观者投影。未结束 → 409 `room.not-ended`。只保留最近 20 个已结束对局。 |
 
@@ -63,16 +65,18 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ### 客户端 → 服务器
 
 ```json
-{"type": "hello", "name": "小明", "token": "<hostToken 或省略>", "clientRevision": 12, "protocolVersion": "3"}
+{"type": "hello", "mode": "player", "clientRevision": 12, "protocolVersion": "4"}
 ```
 
-- `name` 为空字符串 → 旁观者（`yourPlayerId = null`，不可操作）。
-- `token` 等于房主的 `hostToken` → 该连接获得 `isHost`。
-- `name` 已存在于房间 → 断线重连，恢复座位（`roomStatus = playing` 时也可恢复）。
-- 同一座位被新连接以同名登录 → 旧连接收到 `taken-over` 并关闭。
+- WebSocket 握手必须携带有效 `bloodbound_session` Cookie；身份不放 URL 或 hello。
+- `mode="spectator"` → 公开投影（`yourPlayerId = null`，不可发送玩家命令）。
+- 房主账号的稳定引用与房间 hostAccountId 相等 → `isHost`；其他账号不能开始或锁定。
+- `mode="player"` 按当前账号恢复或建立座位，不按客户端姓名认领；同账号已有座位在锁房/开局后可恢复。
+- hello 中出现旧 `name` 或 `token` 字段 → `protocol.legacy-identity`，中文提示刷新。
+- 同一座位被新连接接管 → 旧连接收到 `taken-over` 并关闭。
 - `clientRevision` 为客户端最后收到的 `game.revision`，只用于诊断；服务端始终以 `state` 全量投影完成恢复。
-- `protocolVersion` 与服务端不匹配时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本；缺省仅用于兼容早期客户端。
-- `name` 是新人：房间已开始 → 400 `room.already-started`；房间已锁定 → 403 `room.locked`；名字为空 → 400 `player.name-required`。
+- `protocolVersion` 与服务端不匹配或缺失时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本。
+- 当前账号没有本房座位：房间已开始 → `room.already-started`；已锁定 → `room.locked`。
 
 ```json
 {"type": "command", "command": "pass-dagger", "payload": {"targetPlayerId": "p-…"}, "commandId": "uuid", "expectedRevision": 12}
@@ -176,7 +180,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
   "locked": false,
   "isHost": true,
   "yourPlayerId": "p-… | null（旁观者）",
-  "hostPlayerId": "p-… | null（房主尚未以玩家身份连接时为 null）",
+  "hostPlayerId": "p-…（创建时建立的房主座位）",
   "connected": {"p-…": true},
   "hostActions": [{"type": "start-game"}, {"type": "lock"}],
   "game": { /* GameState 投影；waiting 时也有（setup 阶段） */ },
@@ -186,7 +190,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 ### 断线恢复与命令确认
 
-1. 浏览器在连接关闭后以退避重连；同名 `hello` 恢复原座位。房主离开不会结束或转移房间，持有原 `hostToken` 的重连仍为房主。房主令牌持有者以玩家身份 `hello` 时，服务器把该座位记为 `hostPlayerId`（写入房间 meta，重启后保留），所有客户端据此显示房主标记。
+1. 浏览器在连接关闭后以退避重连；有效登录账号恢复其原座位。房主离开不会结束或转移房间，房主账号重连仍为房主。创建时即建立 hostPlayerId、hostAccountId 与 seatAccounts，写入房间 meta，重启后保留；所有客户端显示同一房主座位。
 2. `hello` 后服务器总会发送完整、按接收者投影的 `state`。客户端以它替换本地状态，不尝试补造事件；因此重连前后的 `game.revision` 与状态哈希以服务器为准。
 3. 客户端仅保留尚未收到 `ack` 的命令，并以原 `commandId`、原 `expectedRevision` 重传。相同命令重复到达时服务端返回 `accepted`，但不再次广播事件或结算。
 4. 新 `commandId` 携带过期 `expectedRevision` 时服务端返回 `game.revision-conflict`、`ack.status = rejected` 和最新 `state`；客户端丢弃该命令，等待用户基于新状态再次操作。
@@ -195,7 +199,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ### 运行指标与公开部署边界
 
 - `GET /metrics` 返回无身份信息的进程内计数：连接数、座位恢复/接管数、命令接受/拒绝数及当前连接、房间数量；进程重启后清零。它用于观察重连风暴和非法命令，不记录昵称、令牌、命令内容或私密状态。
-- 局域网可使用 HTTP/WS；任何内网穿透或公网入口必须由 HTTPS/WSS 终止 TLS。不要将明文隧道、`hostToken`、存档目录或调试端点暴露到公网。
+- 本次按 ADR 0016 延续 HTTP/WS 部署；账号存储、会话凭证、存档目录与调试端点不提供公网访问。
 
 ### GameState 投影形状（`blood_bound/projection.py`）
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandAck, GameEvent, RoomState, ServerError } from "./types";
 
-const PROTOCOL_VERSION = "3";
+const PROTOCOL_VERSION = "4";
 // 初始进房超时：从未收到过状态投影的连接，超过此时长仍未应答视为进房失败
 // （房间号错误 / 服务器未启动 / 网络不通）。已收到过状态的断线重连不受影响。
 const JOIN_TIMEOUT_MS = 10_000;
@@ -31,7 +31,7 @@ export interface SocketHandle {
  * latest authoritative room state. The server pushes a fresh projection after
  * every accepted command, so the UI never needs local rules.
  */
-export function useGameSocket(code: string, name: string, token: string | null): SocketHandle {
+export function useGameSocket(code: string, accountId: string, mode: "player" | "spectator"): SocketHandle {
   const [state, setState] = useState<RoomState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [error, setError] = useState<ServerError | null>(null);
@@ -72,8 +72,7 @@ export function useGameSocket(code: string, name: string, token: string | null):
         ws.send(
           JSON.stringify({
             type: "hello",
-            name,
-            token: token ?? undefined,
+            mode,
             clientRevision: stateRef.current?.game?.revision,
             protocolVersion: PROTOCOL_VERSION,
           }),
@@ -118,7 +117,13 @@ export function useGameSocket(code: string, name: string, token: string | null):
             setError({ type: "error", ...ack.error });
           }
         } else if (typed.type === "error") {
-          setError(message as ServerError);
+          const failure = message as ServerError;
+          setError(failure);
+          if (failure.code.startsWith("auth.") || failure.code.startsWith("protocol.")) {
+            canReconnect = false;
+            setFailed(true);
+            ws.close();
+          }
         } else if (typed.type === "taken-over") {
           canReconnect = false;
           setTakenOver(true);
@@ -155,7 +160,7 @@ export function useGameSocket(code: string, name: string, token: string | null):
       if (joinTimer !== undefined) window.clearTimeout(joinTimer);
       wsRef.current?.close();
     };
-  }, [code, name, token]);
+  }, [code, accountId, mode]);
 
   const send = useCallback((command: string, payload: Record<string, unknown> = {}) => {
     const commandId = newCommandId();
