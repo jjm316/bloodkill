@@ -90,8 +90,8 @@ function makeState(): RoomState {
   };
 }
 
-function renderGameScreen(onLeave = vi.fn()) {
-  render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={onLeave} />);
+function renderGameScreen(onLeave = vi.fn(), onReturnToRoom = vi.fn()) {
+  render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={onLeave} onReturnToRoom={onReturnToRoom} />);
   return onLeave;
 }
 
@@ -221,6 +221,23 @@ describe("账号加入拒绝", () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  // 工单 12：占用拒绝帧携带 details.roomCode，失败页直接提供“返回房间”入口，
+  // 与创建路径（大厅的返回房间按钮）一致，不必先回大厅再查询。
+  it("占用拒绝携带 roomCode 时直接提供返回原房入口", () => {
+    const onReturnToRoom = vi.fn();
+    renderGameScreen(vi.fn(), onReturnToRoom);
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive({ type: "error", code: "account.room-occupied", message: "你已有未结束房间，请返回原房间。", details: { roomCode: "654321" } });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText("你已有未结束房间，请返回原房间。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "返回房间 654321" }));
+    expect(onReturnToRoom).toHaveBeenCalledWith("654321");
   });
 
   it("对局中收到房主操作被拒的 error 不停止断线重连", () => {

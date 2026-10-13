@@ -84,7 +84,9 @@ export function WaitingRoom({ state, sendHost, spectating }: { state: RoomState;
   const [singleTimeoutSeconds, setSingleTimeoutSeconds] = useState(90);
   return <div className="waiting"><p>等待玩家加入（{players.length}/12）。分享此房间号，好友登录账号后输入房间号即可加入。</p><ul className="roster">{players.map((p) => <li key={p.playerId} className={p.playerId === state.yourPlayerId ? "self" : undefined}>{p.displayName}{p.playerId === state.yourPlayerId ? "（你）" : ""}{p.playerId === state.hostPlayerId ? "（房主）" : ""}{state.connected[p.playerId] ? "" : "（离线）"}</li>)}</ul>{spectating && <p className="hint">你正在旁观。</p>}{state.isHost && <div className="host-panel"><label className="field" htmlFor="intervention-timeout">干涉投票时限<select id="intervention-timeout" value={timeoutSeconds} onChange={(e) => setTimeoutSeconds(Number(e.target.value))}>{TIMEOUT_CHOICES.map((s) => <option key={s} value={s}>{s} 秒</option>)}</select></label><label className="field" htmlFor="single-window-timeout">单人窗口超时<select id="single-window-timeout" value={singleTimeoutSeconds} onChange={(e) => setSingleTimeoutSeconds(Number(e.target.value))}>{TIMEOUT_CHOICES.map((s) => <option key={s} value={s}>{s} 秒</option>)}</select></label><button disabled={!canStart} onClick={() => sendHost("start", { interventionTimeoutSeconds: timeoutSeconds, singleWindowTimeoutSeconds: singleTimeoutSeconds })}>开始游戏{canStart ? "" : "（需要 6–12 名玩家）"}</button>{state.hostActions.filter((a) => a.type === "lock" || a.type === "unlock").map((a) => <button key={a.type} onClick={() => sendHost(a.type)}>{a.type === "lock" ? "锁定房间" : "解锁房间"}</button>)}</div>}<p className="hint">开始对局后干涉投票时限固定为 {state.isHost ? timeoutSeconds : (state.game?.interventionTimeoutSeconds ?? 90)} 秒、单人窗口超时固定为 {state.isHost ? singleTimeoutSeconds : (state.game?.singleWindowTimeoutSeconds ?? 90)} 秒，倒计时全员可见；单人窗口到期将自动执行默认操作。</p></div>;
 }
-function Banner({ title, detail, onBack }: { title: string; detail: string; onBack: () => void }) { return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p><button onClick={onBack}>返回大厅</button></section>; }
+function Banner({ title, detail, onBack, returnTo }: { title: string; detail: string; onBack: () => void; returnTo?: { code: string; onReturn: (code: string) => void } }) {
+  return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p>{returnTo && <button onClick={() => returnTo.onReturn(returnTo.code)}>返回房间 {returnTo.code}</button>}<button onClick={onBack}>返回大厅</button></section>;
+}
 const errorText = (code: string, _message: string) => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "room.full": "房间已满员（12 人），不能加入。", "room.ended": "对局已结束，不能加入；可观看回放。", "account.room-occupied": "你已有未结束房间，请返回原房间。", "game.player-count": "玩家人数必须为 6–12 人。", "auth.login-required": "请先登录后进入房间。", "protocol.version-mismatch": "客户端版本已更新，请刷新页面。", "protocol.legacy-identity": "请刷新页面，房间使用当前登录账号。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
 
 // 单人窗口（亮牌/技能/退牌）等待横幅（ADR 0011）：带服务端倒计时，
@@ -108,7 +110,7 @@ export function SingleWindowLayer({ game, serverTime }: { game: GameState; serve
   );
 }
 
-export function GameScreen({ credentials, onLeave }: { credentials: RoomCredentials; onLeave: () => void }) {
+export function GameScreen({ credentials, onLeave, onReturnToRoom }: { credentials: RoomCredentials; onLeave: () => void; onReturnToRoom?: (code: string) => void }) {
   const { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost } = useGameSocket(credentials.code, credentials.accountId, credentials.mode);
   const intervention = useIntervention({ game: state?.game, events, serverTime: state?.serverTime, send });
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -129,7 +131,11 @@ export function GameScreen({ credentials, onLeave }: { credentials: RoomCredenti
 
   if (takenOver) return <Banner title="座位已被接管" detail="已在其他设备进入房间，本设备已停止操作和自动重连；账号仍保持登录，可返回大厅查看房间。" onBack={onLeave} />;
   if (closed && !state && !reconnecting) return <Banner title="连接已断开" detail="房间连接在收到游戏状态前已关闭。" onBack={onLeave} />;
-  if (error && !state) return <Banner title="无法加入房间" detail={errorText(error.code, error.message)} onBack={onLeave} />;
+  // 一房占用拒绝（工单 12）：错误帧携带 details.roomCode，失败页直接提供返回原房入口。
+  const occupiedRoomCode = error && !state && error.code === "account.room-occupied" && typeof error.details?.roomCode === "string" && /^\d{6}$/.test(error.details.roomCode)
+    ? error.details.roomCode
+    : undefined;
+  if (error && !state) return <Banner title="无法加入房间" detail={errorText(error.code, error.message)} onBack={onLeave} returnTo={occupiedRoomCode && onReturnToRoom ? { code: occupiedRoomCode, onReturn: onReturnToRoom } : undefined} />;
   // 初始进房超时（服务器未启动/网络不通/无应答）：服务端错误帧优先给出具体原因。
   if (failed && !state) return <Banner title="无法加入房间" detail="连接超时，请核对房间号；若房间号正确，请确认服务器已启动。" onBack={onLeave} />;
   if (!state) return <div className="loading" role="status" aria-live="polite">正在连接……</div>;

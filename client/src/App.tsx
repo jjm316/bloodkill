@@ -59,6 +59,10 @@ export default function App() {
           setCredentials(null);
           setScreen("lobby");
         }}
+        onReturnToRoom={(code) => {
+          setCredentials({ code, accountId: account.accountId, mode: "player" });
+          setScreen("room");
+        }}
       />
         ) : null}
         </>}
