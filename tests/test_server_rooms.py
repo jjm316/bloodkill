@@ -50,6 +50,103 @@ class RoomManagerTests(unittest.TestCase):
         self.assertFalse(is_new)
         self.assertEqual(resumed, player_id)
 
+    def test_occupied_account_cannot_join_a_second_unfinished_room(self):
+        first = self.create_room()
+        migrant = account("双房玩家")
+        self.manager.join_or_resume(first, migrant)
+        second = self.create_room()
+        with self.assertRaises(RuleError) as error:
+            self.manager.join_or_resume(second, migrant)
+        self.assertEqual(error.exception.code, "account.room-occupied")
+        self.assertIn("返回原房间", str(error.exception))
+        self.assertEqual(error.exception.details["roomCode"], first.code)
+        self.assertIsNone(second.player_id_for_account(migrant.account_id), "被拒后不能在目标房残留幽灵座位")
+        self.assertEqual(len(second.engine.state.players), 1)
+        # 本人恢复原房不算新占用，仍得到原座位。
+        player_id, is_new = self.manager.join_or_resume(first, migrant)
+        self.assertFalse(is_new)
+        self.assertEqual(player_id, first.player_id_for_account(migrant.account_id))
+
+    def test_concurrent_create_attempts_allocate_one_room_per_account(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        owner = account("并发房主")
+        barrier = Barrier(4)
+
+        def attempt(_):
+            barrier.wait(timeout=5)
+            return self.manager.create_room(owner)
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            rooms = list(pool.map(attempt, range(4)))
+        self.assertEqual(len({room.code for room in rooms}), 1, "同账号并发建房必须收敛到同一房间")
+        occupied = [room for room in self.manager.rooms.values()
+                    if room.status != "ended" and owner.account_id in room.seat_accounts]
+        self.assertEqual(len(occupied), 1, "并发竞争后账号最多占一个未结束房间")
+
+    def test_concurrent_join_of_two_rooms_leaves_a_single_seat(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        first, second = self.create_room(), self.create_room()
+        migrant = account("并发入座")
+        barrier = Barrier(2)
+        outcomes: dict[str, object] = {}
+
+        def attempt(key, room):
+            barrier.wait(timeout=5)
+            try:
+                outcomes[key] = self.manager.join_or_resume(room, migrant)
+            except RuleError as error:
+                outcomes[key + "_error"] = error
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pool.submit(attempt, "first", first)
+            pool.submit(attempt, "second", second)
+        occupied = [room for room in self.manager.rooms.values()
+                    if room.status != "ended" and migrant.account_id in room.seat_accounts]
+        self.assertEqual(len(occupied), 1, "并发加入两房后最终只能有一个未结束占用")
+        successes = [key for key in outcomes if not key.endswith("_error")]
+        self.assertEqual(len(successes), 1, "必须恰好一个请求成功")
+        for key, value in outcomes.items():
+            if key.endswith("_error"):
+                self.assertEqual(value.code, "account.room-occupied", key)
+                self.assertEqual(value.details["roomCode"], occupied[0].code, "失败方得到原房引导")
+        loser_room = second if occupied[0] is first else first
+        self.assertIsNone(loser_room.player_id_for_account(migrant.account_id), "失败方不能留下幽灵座位")
+
+    def test_concurrent_create_and_join_race_leaves_a_single_occupancy(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        other_room = self.create_room()
+        migrant = account("并发混合")
+        barrier = Barrier(2)
+        outcomes: dict[str, object] = {}
+
+        def create_attempt():
+            barrier.wait(timeout=5)
+            try:
+                outcomes["create"] = self.manager.create_room(migrant)
+            except RuleError as error:
+                outcomes["create_error"] = error
+
+        def join_attempt():
+            barrier.wait(timeout=5)
+            try:
+                outcomes["join"] = self.manager.join_or_resume(other_room, migrant)
+            except RuleError as error:
+                outcomes["join_error"] = error
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pool.submit(create_attempt)
+            pool.submit(join_attempt)
+        occupied = [room for room in self.manager.rooms.values()
+                    if room.status != "ended" and migrant.account_id in room.seat_accounts]
+        self.assertEqual(len(occupied), 1, "建房与加入混合竞争后仍只能占一个房间")
+        for key, value in outcomes.items():
+            if key.endswith("_error"):
+                self.assertEqual(value.code, "account.room-occupied", key)
+                self.assertEqual(value.details["roomCode"], occupied[0].code, "失败方得到原房引导")
+
     def test_created_host_seat_survives_restore(self):
         room = self.create_room()
         player_id = room.host_player_id

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 import secrets
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -107,6 +108,11 @@ class RoomManager:
         self.saves_dir = Path(saves_dir)
         self.saves_dir.mkdir(parents=True, exist_ok=True)
         self.rooms: dict[str, Room] = {}
+        # One active room per account (issue 12): the occupancy check and the
+        # seat commit of create/join must be one atomic step, so concurrent
+        # requests (multiple devices, threadpool callers) can never claim two
+        # unfinished rooms even when persistence yields the GIL mid-flight.
+        self._seats_lock = threading.Lock()
 
     # ---- creation ------------------------------------------------------
 
@@ -115,39 +121,40 @@ class RoomManager:
                      if room.status in {"waiting", "playing"} and account_id in room.seat_accounts), None)
 
     def create_room(self, account: Account) -> Room:
-        existing = self.room_for_account(account.account_id)
-        if existing is not None:
-            if existing.host_account_id != account.account_id:
-                raise RuleError("account.room-occupied", "你已有未结束房间，请返回原房间。", roomCode=existing.code)
-            return existing
-        code = self._new_code()
-        game_id = f"g-{secrets.token_hex(6)}"
-        engine = RulesEngine.new_game(game_id, secrets.token_hex(16))
-        player_id = f"p-{secrets.token_hex(6)}"
-        engine.apply(Command(f"join-{secrets.token_hex(4)}", game_id, None, engine.state.revision,
-                             "join-game", {"playerId": player_id, "displayName": account.username}))
-        room = Room(
-            code=code,
-            game_id=game_id,
-            host_account_id=account.account_id,
-            locked=False,
-            status="waiting",
-            engine=engine,
-            created_at=time.time(),
-            host_player_id=player_id,
-            seat_accounts={account.account_id: player_id},
-        )
-        try:
-            self._persist(room)
-        except (OSError, SaveError):
-            for path in (self._save_path(room), self._meta_path(room), self._meta_path(room).with_suffix(".tmp")):
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-            raise
-        self.rooms[code] = room
-        return room
+        with self._seats_lock:
+            existing = self.room_for_account(account.account_id)
+            if existing is not None:
+                if existing.host_account_id != account.account_id:
+                    raise RuleError("account.room-occupied", "你已有未结束房间，请返回原房间。", roomCode=existing.code)
+                return existing
+            code = self._new_code()
+            game_id = f"g-{secrets.token_hex(6)}"
+            engine = RulesEngine.new_game(game_id, secrets.token_hex(16))
+            player_id = f"p-{secrets.token_hex(6)}"
+            engine.apply(Command(f"join-{secrets.token_hex(4)}", game_id, None, engine.state.revision,
+                                 "join-game", {"playerId": player_id, "displayName": account.username}))
+            room = Room(
+                code=code,
+                game_id=game_id,
+                host_account_id=account.account_id,
+                locked=False,
+                status="waiting",
+                engine=engine,
+                created_at=time.time(),
+                host_player_id=player_id,
+                seat_accounts={account.account_id: player_id},
+            )
+            try:
+                self._persist(room)
+            except (OSError, SaveError):
+                for path in (self._save_path(room), self._meta_path(room), self._meta_path(room).with_suffix(".tmp")):
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                raise
+            self.rooms[code] = room
+            return room
 
     def get_room(self, code: str) -> Room | None:
         return self.rooms.get(code)
@@ -161,35 +168,44 @@ class RoomManager:
         separately: an account that already holds a seat may resume it even
         when the room is locked or the game has started (or ended, to keep
         browsing the result), while newcomers may only join an unlocked
-        waiting room that is not full.
+        waiting room that is not full — and only if the account holds no seat
+        in any other unfinished room (one active room per account, issue 12).
         """
-        existing = room.player_id_for_account(account.account_id)
-        if existing is not None:
-            return existing, False
-        if room.status == "ended":
-            raise RuleError("room.ended", "对局已结束，不能加入；可观看回放。")
-        if room.status != "waiting":
-            raise RuleError("room.already-started", "游戏已开始，不能加入；若你已在房间，返回原房间即可恢复座位。")
-        if room.locked:
-            raise RuleError("room.locked", "房间已锁定，暂不能加入。")
-        if len(room.engine.state.players) >= 12:
-            raise RuleError("room.full", "房间已满员（12 人），不能加入。")
-        player_id = f"p-{secrets.token_hex(6)}"
-        command = Command(
-            f"join-{secrets.token_hex(4)}",
-            room.game_id,
-            None,
-            room.engine.state.revision,
-            "join-game",
-            {"playerId": player_id, "displayName": account.username},
-        )
-        room.seat_accounts[account.account_id] = player_id
-        try:
-            self.apply_command(room, command)
-        except RuleError:
-            room.seat_accounts.pop(account.account_id, None)
-            raise
-        return player_id, True
+        with self._seats_lock:
+            existing = room.player_id_for_account(account.account_id)
+            if existing is not None:
+                return existing, False
+            occupied = self.room_for_account(account.account_id)
+            if occupied is not None:
+                raise RuleError(
+                    "account.room-occupied",
+                    "你已有未结束房间，请返回原房间。",
+                    roomCode=occupied.code,
+                )
+            if room.status == "ended":
+                raise RuleError("room.ended", "对局已结束，不能加入；可观看回放。")
+            if room.status != "waiting":
+                raise RuleError("room.already-started", "游戏已开始，不能加入；若你已在房间，返回原房间即可恢复座位。")
+            if room.locked:
+                raise RuleError("room.locked", "房间已锁定，暂不能加入。")
+            if len(room.engine.state.players) >= 12:
+                raise RuleError("room.full", "房间已满员（12 人），不能加入。")
+            player_id = f"p-{secrets.token_hex(6)}"
+            command = Command(
+                f"join-{secrets.token_hex(4)}",
+                room.game_id,
+                None,
+                room.engine.state.revision,
+                "join-game",
+                {"playerId": player_id, "displayName": account.username},
+            )
+            room.seat_accounts[account.account_id] = player_id
+            try:
+                self.apply_command(room, command)
+            except RuleError:
+                room.seat_accounts.pop(account.account_id, None)
+                raise
+            return player_id, True
 
     # ---- commands ------------------------------------------------------
 

@@ -79,10 +79,12 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
   一律收到 `seat.taken-over` 拒绝（命令拒绝仍带 ack），不改变引擎状态。
 - `clientRevision` 为客户端最后收到的 `game.revision`，只用于诊断；服务端始终以 `state` 全量投影完成恢复。
 - `protocolVersion` 与服务端不匹配或缺失时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本。
-- 当前账号没有本房座位时按新人加入判断：房间已结束 → `room.ended`（对局已结束，不能加入；可观看回放）；
+- 当前账号没有本房座位时按新人加入判断：账号在**其他**未结束房间已占座 → `account.room-occupied`（你已有未结束房间，请返回原房间），details.roomCode 提供恢复目标；
+  房间已结束 → `room.ended`（对局已结束，不能加入；可观看回放）；
   已开始 → `room.already-started`（游戏已开始，不能加入；若已在房间，返回原房间即可恢复座位）；
   已锁定 → `room.locked`（房间已锁定，暂不能加入）；已满 12 人 → `room.full`（房间已满员，不能加入）。
   拒绝均为中文 `message`，被拒连接随即关闭且不产生座位或占用。
+- 一个账号同时最多占据一个未结束房间的玩家座位（工单 12）：创建与加入共用同一原子占用检查，多个设备并发创建或加入不同房间时最终只有一次有效占用；本人恢复原房不算新占用。正常终局自动释放该房全部玩家的占用。
 
 ```json
 {"type": "command", "command": "pass-dagger", "payload": {"targetPlayerId": "p-…"}, "commandId": "uuid", "expectedRevision": 12}
