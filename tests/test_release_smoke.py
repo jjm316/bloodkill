@@ -108,7 +108,10 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertIn(stage, result.stdout)
         print(result.stdout, end="")
         code = re.search(r"房间 (\d{6})", result.stdout).group(1)
-        status, replay = request(f"{self.base}/api/rooms/{code}/replay")
+        # 回放要求登录：匿名被拒，登录的非参与者可读（工单 23）。
+        self.assertEqual(request(f"{self.base}/api/rooms/{code}/replay")[0], 401)
+        session = AccountClient(self.base).register_test_account()
+        status, replay = session.request(f"/api/rooms/{code}/replay")
         self.assertEqual(status, 200)
         self.assertTrue(replay["steps"])
         self.assertEqual(replay["steps"][-1]["status"], "ended")
@@ -139,7 +142,7 @@ class ReleaseSmokeTests(unittest.TestCase):
 class ReleaseFailureTests(unittest.IsolatedAsyncioTestCase):
     async def run_failing_service(self, mode, *arguments):
         """只替代远端 HTTP/WS 边界，脚本以真实 CLI 子进程运行。"""
-        from fastapi import FastAPI, WebSocket
+        from fastapi import FastAPI, Request, WebSocket
         from fastapi.responses import JSONResponse
         import uvicorn
 
@@ -165,8 +168,13 @@ class ReleaseFailureTests(unittest.IsolatedAsyncioTestCase):
         async def info():
             return {"status": "waiting"}
 
-        @fixture.get("/api/rooms/123456/replay")
-        async def replay():
+        @fixture.get("/api/rooms/{code}/replay")
+        async def replay(code: str, request: Request):
+            # 与真实服务一致的顺序：无有效会话先拒 401，再区分未知房/未终局。
+            if request.cookies.get("bloodbound_session") != "fixture-session":
+                return JSONResponse({"code": "auth.login-required"}, status_code=401)
+            if code != "123456":
+                return JSONResponse({"code": "room.not-found"}, status_code=404)
             return JSONResponse({"code": "room.not-ended"}, status_code=409)
 
         @fixture.get("/metrics")

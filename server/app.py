@@ -386,12 +386,16 @@ async def room_info(code: str) -> Any:
 
 
 @app.get("/api/rooms/{code}/replay")
-async def replay(code: str) -> Any:
+async def replay(code: str, request: Request) -> Any:
+    account = accounts.get_session(request.cookies.get(SESSION_COOKIE))
+    if account is None:
+        return JSONResponse(error_message("auth.login-required", "请先登录后再观看回放。"), status_code=401)
     room = manager.get_room(code)
     if room is None:
-        return JSONResponse(error_message("room.not-found", "Room not found."), status_code=404)
+        return JSONResponse(error_message("room.not-found", "房间不存在，请核对房间号。"), status_code=404)
     if room.status != "ended":
-        return JSONResponse(error_message("room.not-ended", "The game has not ended."), status_code=409)
+        # 将来的管理关闭也不是正常终局，同样落在这里被拒绝。
+        return JSONResponse(error_message("room.not-ended", "该对局尚未正常结束，暂无完整回放。"), status_code=409)
     return {"gameId": room.game_id, "steps": manager.replay(room)}
 
 
