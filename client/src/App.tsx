@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AccountEntry, type Account } from "./AccountEntry";
 import { GameScreen } from "./GameScreen";
 import { Lobby, type RoomCredentials } from "./Lobby";
+import { PasswordChangeForm } from "./PasswordChangeForm";
 import { ReplayScreen } from "./ReplayScreen";
 
 type Screen = "lobby" | "room" | "replay";
@@ -31,6 +32,14 @@ export default function App() {
   }, []);
   const [credentials, setCredentials] = useState<RoomCredentials | null>(null);
   const [screen, setScreen] = useState<Screen>("lobby");
+  // 修改密码（工单 15）：表单开关与成功状态；密码只存在表单组件状态内。
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordDone, setPasswordDone] = useState<string | null>(null);
+
+  const resetPasswordUi = () => {
+    setPasswordOpen(false);
+    setPasswordDone(null);
+  };
 
   // 退出登录（工单 14）：撤销服务端当前登录并清除本机身份与房间状态。
   // 服务端会停止该登录的房间连接；本地清理只影响显示，撤销以服务端为准。
@@ -44,12 +53,14 @@ export default function App() {
     setAccount(null);
     setCredentials(null);
     setScreen("lobby");
+    resetPasswordUi();
   };
   // 会话在服务端失效（过期/撤销/接管后的登录要求）：回到登录页重新登录。
   const authLost = () => {
     setAccount(null);
     setCredentials(null);
     setScreen("lobby");
+    resetPasswordUi();
   };
 
   return (
@@ -61,7 +72,15 @@ export default function App() {
           setCredentials(null);
           setScreen("lobby");
         }} /> : <>
-        <p className="current-account">当前账号：{account.username}<button type="button" className="logout-button" disabled={loggingOut} onClick={() => { void logout(); }}>{loggingOut ? "正在退出……" : "退出登录"}</button></p>
+        <p className="current-account">当前账号：{account.username}<button type="button" className="password-button" onClick={() => { setPasswordDone(null); setPasswordOpen(true); }}>修改密码</button><button type="button" className="logout-button" disabled={loggingOut} onClick={() => { void logout(); }}>{loggingOut ? "正在退出……" : "退出登录"}</button></p>
+        {passwordOpen && <PasswordChangeForm
+          onSuccess={() => {
+            setPasswordOpen(false);
+            setPasswordDone("密码已修改，其他设备需要用新密码重新登录。");
+          }}
+          onCancel={() => setPasswordOpen(false)}
+        />}
+        {!passwordOpen && passwordDone && <p className="current-account password-status" role="status">{passwordDone}</p>}
         {screen === "lobby" ? (
       <Lobby
         key={account.accountId}

@@ -120,6 +120,38 @@ class AccountStore:
             )
         return cursor.rowcount > 0
 
+    def change_password(self, token: str | None, old_password: object,
+                        new_password: object, confirmation: object) -> tuple[Account, set[str]]:
+        """验证旧密码后设置新密码：保留当前会话原有效期，撤销同账号其他全部会话。
+
+        返回 (账号, 被撤销会话的 token 摘要集合)，供服务层停止相应连接；
+        任何校验或写入失败都在同一事务内回滚，不改变原密码与既有会话。
+        """
+        if not isinstance(old_password, str):
+            raise AccountError("auth.wrong-old-password", "旧密码不正确，请重新输入。")
+        current_hash = hashlib.sha256(token.encode()).hexdigest() if token else ""
+        with self.connect() as db:
+            row = db.execute(
+                """SELECT accounts.account_id, username, password_salt, password_hash
+                FROM sessions JOIN accounts USING (account_id)
+                WHERE token_hash = ? AND revoked = 0 AND expires_at > ?""",
+                (current_hash, time.time()),
+            ).fetchone()
+            if row is None:
+                raise AccountError("auth.login-required", "请先登录。", 401)
+            if not hmac.compare_digest(password_digest(old_password, row["password_salt"]), row["password_hash"]):
+                raise AccountError("auth.wrong-old-password", "旧密码不正确，请重新输入。")
+            raw_password = validate_password(new_password, confirmation)
+            revoked = {item[0] for item in db.execute(
+                "SELECT token_hash FROM sessions WHERE account_id = ? AND revoked = 0 AND token_hash != ?",
+                (row["account_id"], current_hash))}
+            salt = secrets.token_bytes(16)
+            db.execute("UPDATE accounts SET password_salt = ?, password_hash = ? WHERE account_id = ?",
+                       (salt, password_digest(raw_password, salt), row["account_id"]))
+            db.execute("UPDATE sessions SET revoked = 1 WHERE account_id = ? AND token_hash != ? AND revoked = 0",
+                       (row["account_id"], current_hash))
+        return Account(row["account_id"], row["username"]), revoked
+
     def list_accounts(self) -> list[Account]:
         """All registered accounts ordered by case-folded username (admin view)."""
         with self.connect() as db:
