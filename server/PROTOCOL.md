@@ -328,7 +328,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 `spectator.became-player`（旁观中的账号成为玩家，其已建立旁观连接被停止，工单 16）、
 `command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`、
 `auth.session-expired`（会话到期后已建立 WS 连接被终止，工单 14）、
-`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14）、
+`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14；管理员重置密码撤销该账号
+全部登录并停止其全部已建立连接时同样使用，工单 20）、
 `auth.password-changed`（改密撤销其他设备登录并停止其连接，工单 15）、
 `auth.wrong-old-password`（改密时旧密码不正确，工单 15）。
 

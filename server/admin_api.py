@@ -1,15 +1,17 @@
-"""仅限服务器本机的管理查询端点与安装配置（工单 19）。
+"""仅限服务器本机的管理端点与安装配置（工单 19；工单 20 增加重置密码）。
 
 运行中的服务在自己的进程内启动一个只绑定 127.0.0.1 的微型 HTTP 监听，
-管理命令行（``server/admin.py``）通过它读取账号与房间现状；命令行不另
-建房间管理实例，也不直接读改活动存档。管理凭证与实例标识存放在存档
-目录的 ``admin/`` 子目录：``installation.json`` 记录稳定安装标识、存档
-目录规范路径和当前管理端口（每次启动后写回），``admin-token`` 是独立
-管理凭证。命令行据此核对目标实例，防止误连同一台机器上的另一个服务。
+管理命令行（``server/admin.py``）通过它读取账号与房间现状、执行重置
+密码；命令行不另建房间管理实例，也不直接读改活动存档。管理凭证与实
+例标识存放在存档目录的 ``admin/`` 子目录：``installation.json`` 记录稳
+定安装标识、存档目录规范路径和当前管理端口（每次启动后写回），
+``admin-token`` 是独立管理凭证。命令行据此核对目标实例，防止误连同一
+台机器上的另一个服务。
 
-公网 FastAPI 应用不注册任何管理路由；即使管理端口配置错误，查询也只
+公网 FastAPI 应用不注册任何管理路由；即使管理端口配置错误，操作也只
 会失败，不会影响另一实例的数据。查询响应只包含允许字段（allowlist），
-不序列化数据库行或房间元数据，密码摘要、会话凭证不会进入输出。
+不序列化数据库行或房间元数据，密码摘要、会话凭证不会进入输出；重置
+密码的请求体只经回环传输，密码不进 URL、日志或任何响应。
 """
 
 from __future__ import annotations
@@ -20,7 +22,8 @@ import hmac
 import json
 import os
 import secrets
-from typing import Any
+import sqlite3
+from typing import Any, Awaitable, Callable
 
 ADMIN_DIRECTORY = "admin"
 INSTALLATION_NAME = "installation.json"
@@ -135,31 +138,38 @@ class AdminInstallation:
 
 
 class AdminEndpoint:
-    """把运行中服务的账号/房间现状映射为允许字段，并执行凭证校验。
+    """把运行中服务的账号/房间现状映射为允许字段，并执行凭证校验与写操作。
 
     ``accounts``/``manager``/``conns`` 是 server.app 进程内的同一批对象
     （``conns`` 为可变字典引用），因此查询结果始终反映实时内存状态，
-    包含在线连接情况；查询本身只读，不触发持久化。
+    包含在线连接情况；查询本身只读，不触发持久化。``stop_account_connections``
+    由 server.app 提供：撤销某账号全部登录后停止其已建立的房间连接（工单 20），
+    返回停止的连接数。
     """
 
     def __init__(self, *, accounts: Any, manager: Any, conns: dict[str, Any],
-                 installation: AdminInstallation) -> None:
+                 installation: AdminInstallation,
+                 stop_account_connections: Callable[[str], Awaitable[int]]) -> None:
         self._accounts = accounts
         self._manager = manager
         self._conns = conns
         self._installation = installation
+        self._stop_account_connections = stop_account_connections
 
     # ---- HTTP 路由 --------------------------------------------------------
 
-    def handle(self, method: str, path: str, headers: dict[str, str]) -> tuple[int, dict[str, Any]]:
-        if method != "GET":
-            return 405, {"error": "admin.method-not-allowed", "message": "管理接口只接受 GET 查询。"}
+    async def handle(self, method: str, path: str, headers: dict[str, str],
+                     body: bytes = b"") -> tuple[int, dict[str, Any]]:
         if path == "/admin/instance":
             # 仅供本机命令行核对目标实例身份；不含任何凭证。
             return 200, {
                 "installationId": self._installation.installation_id(),
                 "savesDir": self._installation.saves_dir_identity(),
             }
+        if path == "/admin/reset-password":
+            return await self._handle_reset_password(method, headers, body)
+        if method != "GET":
+            return 405, {"error": "admin.method-not-allowed", "message": "管理接口只接受 GET 查询与 POST 重置密码。"}
         if path not in ("/admin/users", "/admin/rooms"):
             return 404, {"error": "admin.not-found", "message": "未知的管理查询。"}
         if not self._authorized(headers.get(TOKEN_HEADER)):
@@ -167,6 +177,46 @@ class AdminEndpoint:
         if path == "/admin/users":
             return 200, {"accounts": self.account_rows()}
         return 200, {"rooms": self.room_rows()}
+
+    async def _handle_reset_password(self, method: str, headers: dict[str, str],
+                                     body: bytes) -> tuple[int, dict[str, Any]]:
+        """重置指定账号密码并撤销其全部登录（工单 20）。
+
+        请求体只经本机回环传输且从不落日志；用户名之外唯一敏感字段是待设置的
+        新密码本身，响应与错误信息都不回显它。
+        """
+        if method != "POST":
+            return 405, {"error": "admin.method-not-allowed", "message": "重置密码必须以 POST 提交。"}
+        if not self._authorized(headers.get(TOKEN_HEADER)):
+            return 401, {"error": "admin.auth-required", "message": "管理凭证缺失或不正确。"}
+        try:
+            payload = json.loads(body.decode("utf-8")) if body else None
+        except (ValueError, UnicodeDecodeError):
+            payload = None
+        if not isinstance(payload, dict):
+            return 400, {"error": "admin.bad-request", "message": "重置请求格式不正确。"}
+        username = payload.get("username")
+        password = payload.get("password")
+        if not isinstance(username, str) or not username:
+            return 400, {"error": "admin.bad-request", "message": "重置请求缺少用户名。"}
+        if not isinstance(password, str) or not 6 <= len(password) <= 12:
+            return 400, {"error": "admin.bad-request", "message": "密码须为 6–12 个字符。"}
+        try:
+            outcome = self._accounts.reset_password(username, password)
+        except sqlite3.Error:
+            # 持久化或会话撤销失败：同一事务回滚，不返回成功。
+            return 500, {"error": "admin.service-unavailable",
+                         "message": "服务暂时不可用，重置未完成，请稍后重试。"}
+        if outcome is None:
+            return 404, {"error": "admin.account-not-found",
+                         "message": f"账号「{username}」不存在；管理工具不会自动创建账号。"}
+        account, revoked_sessions = outcome
+        stopped_connections = await self._stop_account_connections(account.account_id)
+        return 200, {
+            "username": account.username,
+            "revokedSessions": revoked_sessions,
+            "stoppedConnections": stopped_connections,
+        }
 
     def _authorized(self, presented: str | None) -> bool:
         expected = self._installation.read_token()
@@ -243,8 +293,14 @@ def _serve_client_factory(endpoint: AdminEndpoint):
             parts = request_line.decode("latin-1", "replace").split()
             if len(parts) == 3:
                 headers = await _read_headers(reader)
-                status, payload = endpoint.handle(parts[0], parts[1], headers)
-        except (asyncio.TimeoutError, ValueError, ConnectionError, OSError):
+                body = b""
+                if parts[0] == "POST":
+                    length = headers.get("content-length", "")
+                    if not length.isdigit() or not 0 < int(length) <= _READ_LINE_LIMIT:
+                        raise ValueError("unsupported content-length")
+                    body = await asyncio.wait_for(reader.readexactly(int(length)), _READ_TIMEOUT)
+                status, payload = await endpoint.handle(parts[0], parts[1], headers, body)
+        except (asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError, ConnectionError, OSError):
             pass
         try:
             await _write_json(writer, status, payload)
@@ -271,7 +327,7 @@ async def _read_headers(reader: asyncio.StreamReader) -> dict[str, str]:
 async def _write_json(writer: asyncio.StreamWriter, status: int, payload: dict[str, Any]) -> None:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     reason = {200: "OK", 400: "Bad Request", 401: "Unauthorized", 404: "Not Found",
-              405: "Method Not Allowed"}.get(status, "Error")
+              405: "Method Not Allowed", 500: "Internal Server Error"}.get(status, "Error")
     head = (
         f"HTTP/1.1 {status} {reason}\r\n"
         "Content-Type: application/json; charset=utf-8\r\n"

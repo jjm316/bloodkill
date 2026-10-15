@@ -160,6 +160,33 @@ class AccountStore:
             ).fetchall()
         return [Account(row["account_id"], row["username"]) for row in rows]
 
+    def reset_password(self, username: object, password: object) -> tuple[Account, int] | None:
+        """管理重置（工单 20）：更新密码并撤销该账号全部登录，同一事务提交。
+
+        返回 (账号, 撤销的登录会话数)；用户名不存在返回 None，不自动创建账号。
+        """
+        raw_password = validate_password(password, password)
+        if not isinstance(username, str):
+            return None
+        salt = secrets.token_bytes(16)
+        digest = password_digest(raw_password, salt)
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT account_id, username FROM accounts WHERE username_key = ?",
+                (username.lower(),),
+            ).fetchone()
+            if row is None:
+                return None
+            revoked = db.execute(
+                "UPDATE sessions SET revoked = 1 WHERE account_id = ? AND revoked = 0",
+                (row["account_id"],),
+            ).rowcount
+            db.execute(
+                "UPDATE accounts SET password_salt = ?, password_hash = ? WHERE account_id = ?",
+                (salt, digest, row["account_id"]),
+            )
+        return Account(row["account_id"], row["username"]), revoked
+
     def verify_credentials(self, username: object, password: object) -> Account | None:
         if not isinstance(username, str) or not isinstance(password, str):
             return None

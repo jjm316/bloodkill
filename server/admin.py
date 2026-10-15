@@ -1,21 +1,25 @@
-"""服务器终端管理命令行：在线查看账号与房间（工单 19）。
+"""服务器终端管理命令行：在线查看账号与房间、重置密码（工单 19/20）。
 
 在部署根目录（或仓库根目录）运行::
 
     python -m server.admin users
     python -m server.admin rooms
+    python -m server.admin reset-password 用户名
 
 命令不直接读改存档，而是请求正在运行的服务：管理端口、安装标识和管
 理凭证来自存档目录的 ``admin/`` 子目录（``--saves-dir`` 可覆盖存档目录，
 默认取环境变量 ``BLOOD_BOUND_SAVES_DIR`` 或 ``./saves``；``--port`` 可显
 式指定管理端口）。请求仅发往 127.0.0.1，不走系统代理、不跟随重定向；
 端口上若是最初目标之外的另一个服务实例（安装标识或存档目录不符）则拒
-绝查询，避免误操作。管理凭证不进命令行参数、不出现在输出中。
+绝操作，避免误连。管理凭证不进命令行参数、不出现在输出中；重置密码
+的新密码经隐藏输入读取（终端走 getpass，管道走等价的逐行读取），不进
+命令行参数、不回显、不写入输出或日志，提交时只经本机回环请求体传输。
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 from pathlib import Path
@@ -44,8 +48,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
 
 
-def _admin_request(port: int, path: str, token: str | None = None) -> tuple[int, dict]:
-    request = urllib.request.Request(f"http://127.0.0.1:{port}{path}")
+def _admin_request(port: int, path: str, token: str | None = None, *,
+                   method: str = "GET", payload: dict | None = None) -> tuple[int, dict]:
+    """对回环管理端口发一次请求；POST 的请求体只含允许经回环传输的数据。"""
+    data = None
+    headers: dict[str, str] = {}
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json; charset=utf-8"
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}", data=data, method=method, headers=headers)
     if token is not None:
         request.add_header("X-Admin-Token", token)
     try:
@@ -166,6 +178,77 @@ def render_rooms(rooms: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+# ---- 重置密码（工单 20）--------------------------------------------------
+
+
+def _read_secret(prompt: str) -> str | None:
+    """读一行秘密输入；返回 None 表示取消（空输入或输入流结束）。
+
+    终端交互走 ``getpass``（不回显；Windows 控制台同样适用）；stdin 是管
+    道或重定向时不存在回显媒介，逐行读取与隐藏输入等价：密码同样不进命
+    令行参数、不写入输出或日志。提示语由本函数打印（getpass 只负责取值），
+    保证中文提示在 Windows 控制台上按 UTF-8 正常显示。
+    """
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    if sys.stdin.isatty():
+        value = getpass.getpass("")
+    else:
+        value = sys.stdin.readline()
+        if value == "":
+            return None
+    value = value.rstrip("\r\n")
+    return value if value else None
+
+
+def _prompt_new_password() -> str | None:
+    """交互读取并校验新密码；校验失败的中文提示后可重试，空输入取消。"""
+    while True:
+        password = _read_secret("请输入新密码（6–12 个字符，直接回车取消）：")
+        if password is None:
+            return None
+        if not 6 <= len(password) <= 12:
+            print("密码须为 6–12 个字符，请重新输入。")
+            continue
+        confirmation = _read_secret("请再次输入新密码确认（直接回车取消）：")
+        if confirmation is None:
+            return None
+        if password != confirmation:
+            print("两次输入的密码不一致，请重新输入。")
+            continue
+        return password
+
+
+def _reset_password_command(port: int, token: str, username: str) -> int:
+    password = _prompt_new_password()
+    if password is None:
+        print("已取消：未修改任何账号。", file=sys.stderr)
+        return 1
+    status, body = _admin_request(
+        port, "/admin/reset-password", token,
+        method="POST", payload={"username": username, "password": password})
+    if status == 401:
+        raise AdminCliError("管理凭证缺失或不正确：请核对服务器存档目录中的 admin/admin-token 后重试。")
+    if status == 404:
+        raise AdminCliError(f"账号「{username}」不存在，未修改任何账号；管理工具不会自动创建账号。")
+    if status != 200:
+        raise AdminCliError(f"重置未完成：{body.get('message', f'服务返回 HTTP {status}。')}")
+    sys.stdout.write(render_reset_success(
+        str(body.get("username", username)),
+        int(body.get("revokedSessions", 0)),
+        int(body.get("stoppedConnections", 0)),
+    ))
+    return 0
+
+
+def render_reset_success(username: str, revoked_sessions: int, stopped_connections: int) -> str:
+    return (
+        f"已重置账号「{username}」的密码；该账号全部登录已撤销（所有设备）。\n"
+        f"共撤销登录会话 {revoked_sessions} 个，停止已建立的房间连接 {stopped_connections} 条。\n"
+        "座位与房主归属保持不变；该账号需用新密码重新登录。\n"
+    )
+
+
 # ---- 入口 ----------------------------------------------------------------
 
 
@@ -191,6 +274,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True, metavar="命令")
     commands.add_parser("users", help="查看账号及其当前房间占用", parents=[common])
     commands.add_parser("rooms", help="查看房间号、状态、房主、玩家与在线情况", parents=[common])
+    reset = commands.add_parser(
+        "reset-password", help="重置账号密码并撤销其全部登录（新密码经隐藏输入，不进参数）", parents=[common])
+    reset.add_argument("username", metavar="用户名", help="要重置密码的账号用户名")
     return parser
 
 
@@ -212,10 +298,16 @@ def main(argv: list[str] | None = None) -> int:
                 f"端口 {port} 上不是预期的管理服务（HTTP {status}）。{TROUBLE_SHOOTING}"
             )
         _verify_instance(port, identity, installation, saves_dir)
+        if args.command == "reset-password":
+            # 防误连核对通过后才提示输入新密码（工单 20）。
+            return _reset_password_command(port, token, args.username)
         payload = _fetch_query(port, token, args.command)
     except AdminCliError as error:
         print(f"失败：{error}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        print("\n已取消：未修改任何账号。", file=sys.stderr)
+        return 130
     if args.command == "users":
         sys.stdout.write(render_users(payload["accounts"]))
     else:
