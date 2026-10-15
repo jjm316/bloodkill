@@ -149,11 +149,14 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
           setError(failure);
           // 加入阶段（尚未收到任何状态投影）的房间错误是终止性的：
           // 锁定、开局、满员、结束、占用等拒绝后不再自动重连，避免反复撞墙。
+          // spectator.*（工单 16）同样是终止性的：占座互斥拒绝、账号成为
+          // 玩家后的旁观停止都不允许再以旁观身份重连。
           // 已进入房间后的命令错误（如房主操作被拒）不影响断线重连。
           if (
             !stateRef.current ||
             failure.code.startsWith("auth.") ||
-            failure.code.startsWith("protocol.")
+            failure.code.startsWith("protocol.") ||
+            failure.code.startsWith("spectator.")
           ) {
             canReconnect = false;
             setFailed(true);

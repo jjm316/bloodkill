@@ -195,6 +195,23 @@ async def _terminate_conn(conn: Conn, code: str, message: str) -> None:
         pass
 
 
+async def _stop_account_spectators(account_id: str, *, exclude: Conn | None = None) -> None:
+    """Ticket 16: an account that becomes a player loses its spectator conns.
+
+    Established spectator connections of this account (any room) are told why
+    in Chinese and closed, so "spectate first, join later" cannot keep a live
+    spectator view next to a player seat. Connections still handshaking are
+    not stopped here: their own hello check runs after the seat commit and
+    rejects them. The player connection itself is passed as `exclude`.
+    """
+    for conn in [conn for conn in list(conns.values())
+                 if conn is not exclude
+                 and conn.account.account_id == account_id
+                 and conn.ready
+                 and conn.player_id is None]:
+        await _terminate_conn(conn, "spectator.became-player", "当前账号已作为玩家进入房间，本旁观连接已停止。")
+
+
 async def send_command_ack(
     conn: Conn,
     command_id: str,
@@ -360,6 +377,8 @@ async def create_room(request: Request) -> Any:
         return JSONResponse(rule_error_message(error), status_code=409)
     except (OSError, SaveError):
         return JSONResponse(error_message("room.create-failed", "创建房间失败，请稍后重试。"), status_code=503)
+    # 工单 16：建房即占座，同样停止该账号已建立的旁观连接。
+    await _stop_account_spectators(account.account_id)
     return {"code": room.code, "gameId": room.game_id}
 
 
@@ -502,6 +521,21 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
     if mode not in {"player", "spectator"}:
         await send_safe(ws, error_message("command.invalid-shape", "请选择加入房间或旁观。"))
         return False
+    if mode == "spectator":
+        # 工单 16：账号存在未结束玩家座位时禁止同时旁观（服务端校验，
+        # 覆盖跨设备与直接请求）；在原房应走玩家恢复路径，details 提供入口。
+        occupied = manager.room_for_account(conn.account.account_id)
+        if occupied is not None:
+            await send_safe(ws, error_message(
+                "spectator.seat-held",
+                "你已有未结束房间的玩家座位，不能同时旁观；请返回原房间。",
+                roomCode=occupied.code,
+            ))
+            return False
+        if room.status == "ended":
+            # 旁观只针对未结束房间；已结束对局走公开回放入口（工单 23）。
+            await send_safe(ws, error_message("room.ended", "对局已结束，不能旁观；可观看回放。"))
+            return False
     conn.is_host = conn.account.account_id == room.host_account_id
     if mode == "player":
         try:
@@ -512,6 +546,8 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
         conn.player_id = player_id
         if not is_new:
             metrics["seatResumptions"] += 1
+        # 工单 16：占座成功即停止该账号已建立的旁观连接（含恢复路径，幂等）。
+        await _stop_account_spectators(conn.account.account_id, exclude=conn)
         for other_id, other in list(conns.items()):
             if other is not conn and other.room is room and other.player_id == player_id:
                 other.taken_over = True
