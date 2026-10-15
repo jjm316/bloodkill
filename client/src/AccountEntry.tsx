@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 export interface Account { accountId: string; username: string; }
 
-export function AccountEntry({ onAuthenticated }: { onAuthenticated: (account: Account) => void }) {
+export function AccountEntry({ onAuthenticated, inviteCode }: { onAuthenticated: (account: Account) => void; inviteCode?: string | null }) {
   const [registering, setRegistering] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -33,6 +33,8 @@ export function AccountEntry({ onAuthenticated }: { onAuthenticated: (account: A
   return <div className="lobby account-entry">
     <h1>鲜血盟约</h1>
     <h2>{registering ? "注册账号" : "登录"}</h2>
+    {/* 邀请链接（工单 17）：登录或注册成功后自动进入目标房，表单切换期间提示保留。 */}
+    {inviteCode && <p className="hint">登录或注册后将自动进入房间 {inviteCode}。</p>}
     <form onSubmit={submit}>
       <label className="field" htmlFor="account-username">用户名<input id="account-username" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></label>
       <p className="hint">2–16 个中文、英文字母、数字或下划线，英文字母不区分大小写。</p>
