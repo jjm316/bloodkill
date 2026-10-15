@@ -315,6 +315,10 @@ async def admin_close_room(code: str, expected_game_id: str | None,
     except RuleError as error:
         status = 503 if error.code in {"admin.backup-failed", "admin.close-failed"} else 409
         raise close_error(status, error.code, str(error), **error.details) from None
+    # 工单 22 故障注入钩子：关闭已提交、回复尚未发出的边界（验证用真实
+    # 进程终止在此模拟「关闭成功但回复丢失」）。
+    from .rooms import admin_close_fault_pause
+    admin_close_fault_pause("after-commit", SAVES_DIR, room.game_id)
     # 计时器走既有调度器机制：窗口已被清空，sync 即取消该房已武装的定时。
     await deadline_scheduler.sync(room)
     # 通知并断开该房全部连接（含真实决策窗口内的）：每条连接先收到中文
@@ -648,6 +652,12 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
                 "你已有未结束房间的玩家座位，不能同时旁观；请返回原房间。",
                 roomCode=occupied.code,
             ))
+            return False
+        if room.status == "closed":
+            # 工单 22：已关闭房间不再可旁观——关闭竞态窗口里排队的旁观
+            # hello 同样只能拿到明确拒绝。
+            await send_safe(ws, error_message(
+                "room.admin-closed", "房间已被管理员关闭，请返回大厅创建或加入新的房间。"))
             return False
         if room.status == "ended":
             # 旁观只针对未结束房间；已结束对局走公开回放入口（工单 23）。

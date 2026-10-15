@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import os
 import secrets
 import threading
 import time
@@ -36,6 +37,33 @@ FINISHED_GAMES_TO_KEEP = 20
 # 管理关闭（工单 21）的隔离备份目录：与活动房间恢复扫描（存档根目录）和
 # 「最近 N 个正常终局」清理互不相干，清理绝不触碰这个子目录。
 ADMIN_BACKUP_DIRECTORY = "admin-backup"
+
+# 工单 22 的故障注入钩子：仅当服务进程以该环境变量指定边界时，管理关闭
+# 才会在该边界写标记文件并阻塞等待释放文件。生产不设置此变量，函数立即
+# 返回；验证用它把进程停在精确边界，再以真实进程终止模拟清理中断，或用
+# 释放文件门控确定性交错（关闭与排队玩家流量）。
+FAULT_PAUSE_ENV = "BLOOD_BOUND_ADMIN_CLOSE_FAULT"
+FAULT_PAUSE_MAX_SECONDS = 300.0
+
+
+def admin_close_fault_pause(point: str, saves_dir: str | Path, game_id: str) -> None:
+    """在管理关闭的指定边界挂起（验证专用，见 :data:`FAULT_PAUSE_ENV`）。
+
+    ``point`` 取 ``before-backup`` / ``after-backup`` / ``after-commit``。命中
+    时先写 ``<存档目录>/.admin-close-fault.<point>.marker``（外部据此同步），
+    再阻塞直到 ``.admin-close-fault.<point>.release`` 出现或超时。
+    """
+    if os.environ.get(FAULT_PAUSE_ENV, "") != point:
+        return
+    root = Path(saves_dir)
+    marker = root / f".admin-close-fault.{point}.marker"
+    release = root / f".admin-close-fault.{point}.release"
+    marker.write_text(game_id, encoding="utf-8")
+    deadline = time.time() + FAULT_PAUSE_MAX_SECONDS
+    while not release.exists():
+        if time.time() > deadline:
+            raise OSError(f"故障注入边界 {point} 等待释放文件超时")
+        time.sleep(0.05)
 
 
 @dataclass
@@ -175,6 +203,11 @@ class RoomManager:
         in any other unfinished room (one active room per account, issue 12).
         """
         with self._seats_lock:
+            if room.status == "closed":
+                # 工单 22：已关闭房间对任何人都不再可用——包括持有旧座位引用
+                # 的重连（关闭竞态窗口里排队的 hello 只能拿到明确拒绝，不能
+                # 拿到一个看似可用的已关房状态）。
+                raise RuleError("room.admin-closed", "房间已被管理员关闭，不能再进入。")
             existing = room.player_id_for_account(account.account_id)
             if existing is not None:
                 return existing, False
@@ -341,13 +374,15 @@ class RoomManager:
         入隔离的 ``admin-backup/<gameId>/`` 目录并落关闭事实；随后才把该房
         的活动存档移出存档根目录、把房间停用并移出活跃注册表。任何一步失
         败都以 :class:`RuleError` 报告，房间保持可用，已写入的备份无害
-        （下次重试整目录重写）。
+        （下次重试整目录重写）。关闭未提交时留下的 stale 关闭记录会被移除
+        （见 :meth:`_discard_stale_closure`），它描述的关闭从未发生。
         """
         with self._seats_lock:
             if self.rooms.get(room.code) is not room:
                 raise RuleError("room.admin-closed", f"房间 {room.code} 已被管理员关闭，无需重复处理。")
             if room.status not in {"waiting", "playing"}:
                 raise RuleError("room.ended", f"房间 {room.code} 已正常结束，无需管理关闭。")
+            admin_close_fault_pause("before-backup", self.saves_dir, room.game_id)
             backup_dir = self.saves_dir / ADMIN_BACKUP_DIRECTORY / room.game_id
             affected = [
                 room.engine.state.players[player_id].display_name
@@ -372,10 +407,13 @@ class RoomManager:
                     "admin.backup-failed",
                     f"备份失败（{error}）。房间 {room.code} 未关闭，保持可用；请处理备份目录后重试。",
                 ) from None
+            admin_close_fault_pause("after-backup", self.saves_dir, room.game_id)
             try:
                 self._meta_path(room).unlink(missing_ok=True)
                 self._save_path(room).unlink(missing_ok=True)
             except OSError as error:
+                # 备份完好但关闭未提交：stale 关闭记录不得继续冒充已关闭。
+                self._discard_stale_closure(room.game_id)
                 raise RuleError(
                     "admin.close-failed",
                     f"备份已完成，但移出活动存档失败（{error}）。房间 {room.code} 关闭未完成，"
@@ -426,6 +464,19 @@ class RoomManager:
         temporary.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True), encoding="utf-8")
         temporary.replace(path)
 
+    def _discard_stale_closure(self, game_id: str) -> None:
+        """移除「从未提交的关闭」留下的 stale 关闭记录（工单 22）。
+
+        只有活动存档仍在（房间可恢复/仍活跃）时才会调用：closure.json 声称
+        已关闭、而关闭实际没有提交，这样的记录继续存在会让后续查询把活房
+        误报成已关闭。备份里的存档与元数据副本保留（无害，重试会整目录重
+        写），只移除会撒谎的关闭事实。
+        """
+        try:
+            (self.saves_dir / ADMIN_BACKUP_DIRECTORY / game_id / "closure.json").unlink(missing_ok=True)
+        except OSError:
+            pass
+
     # ---- recovery & retention -----------------------------------------
 
     def restore(self) -> list[Room]:
@@ -456,6 +507,9 @@ class RoomManager:
                 window_deadline=meta.get("windowDeadline"),
                 window_stage=meta.get("windowStage"),
             )
+            # 工单 22：房间从活动存档恢复 = 它的关闭从未提交。清掉中断尝试
+            # 留下的 stale 关闭记录，避免该房之后消失时被误报成已关闭。
+            self._discard_stale_closure(game_id)
         self._prune_finished()
         return list(self.rooms.values())
 
