@@ -195,6 +195,7 @@ describe("会话失效的重新登录入口（工单 14）", () => {
   it.each([
     ["auth.session-expired", "登录已过期，请重新登录。"],
     ["auth.session-revoked", "当前登录已退出，请重新登录。"],
+    ["auth.password-changed", "密码已修改，请重新登录。"],
   ])("对局中收到 %s 错误帧：停止重连并给出重新登录入口", (code, text) => {
     const onAuthLost = vi.fn();
     render(

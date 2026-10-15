@@ -11,6 +11,7 @@ curse assignment, or private events. See PROTOCOL.md and README.md.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import sqlite3
 import time
@@ -345,6 +346,44 @@ async def logout_account(request: Request) -> JSONResponse:
         await _terminate_conn(conn, "auth.session-revoked", "当前登录已退出，请重新登录。")
     response = JSONResponse({"account": account.public()})
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="strict")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/auth/password")
+async def change_password(request: Request) -> JSONResponse:
+    """验证旧密码后设置新密码（工单 15）。
+
+    当前登录保留原有效期；同账号其他设备的登录全部撤销，其已建立的
+    房间 WebSocket 收到 auth.password-changed 中文说明后关闭。不改座位
+    与房主归属；任何校验或存储失败都不改变原密码与会话。
+    """
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面修改密码。"), status_code=403)
+    try:
+        payload = await request.json()
+    except (ValueError, UnicodeError):
+        return JSONResponse(error_message("auth.invalid-input", "密码修改信息格式不正确，请重新填写。"), status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse(error_message("auth.invalid-input", "密码修改信息格式不正确，请重新填写。"), status_code=400)
+    try:
+        account, revoked = await run_in_threadpool(
+            accounts.change_password,
+            request.cookies.get(SESSION_COOKIE),
+            payload.get("oldPassword"),
+            payload.get("newPassword"),
+            payload.get("confirmPassword"),
+        )
+    except AccountError as error:
+        return JSONResponse(error_message(error.code, str(error)), status_code=error.status)
+    except sqlite3.Error:
+        return JSONResponse(error_message("auth.service-unavailable", "服务暂时不可用，请稍后重试。"), status_code=503)
+    # 只停止被撤销登录（其他设备）已建立的连接；当前设备的连接照常使用。
+    for conn in [conn for conn in list(conns.values())
+                 if hashlib.sha256(conn.token.encode()).hexdigest() in revoked]:
+        await _terminate_conn(conn, "auth.password-changed", "密码已修改，请重新登录。")
+    response = JSONResponse({"account": account.public()})
     response.headers["Cache-Control"] = "no-store"
     return response
 

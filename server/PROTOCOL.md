@@ -50,11 +50,21 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 （连接收到 `auth.session-revoked` 错误帧后关闭），但不移除座位、不改变房主归属；重新登录
 同账号可恢复原座位。无会话或已退出的凭证返回 401 `auth.login-required`，重放不能恢复身份。
 
+`POST /api/auth/password` 接收 JSON `{oldPassword, newPassword, confirmPassword}`，验证旧密码后
+设置新密码（6–12 个字符、确认完全相同，规则与注册一致）。成功返回 200 `{account}`：**当前
+登录保留原有效期**（Cookie 与固定 30 天到期点均不变），同账号**其他设备的全部登录被撤销**
+并停止其已建立的房间 WebSocket（连接收到 `auth.password-changed` 中文错误帧后关闭）；座位
+与房主归属不变，其他设备用新密码重新登录即可恢复原身份。旧密码不正确返回 400
+`auth.wrong-old-password`；新密码越界/确认不一致返回 400 `auth.invalid-password` /
+`auth.password-mismatch`；未登录 401 `auth.login-required`；非本站 Origin 403
+`auth.invalid-origin`；存储不可用 503 `auth.service-unavailable`。任何失败都不改变原密码与
+既有会话；密码只放 JSON 请求体，不进入 URL、日志或响应。
+
 会话到期（固定 30 天，不滚动续期）后所有 HTTP 请求视为未登录；**此前已建立的 WebSocket**
 在下一条消息或房间广播时被终止（`auth.session-expired` 错误帧 + 关闭），旧连接不能再发送
 合法动作、也收不到后续私有投影；同房其他有效会话的连接不受影响。
 
-本节覆盖工单 07–08 注册、登录、身份恢复与工单 14 退出/过期切片；修改密码与管理重置由后续账号工单扩展。
+本节覆盖工单 07–08 注册、登录、身份恢复、工单 14 退出/过期切片与工单 15 主动改密；管理重置密码由后续账号工单扩展。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -81,6 +91,8 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 会话过期或被退出撤销后：重连被 `auth.login-required` 拒绝；**此前已建立的连接**在发送任何
   消息或房间下一次广播时收到 `auth.session-expired`（过期）或 `auth.session-revoked`（退出撤销，
   工单 14）错误帧并关闭，不能再发送合法动作、收不到后续私有投影；同房其他有效会话不受影响。
+  改密撤销（工单 15）同理：其他设备的已建立连接收到 `auth.password-changed` 后关闭，
+  当前设备的连接照常使用。
 - `mode="spectator"` → 公开投影（`yourPlayerId = null`，不可发送玩家命令）。在线旁观必须登录；
   旁观只针对未结束（等待/进行）房间。账号在**任何**未结束房间持有玩家座位时禁止同时旁观
   （工单 16，服务端校验、跨设备一致）→ `spectator.seat-held`（你已有未结束房间的玩家座位，
@@ -316,7 +328,9 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 `spectator.became-player`（旁观中的账号成为玩家，其已建立旁观连接被停止，工单 16）、
 `command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`、
 `auth.session-expired`（会话到期后已建立 WS 连接被终止，工单 14）、
-`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14）。
+`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14）、
+`auth.password-changed`（改密撤销其他设备登录并停止其连接，工单 15）、
+`auth.wrong-old-password`（改密时旧密码不正确，工单 15）。
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、
 `game.already-ended`、`command.unknown`、`game.not-setup`、`game.duplicate-player`、
