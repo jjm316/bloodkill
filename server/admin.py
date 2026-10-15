@@ -120,6 +120,71 @@ def _fetch_query(port: int, token: str, command: str) -> dict:
     return body
 
 
+def _admin_post(port: int, path: str, token: str, payload: dict) -> tuple[int, dict]:
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-Admin-Token": token},
+        method="POST",
+    )
+    try:
+        with _OPENER.open(request, timeout=30) as response:
+            return response.status, json.load(response)
+    except urllib.error.HTTPError as error:
+        try:
+            body = json.load(error)
+        except (ValueError, OSError):
+            body = {}
+        return error.code, body if isinstance(body, dict) else {}
+    except urllib.error.URLError as error:
+        raise AdminCliError(
+            f"无法连接 127.0.0.1:{port} 上的管理端口（{error.reason}）。"
+            f"服务可能未运行或端口已变化。{TROUBLE_SHOOTING}"
+        ) from None
+    except (TimeoutError, OSError) as error:
+        raise AdminCliError(
+            f"连接 127.0.0.1:{port} 上的管理端口超时或中断（{error}）。{TROUBLE_SHOOTING}"
+        ) from None
+
+
+def run_close_room(port: int, token: str, room_code: str) -> int:
+    """预览 → 再次输入房号确认 → 备份并关闭（工单 21）。"""
+    from urllib.parse import quote
+    status, preview = _admin_request(
+        port, f"/admin/close-room/preview?code={quote(room_code)}", token)
+    if status == 401:
+        print("失败：管理凭证缺失或不正确：请核对服务器存档目录中的 admin/admin-token 后重试。",
+              file=sys.stderr)
+        return 1
+    if status != 200:
+        # 不存在 / 已正常结束 / 已被管理关闭：服务端已给出中文原因。
+        print(f"失败：{preview.get('message', '未知错误')}", file=sys.stderr)
+        return 1
+    sys.stdout.write(render_close_preview(preview))
+    sys.stdout.write(f"再次输入房号 {room_code} 确认关闭（其他输入或直接回车取消）：")
+    sys.stdout.flush()
+    try:
+        answer = input()
+    except EOFError:
+        answer = ""
+    if answer.strip() != room_code:
+        print(f"已取消：输入与房间号不一致，未关闭房间 {room_code}。", file=sys.stderr)
+        return 1
+    status, result = _admin_post(port, "/admin/close-room", token, {
+        "code": room_code,
+        "expectedGameId": preview.get("gameId"),
+        "expectedRevision": preview.get("revision"),
+    })
+    if status != 200:
+        print(f"失败：{result.get('message', '未知错误')}", file=sys.stderr)
+        return 1
+    players = "、".join(result.get("affectedPlayers", []))
+    print(f"已关闭房间 {result['code']}。")
+    print(f"受影响玩家 {len(result.get('affectedPlayers', []))} 人：{players if players else '无'}")
+    print(f"备份已写入：{result['backupPath']}")
+    return 0
+
+
 # ---- 中文输出 ------------------------------------------------------------
 
 _ROOM_STATUS_LABELS = {"waiting": "等待中", "playing": "进行中", "ended": "已结束"}
@@ -165,11 +230,7 @@ def render_rooms(rooms: list[dict]) -> str:
         summary.append(f"其他 {others} 个")
     lines = [f"共 {len(rooms)} 个房间（{'、'.join(summary)}）："]
     for room in rooms:
-        status = _ROOM_STATUS_LABELS.get(room["status"], room["status"])
-        locked = "已锁定" if room["locked"] else "未锁定"
-        lines.append(
-            f"房间 {room['code']}｜对局 {room['gameId']}｜{status}｜{locked}｜房主 {room['hostUsername']}"
-        )
+        lines.append(_render_room_line(room))
         players = "、".join(
             f"{player['username']}（{'在线' if player['online'] else '离线'}）"
             for player in room["players"]
@@ -249,6 +310,30 @@ def render_reset_success(username: str, revoked_sessions: int, stopped_connectio
     )
 
 
+def _render_room_line(room: dict) -> str:
+    status = _ROOM_STATUS_LABELS.get(room["status"], room["status"])
+    locked = "已锁定" if room["locked"] else "未锁定"
+    return f"房间 {room['code']}｜对局 {room['gameId']}｜{status}｜{locked}｜房主 {room['hostUsername']}"
+
+
+def render_close_preview(preview: dict) -> str:
+    """close-room 预览：写入前显示目标房间的当前信息（工单 21）。"""
+    lines = [
+        "将要关闭的房间：",
+        _render_room_line(preview),
+    ]
+    players = "、".join(
+        f"{player['username']}（{'在线' if player['online'] else '离线'}）"
+        for player in preview["players"]
+    )
+    lines.append(f"  玩家 {len(preview['players'])} 人：{players if players else '无'}")
+    lines.append(
+        "关闭将先备份该房存档，再停止其操作与计时器、断开全部连接并释放玩家占用；"
+        "这不是正常终局，不产生胜负或身份揭晓。"
+        )
+    return "\n".join(lines) + "\n"
+
+
 # ---- 入口 ----------------------------------------------------------------
 
 
@@ -277,6 +362,9 @@ def build_parser() -> argparse.ArgumentParser:
     reset = commands.add_parser(
         "reset-password", help="重置账号密码并撤销其全部登录（新密码经隐藏输入，不进参数）", parents=[common])
     reset.add_argument("username", metavar="用户名", help="要重置密码的账号用户名")
+    close_parser = commands.add_parser(
+        "close-room", help="预览、确认并备份关闭一个未结束房间", parents=[common])
+    close_parser.add_argument("room_code", metavar="房间号")
     return parser
 
 
@@ -301,6 +389,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "reset-password":
             # 防误连核对通过后才提示输入新密码（工单 20）。
             return _reset_password_command(port, token, args.username)
+        if args.command == "close-room":
+            return run_close_room(port, token, args.room_code)
         payload = _fetch_query(port, token, args.command)
     except AdminCliError as error:
         print(f"失败：{error}", file=sys.stderr)

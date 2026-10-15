@@ -152,11 +152,13 @@ export function useGameSocket(code: string, accountId: string, mode: "player" | 
           // spectator.*（工单 16）同样是终止性的：占座互斥拒绝、账号成为
           // 玩家后的旁观停止都不允许再以旁观身份重连。
           // 已进入房间后的命令错误（如房主操作被拒）不影响断线重连。
+          // 管理关闭（工单 21）同样终止：房间已不存在，重连只会撞 404。
           if (
             !stateRef.current ||
             failure.code.startsWith("auth.") ||
             failure.code.startsWith("protocol.") ||
-            failure.code.startsWith("spectator.")
+            failure.code.startsWith("spectator.") ||
+            failure.code === "room.admin-closed"
           ) {
             canReconnect = false;
             setFailed(true);

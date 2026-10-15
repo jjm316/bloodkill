@@ -87,7 +87,7 @@ export function WaitingRoom({ state, sendHost, spectating }: { state: RoomState;
 function Banner({ title, detail, onBack, returnTo, actionText = "返回大厅" }: { title: string; detail: string; onBack: () => void; returnTo?: { code: string; onReturn: (code: string) => void }; actionText?: string }) {
   return <section className="banner" aria-labelledby="banner-title"><h2 id="banner-title">{title}</h2><p>{detail}</p>{returnTo && <button onClick={() => returnTo.onReturn(returnTo.code)}>返回房间 {returnTo.code}</button>}<button onClick={onBack}>{actionText}</button></section>;
 }
-const errorText = (code: string, _message: string, mode: "player" | "spectator" = "player") => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "room.full": "房间已满员（12 人），不能加入。", "room.ended": mode === "spectator" ? "对局已结束，不能旁观；可观看回放。" : "对局已结束，不能加入；可观看回放。", "account.room-occupied": "你已有未结束房间，请返回原房间。", "spectator.seat-held": "你已有未结束房间的玩家座位，不能同时旁观。", "spectator.became-player": "当前账号已作为玩家进入房间，本旁观连接已停止。", "game.player-count": "玩家人数必须为 6–12 人。", "auth.login-required": "请先登录后进入房间。", "auth.session-expired": "登录已过期，请重新登录。", "auth.session-revoked": "当前登录已退出，请重新登录。", "auth.password-changed": "密码已修改，请重新登录。", "protocol.version-mismatch": "客户端版本已更新，请刷新页面。", "protocol.legacy-identity": "请刷新页面，房间使用当前登录账号。", "room.host-seat-kept": "房主返回大厅不会退座；你的座位和房主身份会保留，可随时返回本房间。", "room.in-progress": "对局进行中不能退出座位；返回大厅仅断开连接，你的座位会保留。", "seat.not-held": "你在此房间没有座位。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
+const errorText = (code: string, _message: string, mode: "player" | "spectator" = "player") => ({ "room.not-found": "房间不存在，请核对房间号。", "room.locked": "房间已锁定。", "room.already-started": "游戏已经开始。", "room.full": "房间已满员（12 人），不能加入。", "room.ended": mode === "spectator" ? "对局已结束，不能旁观；可观看回放。" : "对局已结束，不能加入；可观看回放。", "room.admin-closed": "房间已被管理员关闭，请返回大厅创建或加入新的房间。", "account.room-occupied": "你已有未结束房间，请返回原房间。", "spectator.seat-held": "你已有未结束房间的玩家座位，不能同时旁观。", "spectator.became-player": "当前账号已作为玩家进入房间，本旁观连接已停止。", "game.player-count": "玩家人数必须为 6–12 人。", "auth.login-required": "请先登录后进入房间。", "auth.session-expired": "登录已过期，请重新登录。", "auth.session-revoked": "当前登录已退出，请重新登录。", "auth.password-changed": "密码已修改，请重新登录。", "protocol.version-mismatch": "客户端版本已更新，请刷新页面。", "protocol.legacy-identity": "请刷新页面，房间使用当前登录账号。", "room.host-seat-kept": "房主返回大厅不会退座；你的座位和房主身份会保留，可随时返回本房间。", "room.in-progress": "对局进行中不能退出座位；返回大厅仅断开连接，你的座位会保留。", "seat.not-held": "你在此房间没有座位。" } as Record<string, string>)[code] ?? "操作未完成，请检查当前阶段和操作条件。";
 
 // 单人窗口（亮牌/技能/退牌）等待横幅（ADR 0011）：带服务端倒计时，
 // 并直接告知"超时会替你做什么"，当事人与旁观者看到同一句话。
@@ -145,6 +145,9 @@ export function GameScreen({ credentials, onLeave, onReturnToRoom, onAuthLost }:
   // 已停止重连），给出独立说明而不是伪装成进房失败或断线。
   const spectatorStopped = failed && error !== null && error.code === "spectator.became-player";
   if (spectatorStopped) return <Banner title="旁观已停止" detail={errorText(error.code, error.message, credentials.mode)} onBack={onLeave} />;
+  // 管理关闭（工单 21）：终止帧到达即说明房间已被管理员关闭，不是断线，
+  // 给出独立说明与返回大厅路径，而不是伪装成重连中。
+  if (error && error.code === "room.admin-closed") return <Banner title="房间已被管理员关闭" detail="该房间已被管理员关闭并停止运行；不会产生胜负或身份揭晓，你可以返回大厅创建或加入新的房间。" onBack={onLeave} />;
   if (closed && !state && !reconnecting) return <Banner title="连接已断开" detail="房间连接在收到游戏状态前已关闭。" onBack={onLeave} />;
   // 一房占用拒绝（工单 12）与旁观互斥拒绝（工单 16）：错误帧携带 details.roomCode，
   // 失败页直接提供返回原房入口。
