@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { GameEvent, PlayerView } from "./types";
 import type { EventCategoryId } from "./eventLog";
 import {
@@ -7,8 +7,12 @@ import {
 } from "./eventLog";
 
 // 日志模块拥有整份阅读视图及本机筛选偏好，房间页面只提供公开事件与玩家名单。
-export function EventLog({ events, players }: { events: GameEvent[]; players?: PlayerView[] }) {
-  const [muted, setMuted] = useState<Set<EventCategoryId>>(loadMutedCategories);
+// 筛选偏好按账号隔离（工单 18）：accountId 变化时重读该账号自己的偏好。
+export function EventLog({ accountId, events, players }: { accountId: string; events: GameEvent[]; players?: PlayerView[] }) {
+  const [muted, setMuted] = useState<Set<EventCategoryId>>(() => loadMutedCategories(accountId));
+  useEffect(() => {
+    setMuted(loadMutedCategories(accountId));
+  }, [accountId]);
   if (!events.length) return null;
 
   const shown = events
@@ -19,7 +23,7 @@ export function EventLog({ events, players }: { events: GameEvent[]; players?: P
   const allSelected = muted.size === 0;
   const applyMuted = (next: Set<EventCategoryId>) => {
     setMuted(next);
-    saveMutedCategories(next);
+    saveMutedCategories(accountId, next);
   };
   const toggleCategory = (id: EventCategoryId) => {
     const next = new Set(muted);

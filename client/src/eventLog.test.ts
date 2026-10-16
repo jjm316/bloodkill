@@ -127,18 +127,18 @@ describe("屏蔽偏好存取", () => {
   afterEach(() => localStorage.clear());
 
   it("存取往返一致", () => {
-    saveMutedCategories(["dagger", "flow"]);
-    expect([...loadMutedCategories()].sort()).toEqual(["dagger", "flow"]);
+    saveMutedCategories("fixture-log-account", ["dagger", "flow"]);
+    expect([...loadMutedCategories("fixture-log-account")].sort()).toEqual(["dagger", "flow"]);
   });
 
   it("无存储时默认全选（空屏蔽集）", () => {
-    expect(loadMutedCategories().size).toBe(0);
+    expect(loadMutedCategories("fixture-log-account").size).toBe(0);
   });
 
   it("存储里的非法/未知 id 被过滤，坏 JSON 不抛错", () => {
-    localStorage.setItem("bloodbound:event-log-filter", JSON.stringify(["dagger", "nope", 42]));
-    expect([...loadMutedCategories()]).toEqual(["dagger"]);
-    localStorage.setItem("bloodbound:event-log-filter", "{not json");
-    expect(loadMutedCategories().size).toBe(0);
+    localStorage.setItem("bloodbound:account:fixture-log-account:event-log-filter", JSON.stringify(["dagger", "nope", 42]));
+    expect([...loadMutedCategories("fixture-log-account")]).toEqual(["dagger"]);
+    localStorage.setItem("bloodbound:account:fixture-log-account:event-log-filter", "{not json");
+    expect(loadMutedCategories("fixture-log-account").size).toBe(0);
   });
 });
