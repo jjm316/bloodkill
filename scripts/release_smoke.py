@@ -91,7 +91,13 @@ def next_action(states: list[dict]) -> tuple[int, dict]:
     raise SmokeFailure("对局无法推进：当前投影没有可用的合法动作")
 
 
-async def websocket_smoke(base: str, room: dict, sessions: list[AccountClient], *, timeout: float = 5, game_timeout: float = 60, max_commands: int = 100) -> dict:
+async def websocket_smoke(base: str, room: dict, sessions: list[AccountClient], *, timeout: float = 5, game_timeout: float = 60, max_commands: int = 100, player_count: int | None = None) -> dict:
+    if player_count is None:
+        player_count = len(sessions) - 1
+    if not 6 <= player_count <= 12:
+        raise SmokeFailure("玩家人数必须在 6-12 之间")
+    if len(sessions) < player_count + 1:
+        raise SmokeFailure("账号会话不足以覆盖全部玩家与旁观者")
     code = room["code"]
     endpoint = base.replace("https://", "wss://").replace("http://", "ws://")
     sockets = []
@@ -114,14 +120,14 @@ async def websocket_smoke(base: str, room: dict, sessions: list[AccountClient], 
     try:
         async with asyncio.timeout(game_timeout):
             players = []
-            for session in sessions[:6]:
+            for session in sessions[:player_count]:
                 socket = await connect(session)
                 joined = await state(socket, status="waiting")
                 require(bool(joined["yourPlayerId"]), "首次握手未获得玩家座位")
                 players.append(socket)
-            spectator = await connect(sessions[6], "spectator")
+            spectator = await connect(sessions[player_count], "spectator")
             require((await state(spectator))["yourPlayerId"] is None, "旁观者握手错误")
-            print(f"smoke：首次握手成功（协议 v{PROTOCOL_VERSION}，6 名玩家与旁观者）")
+            print(f"smoke：首次握手成功（协议 v{PROTOCOL_VERSION}，{player_count} 名玩家与旁观者）")
             await players[0].send(json.dumps({"type": "host", "action": "start"}))
             states = list(await asyncio.gather(*(state(socket, status="playing") for socket in players)))
             public = await state(spectator, status="playing")
@@ -163,6 +169,12 @@ async def websocket_smoke(base: str, room: dict, sessions: list[AccountClient], 
             game = public["game"]
             require(game["status"] == "ended" and bool(game["result"]), "终局未提供结果")
             require(any(player["captured"] and player["damage"] == 4 for player in game["players"]), "终局没有第 4 点伤害捕获")
+            if player_count % 2:
+                # 规则语料：奇数人数对局必有 1 名审判者（secret-order），
+                # 终局帧按 ADR 0015 公开身份。
+                inquisitors = [player for player in game["players"] if player.get("identity", {}).get("faction") == "secret-order"]
+                require(len(inquisitors) == 1, "奇数局终局未公开恰好 1 名审判者")
+                print("smoke：奇数局含 1 名审判者")
             for item in states:
                 require({key: value for key, value in item["game"].items() if key not in {"viewer", "legalActions"}} == {key: value for key, value in game.items() if key not in {"viewer", "legalActions"}}, "玩家终局与旁观终局不一致")
             print(f"smoke：终局成功（{command_count} 条命令，修订号 {game['revision']}）")
@@ -226,6 +238,13 @@ def positive_count(value: str) -> int:
     return count
 
 
+def player_count(value: str) -> int:
+    count = int(value)
+    if not 6 <= count <= 12:
+        raise argparse.ArgumentTypeError("玩家人数必须在 6-12 之间")
+    return count
+
+
 def find_unused_code(base: str, created: str, timeout: float) -> str:
     """取一个房间概览 404 的房号，用于未知房回放反例。"""
     for offset in range(1, 11):
@@ -241,12 +260,13 @@ def main() -> int:
     parser.add_argument("--timeout", type=positive_seconds, default=5, help="单次 HTTP/连接/消息等待上限（秒，默认 5）")
     parser.add_argument("--game-timeout", type=positive_seconds, default=60, help="WebSocket 完整流程总时限（秒，默认 60）")
     parser.add_argument("--max-commands", type=positive_count, default=100, help="对局命令上限（默认 100）")
+    parser.add_argument("--players", type=player_count, default=6, help="玩家人数 6-12（奇数局含审判者），默认 6")
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
     try:
         status, health = request(f"{base}/health", timeout=args.timeout)
         require(status == 200 and health.get("status") == "ok", "健康检查失败")
-        sessions = [AccountClient(base, args.timeout).register_test_account() for _ in range(7)]
+        sessions = [AccountClient(base, args.timeout).register_test_account() for _ in range(args.players + 1)]
         status, room = sessions[0].request("/api/rooms", method="POST")
         require(status == 200 and len(room.get("code", "")) == 6 and "hostToken" not in room, "创建房间失败")
         status, info = request(f"{base}/api/rooms/{room['code']}", timeout=args.timeout)
@@ -257,13 +277,13 @@ def main() -> int:
         require(status == 401 and replay_error.get("code") == "auth.login-required", "未登录未拒绝回放")
         status, replay_error = request(f"{base}/api/rooms/{unknown}/replay", timeout=args.timeout)
         require(status == 401, "未登录请求未知房回放必须先拒登录")
-        status, replay_error = sessions[6].request(f"/api/rooms/{room['code']}/replay")
+        status, replay_error = sessions[args.players].request(f"/api/rooms/{room['code']}/replay")
         require(status == 409 and replay_error.get("code") == "room.not-ended", "未结束房间未拒绝回放")
-        status, replay_error = sessions[6].request(f"/api/rooms/{unknown}/replay")
+        status, replay_error = sessions[args.players].request(f"/api/rooms/{unknown}/replay")
         require(status == 404 and replay_error.get("code") == "room.not-found", "未知房间未给出明确原因")
         status, metrics = request(f"{base}/metrics", timeout=args.timeout)
         require(status == 200 and "hostToken" not in json.dumps(metrics), "运行指标检查失败")
-        final = asyncio.run(websocket_smoke(base, room, sessions, timeout=args.timeout, game_timeout=args.game_timeout, max_commands=args.max_commands))
+        final = asyncio.run(websocket_smoke(base, room, sessions, timeout=args.timeout, game_timeout=args.game_timeout, max_commands=args.max_commands, player_count=args.players))
         status, info = request(f"{base}/api/rooms/{room['code']}", timeout=args.timeout)
         require(status == 200 and info.get("status") == "ended", "终局房间概览检查失败")
         # 参与者与登录的非参与者账号都能读取同一份正常终局公开回放。

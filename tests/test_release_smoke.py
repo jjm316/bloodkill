@@ -17,7 +17,7 @@ SERVER_AVAILABLE = all(importlib.util.find_spec(name) is not None for name in ("
 
 if SERVER_AVAILABLE:
     import websockets
-    from websockets.exceptions import ConnectionClosed
+    from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
     from scripts.release_smoke import SmokeFailure, request, validate_replay
     from scripts.account_client import AccountClient
@@ -28,11 +28,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "release_smoke.py"
 
 
-def run_cli(base, *arguments, cwd=ROOT):
+def run_cli(base, *arguments, cwd=ROOT, timeout=15):
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--base-url", base, *arguments],
         cwd=cwd, capture_output=True, text=True, encoding="utf-8",
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"}, timeout=15,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"}, timeout=timeout,
     )
 
 
@@ -121,6 +121,56 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertEqual(step["legalActions"], [])
             self.assertNotIn("seed", step)
 
+    def test_cli_completes_odd_player_game_with_inquisitor(self):
+        # V19.01：奇数人数（7 人）对局也要能走完完整真实服务流程；
+        # 规则语料规定奇数局必有 1 名审判者（secret-order）。
+        result = run_cli(self.base, "--players", "7", "--game-timeout", "90", timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for stage in ("7 名玩家与旁观者", "建局成功", "终局成功", "奇数局含 1 名审判者", "公开回放成功"):
+            self.assertIn(stage, result.stdout)
+        code = re.search(r"房间 (\d{6})", result.stdout).group(1)
+        session = AccountClient(self.base).register_test_account()
+        status, replay = session.request(f"/api/rooms/{code}/replay")
+        self.assertEqual(status, 200)
+        final_step = replay["steps"][-1]
+        self.assertEqual(final_step["status"], "ended")
+        factions = [player["identity"]["faction"] for player in final_step["players"]]
+        self.assertEqual(factions.count("secret-order"), 1, "奇数局终局必须公开 1 名审判者")
+        print(result.stdout, end="")
+
+    def test_cli_rejects_player_counts_outside_game_rules(self):
+        for players in ("5", "13"):
+            with self.subTest(players=players):
+                result = run_cli(self.base, "--players", players)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("6-12", result.stderr)
+                self.assertNotIn("smoke 通过", result.stdout)
+
+    def test_wrong_or_missing_account_cannot_take_seats_on_real_service(self):
+        # V19.02：错误账号（无会话/伪造会话）经 smoke 同款 WS 传输连真实服务，
+        # 必须被拒且拿不到座位；这是 smoke 失败路径所依赖的真实协议行为。
+        session = AccountClient(self.base).register_test_account()
+        _, room = session.request("/api/rooms", method="POST")
+
+        async def hello_with(cookie):
+            headers = {"Cookie": cookie} if cookie else {}
+            async with websockets.connect(
+                f"{self.base.replace('http:', 'ws:')}/ws/{room['code']}",
+                additional_headers=headers, open_timeout=2, close_timeout=2,
+            ) as connection:
+                try:
+                    await connection.send(json.dumps({"type": "hello", "mode": "player", "protocolVersion": PROTOCOL_VERSION}))
+                except ConnectionClosedOK:
+                    pass  # 无登录连接在 hello 发出前就可能被服务端关闭；拒绝帧已在接收缓冲
+                return json.loads(await asyncio.wait_for(connection.recv(), timeout=2))
+
+        for cookie in ("", "bloodbound_session=forged-session"):
+            with self.subTest(cookie=cookie or "无会话"):
+                message = asyncio.run(hello_with(cookie))
+                self.assertEqual(message["type"], "error")
+                self.assertEqual(message["code"], "auth.login-required")
+                self.assertIn("登录", message["message"])
+
     def test_command_limit_exits_without_fetching_successful_replay(self):
         result = run_cli(self.base, "--max-commands", "1")
         self.assertEqual(result.returncode, 1)
@@ -187,6 +237,9 @@ class ReleaseFailureTests(unittest.IsolatedAsyncioTestCase):
             await connection.receive_text()
             if mode == "protocol":
                 await connection.send_text(json.dumps({"type": "error", "code": "protocol.version-mismatch", "details": {"expected": "999", "hostToken": secret_token}}))
+            elif mode == "auth":
+                # 与真实服务一致：错误账号（无会话/伪造会话）在握手处被拒。
+                await connection.send_text(json.dumps({"type": "error", "code": "auth.login-required", "message": "请先登录。"}))
             elif mode == "rejected-ack":
                 await connection.send_text(json.dumps({"type": "ack", "status": "rejected", "error": {"code": "game.revision-conflict"}}))
             elif mode == "closed":
@@ -234,6 +287,11 @@ class ReleaseFailureTests(unittest.IsolatedAsyncioTestCase):
         output = await self.run_failing_service("protocol")
         self.assertIn("protocol.version-mismatch", output)
         self.assertIn("期望版本 999", output)
+
+    async def test_wrong_account_rejection_fails_the_smoke_run(self):
+        # V19.02：错误账号被服务拒绝（auth.login-required）时 smoke 不得成功。
+        output = await self.run_failing_service("auth")
+        self.assertIn("auth.login-required", output)
 
     async def test_rejected_ack_is_reported(self):
         self.assertIn("game.revision-conflict", await self.run_failing_service("rejected-ack"))

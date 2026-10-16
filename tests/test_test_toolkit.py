@@ -1,6 +1,7 @@
 """scripts/test_toolkit.py 的纯逻辑单测（不触网、不杀进程、不依赖 WMI）。"""
 
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -108,6 +109,36 @@ class IsolatedToolkitTests(unittest.TestCase):
                 self.assertEqual(test_toolkit.clear_saves(), 1)
             self.assertEqual((root / "accounts" / "accounts.sqlite3").read_bytes(), b"persistent account fixture")
             self.assertEqual((root / "server.json").read_text(), "owned server fixture")
+
+    def test_cleanup_preserves_admin_backup_directory(self):
+        # V19.03：--clear-saves 只清测试房间存档，管理备份子目录必须保留。
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "admin-backup").mkdir()
+            (root / "admin-backup" / "closed-room.json").write_text("管理备份 fixture", encoding="utf-8")
+            (root / "g-old.json.gz").write_bytes(b"")
+            (root / "g-old.meta.json").write_text("", encoding="utf-8")
+            with mock.patch.object(test_toolkit, "SAVES_DIR", root):
+                self.assertEqual(test_toolkit.clear_saves(), 2)
+            self.assertEqual(
+                (root / "admin-backup" / "closed-room.json").read_text(encoding="utf-8"),
+                "管理备份 fixture",
+            )
+
+    def test_server_launcher_pins_isolated_saves_directory(self):
+        # V19.03：工具箱启动的服务端必须以隔离存档目录运行，不指向真实 saves/。
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            isolated = root / ".scratch" / "toolkit-saves"
+            silent_success = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+            with mock.patch.object(test_toolkit, "SAVES_DIR", isolated), \
+                    mock.patch.object(test_toolkit, "REPO_ROOT", root), \
+                    mock.patch.object(test_toolkit, "wmi_spawn", return_value=silent_success) as spawn:
+                test_toolkit.start_server_detached(18025)
+            launcher = (root / ".scratch" / "run-server.cmd").read_text(encoding="ascii")
+            self.assertIn(f"BLOOD_BOUND_SAVES_DIR={isolated}", launcher)
+            self.assertNotIn(f"BLOOD_BOUND_SAVES_DIR={root / 'saves'}", launcher)
+            spawn.assert_called_once()
 
 
 class StaleServerWarningTest(unittest.TestCase):
