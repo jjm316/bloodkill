@@ -124,6 +124,27 @@ describe("事件日志阅读视图", () => {
     expect(rows()).toHaveLength(2);
   });
 
+  it("玩家退座移出名册后，其加入/退座行仍显示用户名而不是原始 playerId", () => {
+    const rosterWithLeaver = [
+      { playerId: "p1", displayName: "阿玫" },
+      { playerId: "p3", displayName: "阿离" },
+    ] as PlayerView[];
+    const joined = event("PlayerJoined", { playerId: "p3", seat: 2 }, 1);
+    const view = render(<EventLog accountId="fixture-log-account" events={[joined]} players={rosterWithLeaver} />);
+    openLog();
+    expect(rows()[0]).toHaveTextContent("阿离 加入了房间");
+    // 退座：PlayerLeft 事件帧与移除了退座者的名册帧同时到达（服务端顺序）
+    const left = event("PlayerLeft", { playerId: "p3", seat: 2 }, 2);
+    view.rerender(<EventLog
+      accountId="fixture-log-account"
+      events={[joined, left]}
+      players={[{ playerId: "p1", displayName: "阿玫" }] as PlayerView[]}
+    />);
+    expect(rows()[0]).toHaveTextContent("阿离 退出了房间");
+    expect(rows()[1]).toHaveTextContent("阿离 加入了房间");
+    expect(screen.queryByText(/p3/)).not.toBeInTheDocument();
+  });
+
   it("未知事件仍显示在流程中，使用中文兜底且不会暴露原始 payload", () => {
     render(<EventLog accountId="fixture-log-account" events={[event("SomeFutureEvent", { secret: "private-payload" })]} />);
     openLog();

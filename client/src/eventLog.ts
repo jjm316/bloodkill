@@ -123,9 +123,31 @@ export function isLogVisible(eventType: string): boolean {
   return !definitionOf(eventType).hidden;
 }
 
-export function describeEvent(event: GameEvent, players?: PlayerView[]): string {
-  const name: PlayerName = (id) => players?.find((player) => player.playerId === id)?.displayName ?? String(id);
+export function describeEvent(
+  event: GameEvent,
+  players?: PlayerView[],
+  knownNames?: ReadonlyMap<string, string>,
+): string {
+  // 名册是权威来源；退座者已被移出名册时退到「最后已知名字」（见
+  // rememberPlayerNames），两者都没有才展示原始 playerId。
+  const name: PlayerName = (id) =>
+    players?.find((player) => player.playerId === id)?.displayName
+    ?? knownNames?.get(String(id))
+    ?? String(id);
   return definitionOf(event.eventType).describe(event.payload, name);
+}
+
+// 最后已知名字：事件载荷只有 {playerId, seat} 不含用户名，服务端也不回填
+// 历史事件，退座者一旦移出名册，其日志行只能靠客户端记住的名字描述。
+// 纯函数：把当前名册的名字合并进先前记忆，退座前见过的名字不会丢失。
+export function rememberPlayerNames(
+  previous: ReadonlyMap<string, string>,
+  players?: PlayerView[],
+): ReadonlyMap<string, string> {
+  if (!players?.length) return previous;
+  const merged = new Map(previous);
+  for (const player of players) merged.set(player.playerId, player.displayName);
+  return merged;
 }
 
 // 屏蔽偏好：本设备、按账号隔离的阅读偏好（工单 18），跨房间、跨对局保留

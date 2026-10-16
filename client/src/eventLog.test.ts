@@ -2,7 +2,7 @@
 import engineSource from "../../blood_bound/engine.py?raw";
 import protocolSource from "../../server/protocol.py?raw";
 import { afterEach, describe, expect, it } from "vitest";
-import { categoryOf, describeEvent, isLogVisible, loadMutedCategories, saveMutedCategories } from "./eventLog";
+import { categoryOf, describeEvent, isLogVisible, loadMutedCategories, rememberPlayerNames, saveMutedCategories } from "./eventLog";
 import type { EventCategoryId } from "./eventLog";
 import type { GameEvent, PlayerView } from "./types";
 
@@ -120,6 +120,29 @@ describe("事件日志中文描述", () => {
     ["TokenReturned", { playerId: "p1", reason: "timeout" }, "阿玫 归还了身份标记（超时自动）"],
   ] as [string, GameEvent["payload"], string][])("%s 的超时自动标注保持可解释", (type, payload, text) => {
     expect(describeEvent(event(type, payload), players)).toBe(text);
+  });
+});
+
+describe("最后已知名字（玩家已不在名册）", () => {
+  it("退座/加入事件引用已移出名册的玩家时，用记住的用户名描述", () => {
+    const known = new Map([["p9", "阿离"]]);
+    expect(describeEvent(event("PlayerLeft", { playerId: "p9", seat: 2 }), [], known)).toBe("阿离 退出了房间");
+    expect(describeEvent(event("PlayerJoined", { playerId: "p9", seat: 2 }), [], known)).toBe("阿离 加入了房间");
+  });
+
+  it("当前名册优先于陈旧记忆；从未见过的玩家保留 playerId 回退", () => {
+    const stale = new Map([["p2", "旧名"]]);
+    expect(describeEvent(event("PlayerLeft", { playerId: "p2" }), players, stale)).toBe("阿兽 退出了房间");
+    expect(describeEvent(event("PlayerLeft", { playerId: "p3" }), players, stale)).toBe("p3 退出了房间");
+  });
+
+  it("rememberPlayerNames 合并名册且不丢历史，无名册时原样返回", () => {
+    const before = new Map([["p9", "阿离"]]);
+    expect(rememberPlayerNames(before)).toBe(before);
+    const merged = rememberPlayerNames(before, players);
+    expect(merged.get("p9")).toBe("阿离");
+    expect(merged.get("p1")).toBe("阿玫");
+    expect(merged.get("p2")).toBe("阿兽");
   });
 });
 
