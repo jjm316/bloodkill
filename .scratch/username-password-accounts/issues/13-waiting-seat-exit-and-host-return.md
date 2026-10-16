@@ -45,7 +45,7 @@ Draft ID: 07
 - `RoomManager.exit_seat`（`server/rooms.py`）：在既有占用锁内原子完成「检查 → 引擎命令 → 座位映射/占用提交 → 持久化」。等待普通玩家退座真释放；房主拒绝 `room.host-seat-kept`（返回大厅保留座位/身份/占用）；对局中拒绝 `room.in-progress`（仅断开连接）；无座位拒绝 `seat.not-held`。`start_game` 改持同一把锁：退座与开局竞争最终恰好一种合法状态。
 - WS 协议（`server/app.py`、`server/PROTOCOL.md`）：新增客户端消息 `{"type":"leave"}` 与服务端确认帧 `{"type":"left"}`。成功退座先向退座者确认并关闭其连接，再向剩余成员广播 `PlayerLeft` 事件与名册更新；`leave-game` 引擎命令列入服务器托管，客户端直发得到 `command.server-managed`。
 - 前端（`client/src/useSocket.ts`、`GameScreen.tsx`、`eventLog.ts`）：只有「等待阶段非房主玩家」看到「退出房间」——点击发送 leave，收到 `left` 确认才回大厅且不再重连；房主、对局中与旁观一律「返回大厅」（仅断开连接，不发 leave）；退座被拒时停留房间并显示中文原因；事件日志新增「XX 退出了房间」。
-- 证据与验证记录见 [../evidence/13.md](../evidence/13.md)：V07.01–V07.05 全部以真实 uvicorn/HTTP/WS（独立临时存档与端口）执行，V07.02 以真实停止进程树后同存档目录重启核验名册/引用/顺序一致，V07.04 用双线程 + Barrier 让 leave 与 start 同时到达真实服务端；界面部分（「退出房间/返回大厅」按钮区分与确认后回大厅）浏览器场景留给主 agent 外部 Chrome 执行。
+- 证据与验证记录见 [../evidence/13.md](../evidence/13.md)：V07.01–V07.05 全部以真实 uvicorn/HTTP/WS（独立临时存档与端口）执行，V07.02 以真实停止进程树后同存档目录重启核验名册/引用/顺序一致，V07.04 用双线程 + Barrier 让 leave 与 start 同时到达真实服务端；界面部分（「退出房间/返回大厅」按钮区分与确认后回大厅）已于 2026-10-16 由第二批验收子 agent 外部 Chrome 真实执行通过（发现事件日志 PlayerLeft 行显示退座者原始 playerId 的界面缺陷 D13-log-player-name，已记录待修）。
 
 来源：[完整规格](../spec.md)。父级聚合范围：[02 原范围](02-room-ownership-and-protocol.md)、[03 原范围](03-auth-and-room-ui.md)；父项仅用于追溯，不作为阻塞依赖或单独执行任务。
 

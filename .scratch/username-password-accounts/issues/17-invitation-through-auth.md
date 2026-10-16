@@ -45,7 +45,7 @@ Draft ID: 11
 - 取消邀请语义：失败页（占用/锁定/开局/满员/结束/不存在/超时）的「返回大厅」与占用页的「返回房间 XXXXXX」都会清除邀请目标并从地址栏移除 `?room=`，此后刷新回到大厅，不再自动进目标房；不自动离开原房、不自动转旁观。
 - `AccountEntry.tsx`：有邀请目标时登录/注册页提示「登录或注册后将自动进入房间 XXXXXX。」，表单切换期间提示保留。
 - 目标不可加入的反馈沿用 10/12 的服务端拒绝原因与前端 `errorText` 中文映射（结束房提示「可观看回放」，23 语义；关闭房落 `room.not-found` 语义）；占用拒绝带 `details.roomCode` 直达返回原房入口（12 交付）。
-- 证据与验证记录见 [../evidence/17.md](../evidence/17.md)：前端 vitest 16 项（mock fetch/WebSocket 网络边界）+ 真实 uvicorn/HTTP/WS 3 项 + 全量 `scripts/check.py`；真实浏览器邀请链接深链流（外部 Chrome `?room=` 验收）按惯例留给主 agent 执行并在证据中标注。
+- 证据与验证记录见 [../evidence/17.md](../evidence/17.md)：前端 vitest 16 项（mock fetch/WebSocket 网络边界）+ 真实 uvicorn/HTTP/WS 3 项 + 全量 `scripts/check.py`；真实浏览器邀请链接深链流（外部 Chrome `?room=` 验收）已于 2026-10-16 由第二批验收子 agent 执行通过并在证据中登记。
 
 来源：[完整规格](../spec.md)。父级聚合范围：[03 原范围](03-auth-and-room-ui.md)；父项仅用于追溯，不作为阻塞依赖或单独执行任务。
 
