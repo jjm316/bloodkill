@@ -3,10 +3,11 @@
 ## 构建与验证
 
 - [ ] 安装 `requirements-dev.txt` 与前端锁定依赖，运行 `python scripts/check.py`，通过 Python/前端全部测试、类型检查与构建，确认生成 `client/dist/`。
-- [ ] 启动服务后运行 `.venv/Scripts/python.exe scripts/release_smoke.py --base-url http://127.0.0.1:8000`（需安装服务端 requirements）。脚本验收 v3 首次握手、6 人建局、命令 ack、同名重连、合法捕获终局和 HTTP 公开回放；逐步检查隐私，回放末尾必须与旁观者终局一致，未结束房间仍应返回 409。
+- [ ] 启动服务后运行 `.venv/Scripts/python.exe scripts/release_smoke.py --base-url http://127.0.0.1:8000`（需安装服务端 requirements）。脚本用真实测试账号验收协议握手、6 人（或 `--players` 指定人数）建局、命令 ack、断线重连、合法捕获终局和 HTTP 公开回放；逐步检查隐私，回放末尾必须与旁观者终局一致，未结束房间仍应返回 409。
 - [ ] 运行 `.venv/Scripts/python.exe -m unittest tests.test_release_smoke -v`，验证真实服务流程及连接失败、协议拒绝、消息等待超时的有限退出。测试使用独立本地端口、临时存档，并清理自己创建的服务进程。
-- [ ] 浏览器完成创建房间、加入、开始对局、操作、断线重连和回放 smoke 流程。
-- [ ] 用键盘完成首屏、房间操作和回放控制；焦点始终可见，错误可被读屏播报。
+- [ ] 浏览器完成注册登录、创建房间、加入、开始对局、操作、断线重连和回放 smoke 流程。
+- [ ] 用键盘完成首屏、登录注册表单、房间操作和回放控制；焦点始终可见，错误可被读屏播报。
+- [ ] 管理命令按 [账号管理工具使用指南](account-admin.md) 在部署根目录真实跑通 `users`/`rooms`；重置密码与关闭房间在需要时用测试账号/弃局房演练（不操作真实玩家数据）。
 
 ## 性能预算
 
@@ -19,14 +20,14 @@
 
 ## 发布与回滚
 
-- [ ] 备份 `BLOOD_BOUND_SAVES_DIR` 目录及其权限。
-- [ ] 反向代理启用 HTTPS/WSS；公网访问不得暴露明文 HTTP/WS。
-- [ ] 仅开放应用端口，管理端点按需限制在内网。
+- [ ] 备份 `BLOOD_BOUND_SAVES_DIR` 目录及其权限（含 `accounts/`、`admin/`、`admin-backup/`、`legacy-backup/`）。
+- [ ] 公网按已裁定方案直部署（裸 IP HTTP/WS，见 [云服务器部署](deployment-cloud.md) 与 [ADR 0016](adr/0016-username-password-accounts.md)）；HTTPS/WSS 终止作为后续升级项保留，不阻塞发布。
+- [ ] 仅开放应用端口；管理监听只绑定本机回环（127.0.0.1），公网应用无管理路由，无需额外放行。
 - [ ] 发布后检查 `/health`、`/metrics`，确认活动连接和房间计数正常。
 - [ ] 回滚时停止新进程、恢复上一版本代码与 saves 备份，再运行 smoke 脚本。
 
 ## 隐私与诊断
 
-- [ ] 日志只记录事件 ID、命令 ID、修订号和错误代码，不记录身份、诅咒或 host token。
+- [ ] 日志只记录事件 ID、命令 ID、修订号和错误代码，不记录密码摘要、身份、诅咒或会话凭证。
 - [ ] 将崩溃时间、版本、浏览器和可复现的 seed/命令序列提供给维护者。
-- [ ] 不把 `/metrics`、保存目录或 host token 放入公网穿透配置。
+- [ ] 不把 `/metrics`、保存目录或管理凭证放入公网配置；管理凭证只留在服务器存档目录 `admin/` 内。

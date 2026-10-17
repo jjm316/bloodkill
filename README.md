@@ -78,10 +78,13 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 ## 网络访问与安全
 
 - **局域网内**：HTTP/WS 明文即可。
-- **内网穿透/公网访问**：推荐 cloudflared 快速隧道（免费、免账号、自动 HTTPS/WSS，
-  手机浏览器直接开链接，启动命令见 [`docs/deployment-lan.md`](docs/deployment-lan.md)）。
-  本项目定位为个人学习与朋友间分享，明文方案可接受，加密降级为建议项；各方案对比与
-  实测数据见[穿透选型调研](.scratch/blood-oath-replica/research-02-public-access-tunnel.md)。
+- **公网访问**：按已裁定方案直部署阿里云轻量服务器，公网走 HTTP/WS（裸 IP 免域名、
+  免备案、免证书；产品方已接受明文传输风险，见
+  [ADR 0016](docs/adr/0016-username-password-accounts.md)）。部署与更新步骤见
+  [云服务器部署](docs/deployment-cloud.md)；局域网穿透的历史调研保留在
+  [deployment-lan.md](docs/deployment-lan.md)。
+- 账号密码经加盐哈希存储、登录会话可撤销；服务器终端的账号管理命令（查看、重置
+  密码、关闭弃局房间）用法见[账号管理工具使用指南](docs/account-admin.md)。
 
 ## 测试
 

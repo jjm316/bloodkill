@@ -92,7 +92,7 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 
 ## 服务器管理命令（本机终端）
 
-运维用查看、重置密码与关闭房间命令随服务端一起交付（`server/admin.py`），在部署根目录运行：
+运维用查看、重置密码与关闭房间命令随服务端一起交付（`server/admin.py`），在部署根目录运行。完整的中文用法指南（本地与云服务器布局、互动输入、备份位置与故障处理）见 [docs/account-admin.md](../docs/account-admin.md)：
 
 ```text
 .venv/Scripts/python.exe -m server.admin users                     # 查看账号及当前房间占用
@@ -100,6 +100,8 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 .venv/Scripts/python.exe -m server.admin reset-password 用户名     # 重置密码并撤销该账号全部登录
 .venv/Scripts/python.exe -m server.admin close-room 123456         # 预览、确认并备份关闭一个弃局房间
 ```
+
+云服务器在 `/opt/bloodkill` 部署根用 `.venv/bin/python -m server.admin <命令>`，行为一致（见 [云服务器部署](../docs/deployment-cloud.md)）。
 
 - 命令不直接读改存档：服务启动时在同一进程打开一个**只绑定 127.0.0.1** 的管理
   监听，CLI 请求它读取实时状态（含在线连接）、执行重置密码与管理关闭。公网应用不注册任何管理路由。
