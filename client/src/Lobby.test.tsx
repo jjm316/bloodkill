@@ -43,6 +43,25 @@ it("输入六位房号加入房间；非六位输入给中文提示不发起", a
   expect(screen.getByLabelText("房间号")).toHaveValue("123456");
 });
 
+// 工单 03：错误来源判定按结构化类型分流，服务端消息即使不含中文也原文展示。
+it("创建房间收到纯英文服务端错误消息时原文展示", async () => {
+  const fetcher = vi.fn((input) => String(input).includes("/api/rooms")
+    ? Promise.resolve({ ok: false, json: async () => ({ type: "error", code: "room.exists", message: "room limit reached" }) })
+    : Promise.resolve({ ok: true, json: async () => ({ room: null }) }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<Lobby account={{ accountId: "create-account", username: "建房玩家" }} onJoin={() => {}} onReplay={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("room limit reached");
+});
+
+// 工单 03：网络失败等本地异常不是服务端消息，显示本地兜底文案。
+it("创建房间遇网络异常时显示本地兜底文案", async () => {
+  vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("network"))));
+  render(<Lobby account={{ accountId: "offline-account", username: "断网玩家" }} onJoin={() => {}} onReplay={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("创建房间失败，请查询已有房间或重试。");
+});
+
 // 工单 16：前端限制——已有未结束房间的账号不能同时旁观；跨设备由服务端校验兜底。
 it("已有未结束房间时禁用旁观看守前端入口并说明原因；无房间时可旁观", async () => {
   const fetcher = vi.fn()
