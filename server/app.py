@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 import uuid
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -93,8 +93,10 @@ async def live_room_conns(room: Room) -> list[Conn]:
             alive.append(conn)
         else:
             expired.append(conn)
-    for conn in expired:
-        await _terminate_conn(conn, "auth.session-expired", "登录已过期，请重新登录。")
+    # Conn 是 dataclass（自动生成 __eq__），过期判定必须按对象身份比对，
+    # 不能用 in（值相等会把仍在线的同类连接误判为过期）。
+    await _stop_conns(lambda conn: any(conn is stale for stale in expired),
+                      "auth.session-expired", "登录已过期，请重新登录。")
     return alive
 
 
@@ -200,20 +202,40 @@ async def send_state(conn: Conn) -> None:
     await send_safe(conn.ws, build_state(conn))
 
 
+def _drop_conn(conn: Conn) -> None:
+    """按对象身份从连接注册表移除连接（「按对象移除」的唯一扫描）。"""
+    for conn_id, candidate in list(conns.items()):
+        if candidate is conn:
+            conns.pop(conn_id, None)
+
+
 async def _terminate_conn(conn: Conn, code: str, message: str) -> None:
     """Stop an established connection whose session was revoked or expired.
 
     The connection is dropped from the registry first so no later broadcast or
     command can reach it, then it is told why in Chinese and closed.
     """
-    for conn_id, candidate in list(conns.items()):
-        if candidate is conn:
-            conns.pop(conn_id, None)
+    _drop_conn(conn)
     await send_safe(conn.ws, error_message(code, message))
     try:
         await conn.ws.close()
     except Exception:
         pass
+
+
+async def _stop_conns(predicate: Callable[[Conn], bool], code: str, message: str) -> int:
+    """按谓词停止一批已建立的连接：逐条发中文原因帧后关闭，返回终止数。
+
+    「过滤注册表 → 逐条终止」的唯一管线：退出登录、改密停其他设备、
+    管理重置停连、旁观转玩家停旁观、管理关房与广播惰性踢出共用；
+    各路径的错误码、中文文案与排除语义（如不停当前设备）由调用方
+    以谓词与参数保持原样。
+    """
+    stopped = 0
+    for conn in [conn for conn in list(conns.values()) if predicate(conn)]:
+        await _terminate_conn(conn, code, message)
+        stopped += 1
+    return stopped
 
 
 async def _stop_account_spectators(account_id: str, *, exclude: Conn | None = None) -> None:
@@ -225,12 +247,12 @@ async def _stop_account_spectators(account_id: str, *, exclude: Conn | None = No
     not stopped here: their own hello check runs after the seat commit and
     rejects them. The player connection itself is passed as `exclude`.
     """
-    for conn in [conn for conn in list(conns.values())
-                 if conn is not exclude
-                 and conn.account.account_id == account_id
-                 and conn.ready
-                 and conn.player_id is None]:
-        await _terminate_conn(conn, "spectator.became-player", "当前账号已作为玩家进入房间，本旁观连接已停止。")
+    await _stop_conns(
+        lambda conn: conn is not exclude
+        and conn.account.account_id == account_id
+        and conn.ready
+        and conn.player_id is None,
+        "spectator.became-player", "当前账号已作为玩家进入房间，本旁观连接已停止。")
 
 
 async def send_command_ack(
@@ -331,8 +353,8 @@ async def admin_close_room(code: str, expected_game_id: str | None,
     await deadline_scheduler.sync(room)
     # 通知并断开该房全部连接（含真实决策窗口内的）：每条连接先收到中文
     # 关闭原因再被关闭，与撤销登录的终止管线一致。
-    for conn in [conn for conn in list(conns.values()) if conn.room is room]:
-        await _terminate_conn(conn, "room.admin-closed", "房间已被管理员关闭，请返回大厅创建或加入新的房间。")
+    await _stop_conns(lambda conn: conn.room is room,
+                      "room.admin-closed", "房间已被管理员关闭，请返回大厅创建或加入新的房间。")
     return result
 
 
@@ -404,8 +426,8 @@ async def logout_account(request: Request) -> JSONResponse:
     account = accounts.get_session(token)
     if account is None or not await run_in_threadpool(accounts.revoke_session, token):
         return JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
-    for conn in [conn for conn in list(conns.values()) if conn.token == token]:
-        await _terminate_conn(conn, "auth.session-revoked", "当前登录已退出，请重新登录。")
+    await _stop_conns(lambda conn: conn.token == token,
+                      "auth.session-revoked", "当前登录已退出，请重新登录。")
     response = JSONResponse({"account": account.public()})
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="strict")
     response.headers["Cache-Control"] = "no-store"
@@ -439,9 +461,9 @@ async def change_password(request: Request) -> JSONResponse:
     except sqlite3.Error:
         return JSONResponse(error_message("auth.service-unavailable", "服务暂时不可用，请稍后重试。"), status_code=503)
     # 只停止被撤销登录（其他设备）已建立的连接；当前设备的连接照常使用。
-    for conn in [conn for conn in list(conns.values())
-                 if hashlib.sha256(conn.token.encode()).hexdigest() in revoked]:
-        await _terminate_conn(conn, "auth.password-changed", "密码已修改，请重新登录。")
+    await _stop_conns(
+        lambda conn: hashlib.sha256(conn.token.encode()).hexdigest() in revoked,
+        "auth.password-changed", "密码已修改，请重新登录。")
     response = JSONResponse({"account": account.public()})
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -538,12 +560,8 @@ async def _stop_account_connections(account_id: str) -> int:
     返回停止的连接数。会话已在存储层撤销：即使此处遗漏，消息级校验与广播
     惰性踢出也会兜底停止旧连接。
     """
-    stopped = 0
-    for conn in [conn for conn in list(conns.values()) if conn.account.account_id == account_id]:
-        await _terminate_conn(
-            conn, "auth.session-revoked", "管理员已重置该账号密码，请用新密码重新登录。")
-        stopped += 1
-    return stopped
+    return await _stop_conns(lambda conn: conn.account.account_id == account_id,
+                             "auth.session-revoked", "管理员已重置该账号密码，请用新密码重新登录。")
 
 
 @app.on_event("startup")
@@ -802,9 +820,7 @@ async def _handle_leave(conn: Conn) -> None:
         return
     # 先确认退座者并移出连接注册表，再向剩余成员广播退座事件与名册；
     # 退座者不需要收到自己的 PlayerLeft 事件。
-    for conn_id, candidate in list(conns.items()):
-        if candidate is conn:
-            conns.pop(conn_id, None)
+    _drop_conn(conn)
     await send_safe(conn.ws, {"type": "left", "roomCode": room.code})
     try:
         await conn.ws.close()
