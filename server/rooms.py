@@ -38,12 +38,45 @@ FINISHED_GAMES_TO_KEEP = 20
 # 「最近 N 个正常终局」清理互不相干，清理绝不触碰这个子目录。
 ADMIN_BACKUP_DIRECTORY = "admin-backup"
 
-# 工单 22 的故障注入钩子：仅当服务进程以该环境变量指定边界时，管理关闭
-# 才会在该边界写标记文件并阻塞等待释放文件。生产不设置此变量，函数立即
-# 返回；验证用它把进程停在精确边界，再以真实进程终止模拟清理中断，或用
-# 释放文件门控确定性交错（关闭与排队玩家流量）。
+# 旧房间切换（工单 24）：账号机制首次启用时，旧免账号服务端留下的等待/进行
+# 房间只备份（原样、不伪造终局）后停用；旧已结束回放照常按保留规则恢复。备份
+# 放独立的 legacy-backup/ 子目录，完成事实登记在存档根的 legacy-cutover.json，
+# 两者同样不被活动扫描与回放清理触碰。
+LEGACY_BACKUP_DIRECTORY = "legacy-backup"
+LEGACY_CUTOVER_MARKER = "legacy-cutover.json"
+
+# 工单 22/24 的故障注入钩子：仅当服务进程以该环境变量指定边界时，管理关闭/
+# 旧房间切换才会在该边界写标记文件并阻塞等待释放文件。生产不设置此变量，函
+# 数立即返回；验证用它把进程停在精确边界，再以真实进程终止模拟中断，或用释
+# 放文件门控确定性交错。
 FAULT_PAUSE_ENV = "BLOOD_BOUND_ADMIN_CLOSE_FAULT"
+LEGACY_CUTOVER_FAULT_ENV = "BLOOD_BOUND_LEGACY_CUTOVER_FAULT"
 FAULT_PAUSE_MAX_SECONDS = 300.0
+
+
+def _fault_pause(env_name: str, marker_prefix: str, point: str,
+                 saves_dir: str | Path, subject: str,
+                 once_per_process: set[str] | None = None) -> None:
+    """验证专用的边界挂起：环境变量命中 ``point`` 时写标记并阻塞等释放文件。
+
+    ``once_per_process`` 传入集合时，同一边界本进程只挂起一次（工单 24 的切换
+    在一次启动里连续处理多个旧房间，测试只需在第一个房间处停住）。
+    """
+    if os.environ.get(env_name, "") != point:
+        return
+    if once_per_process is not None:
+        if point in once_per_process:
+            return
+        once_per_process.add(point)
+    root = Path(saves_dir)
+    marker = root / f"{marker_prefix}.{point}.marker"
+    release = root / f"{marker_prefix}.{point}.release"
+    marker.write_text(subject, encoding="utf-8")
+    deadline = time.time() + FAULT_PAUSE_MAX_SECONDS
+    while not release.exists():
+        if time.time() > deadline:
+            raise OSError(f"故障注入边界 {point} 等待释放文件超时")
+        time.sleep(0.05)
 
 
 def admin_close_fault_pause(point: str, saves_dir: str | Path, game_id: str) -> None:
@@ -53,17 +86,21 @@ def admin_close_fault_pause(point: str, saves_dir: str | Path, game_id: str) -> 
     时先写 ``<存档目录>/.admin-close-fault.<point>.marker``（外部据此同步），
     再阻塞直到 ``.admin-close-fault.<point>.release`` 出现或超时。
     """
-    if os.environ.get(FAULT_PAUSE_ENV, "") != point:
-        return
-    root = Path(saves_dir)
-    marker = root / f".admin-close-fault.{point}.marker"
-    release = root / f".admin-close-fault.{point}.release"
-    marker.write_text(game_id, encoding="utf-8")
-    deadline = time.time() + FAULT_PAUSE_MAX_SECONDS
-    while not release.exists():
-        if time.time() > deadline:
-            raise OSError(f"故障注入边界 {point} 等待释放文件超时")
-        time.sleep(0.05)
+    _fault_pause(FAULT_PAUSE_ENV, ".admin-close-fault", point, saves_dir, game_id)
+
+
+# 旧房间切换钩子的「每进程一次」记录：模块级即可，生产不设置环境变量时永不生效。
+_legacy_cutover_fault_triggered: set[str] = set()
+
+
+def legacy_cutover_fault_pause(point: str, saves_dir: str | Path, subject: str) -> None:
+    """在旧房间切换的指定边界挂起（验证专用，见 :data:`LEGACY_CUTOVER_FAULT_ENV`）。
+
+    ``point`` 取 ``before-backup`` / ``after-backup`` / ``before-marker``；同一
+    边界每个进程只挂起一次。命名与释放文件协议和管理关闭钩子一致。
+    """
+    _fault_pause(LEGACY_CUTOVER_FAULT_ENV, ".legacy-cutover-fault", point, saves_dir,
+                 subject, once_per_process=_legacy_cutover_fault_triggered)
 
 
 @dataclass
@@ -477,10 +514,120 @@ class RoomManager:
         except OSError:
             pass
 
+    # ---- legacy cutover (issue 24) --------------------------------------
+
+    def cutover_legacy_rooms(self) -> dict[str, Any]:
+        """账号机制首次启用时，把旧免账号的未结束房间备份后停用（只做一次）。
+
+        旧服务端元数据（含 ``hostToken``、无 ``hostAccountId``）代表免账号时代
+        的房间：等待/进行的旧房**只备份**到 ``legacy-backup/<对局号>/``（存档与
+        元数据原样，另附 ``cutover.json`` 停用事实——不是正常终局，不伪造胜负
+        或身份揭晓，也不制作中止回放），成功后把活动存档移出存档根目录；旧已
+        结束回放不属于切换范围，照常按保留规则恢复供登录后观看。
+
+        每个房间独立提交，切换因此可重复执行与恢复：某房备份失败时原文件保持
+        原样、如实报告失败且不写完成标记，下次启动继续处理剩余旧房；账号方案
+        的新房间（元数据带 ``hostAccountId``）无论何时都不在处理范围内，重复
+        启动绝不会误关新房。全部处理成功后写 ``legacy-cutover.json`` 完成标记。
+        """
+        report: dict[str, Any] = {"processed": [], "failed": [], "markerWritten": False}
+        marker_path = self.saves_dir / LEGACY_CUTOVER_MARKER
+        targets: list[tuple[Path, dict[str, Any]]] = []
+        for meta_path in sorted(self.saves_dir.glob("*.meta.json")):
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                continue  # 无法分类的坏元数据保持原样，与既有恢复扫描一致
+            if not isinstance(meta, dict) or not meta.get("gameId"):
+                continue
+            if "hostAccountId" in meta:
+                continue  # 账号方案的房间：不属于旧房间切换
+            if meta.get("status", "waiting") == "ended":
+                continue  # 旧已结束回放按原保留规则继续可读
+            targets.append((meta_path, meta))
+        for meta_path, meta in targets:
+            game_id = str(meta["gameId"])
+            code = str(meta.get("code") or game_id)
+            legacy_cutover_fault_pause("before-backup", self.saves_dir, game_id)
+            # 先核对存档可读性，让停用记录如实区分「可读原样备份」与「坏旧存档
+            # 按字节原样备份」；读不出也不丢原文件——仍原样备份并停用。
+            save_path = self.saves_dir / f"{game_id}.json.gz"
+            engine_loadable = False
+            players: list[str] = []
+            try:
+                engine = load_game(save_path)
+                engine_loadable = True
+                players = [player.display_name for player in engine.state.players.values()]
+            except (SaveError, OSError):
+                pass
+            backup_dir = self.saves_dir / LEGACY_BACKUP_DIRECTORY / game_id
+            record = {
+                "code": code,
+                "gameId": game_id,
+                "status": "legacy-deactivated",
+                "deactivatedAt": time.time(),
+                "engineLoadable": engine_loadable,
+                "players": players,
+                "backupPath": str(backup_dir.resolve()),
+            }
+            try:
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                if save_path.exists():
+                    self._copy_into_backup(save_path, backup_dir / "game.json.gz")
+                self._copy_into_backup(meta_path, backup_dir / "meta.json")
+                self._write_backup_json(backup_dir / "cutover.json", record)
+            except OSError as error:
+                report["failed"].append({"code": code, "gameId": game_id, "reason": str(error)})
+                print(f"旧房间切换失败：房间 {code}（对局 {game_id}）备份失败（{error}）；"
+                      "原存档保留、房间未停用，下次启动将重试。", flush=True)
+                continue
+            legacy_cutover_fault_pause("after-backup", self.saves_dir, game_id)
+            try:
+                # 先移除恢复扫描入口（meta），再移除对局存档：两步之间中断只会
+                # 留下一个不被扫描的孤立存档文件，重试安全（与 admin_close 同序）。
+                meta_path.unlink()
+                save_path.unlink(missing_ok=True)
+            except OSError as error:
+                report["failed"].append({"code": code, "gameId": game_id, "reason": str(error)})
+                print(f"旧房间切换失败：房间 {code}（对局 {game_id}）移出活动存档失败（{error}）；"
+                      "原存档保留、房间未停用，下次启动将重试。", flush=True)
+                continue
+            report["processed"].append(record)
+            outcome = ("已备份并停用" if engine_loadable
+                       else "存档无法读取，已按原样备份并停用")
+            print(f"旧房间切换：房间 {code}（对局 {game_id}）{outcome}，"
+                  f"备份目录 {record['backupPath']}。", flush=True)
+        backup_root = self.saves_dir / LEGACY_BACKUP_DIRECTORY
+        try:
+            accumulated = sorted(path.parent.name for path in backup_root.glob("*/cutover.json"))
+        except OSError:
+            accumulated = []
+        if report["failed"]:
+            print(f"旧房间切换未完成：{len(report['failed'])} 个旧房间处理失败，"
+                  "未写完成标记；下次启动会继续处理。", flush=True)
+            return report
+        # 完成标记：有新完成的房间时刷新；此前已写好且无新变化时保持字节不变。
+        # 中断发生在「全部处理完、标记未写」边界时，重启凭备份目录里的停用记录
+        # 补写标记，不重复处理任何房间。
+        if report["processed"] or (accumulated and not marker_path.exists()):
+            legacy_cutover_fault_pause("before-marker", self.saves_dir, "marker")
+            self._write_backup_json(marker_path, {
+                "completedAt": time.time(),
+                "processedGameIds": accumulated,
+                "processedCount": len(accumulated),
+            })
+            report["markerWritten"] = True
+            print(f"旧房间切换完成：共停用 {len(accumulated)} 个旧房间，"
+                  f"完成记录 {marker_path.resolve()}。", flush=True)
+        return report
+
     # ---- recovery & retention -----------------------------------------
 
     def restore(self) -> list[Room]:
         """Load persisted rooms after a restart; finished rooms are pruned to the cap."""
+        # 首次启用账号机制时先完成旧房间切换（工单 24）：旧等待/进行房间备份后
+        # 停用，绝不恢复成可加入的房间（含切换失败的：原文件保留但同样不可用）。
+        self.cutover_legacy_rooms()
         for meta_path in sorted(self.saves_dir.glob("*.meta.json")):
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -489,6 +636,8 @@ class RoomManager:
             code, game_id = meta.get("code"), meta.get("gameId")
             if not code or not game_id:
                 continue
+            if "hostAccountId" not in meta and meta.get("status", "waiting") != "ended":
+                continue  # 旧免账号未结束房：只备份停用，不恢复
             try:
                 engine = load_game(self.saves_dir / f"{game_id}.json.gz")
             except (SaveError, OSError):
