@@ -5,6 +5,16 @@ import type { Account } from "./AccountEntry";
 export interface RoomCredentials { code: string; accountId: string; mode: "player" | "spectator"; }
 interface ExistingRoom { code: string; status: string; }
 
+/** 服务端错误帧解析出的结构化错误：携带错误码与消息，用于与网络失败等本地异常区分（工单 03）。 */
+export class ServerApiError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+    this.name = "ServerApiError";
+  }
+}
+
 export function Lobby({ onJoin, onReplay, account }: { onJoin: (c: RoomCredentials) => void; onReplay: () => void; account: Account }) {
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,11 +42,11 @@ export function Lobby({ onJoin, onReplay, account }: { onJoin: (c: RoomCredentia
       const data = await response.json();
       if (!response.ok) {
         if (data.details?.roomCode) setExisting({ code: data.details.roomCode, status: "waiting" });
-        throw new Error(data.message ?? "创建房间失败，请稍后重试。");
+        throw new ServerApiError(String(data.code ?? ""), data.message ?? "创建房间失败，请稍后重试。");
       }
       enter(data.code);
     } catch (err) {
-      setError(err instanceof Error && /[\u3400-\u9fff]/.test(err.message) ? err.message : "创建房间失败，请查询已有房间或重试。");
+      setError(err instanceof ServerApiError ? err.message : "创建房间失败，请查询已有房间或重试。");
       await refreshRoom();
     } finally { submitting.current = false; setBusy(false); }
   };
