@@ -568,6 +568,9 @@ class AdminCLITests(unittest.TestCase):
                                     input="12345\nNew9Pass\nNew9Pass\n")
         self.assertEqual(five_then_ok.returncode, 0, five_then_ok.stderr + five_then_ok.stdout)
         self.assertIn("6–12", five_then_ok.stdout, "长度不符的中文提示")
+        self.assertIn("密码须为 6–12 个字符，请重新输入。", five_then_ok.stdout,
+                      "重试提示须为完整单句（消息句号衔接为逗号）")
+        self.assertNotIn("。，", five_then_ok.stdout, "不得出现「。，」双标点")
         self.assertEqual(login_status("New9Pass"), 200)
         self.assertEqual(login_status("123456"), 401, "旧密码必须立即失效")
 

@@ -17,6 +17,9 @@ SESSION_COOKIE = "bloodbound_session"
 SESSION_SECONDS = 30 * 24 * 60 * 60
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 5
 
+# 密码形状规则的唯一说明文本：校验错误消息与管理 CLI 提示共用，不得另存副本。
+PASSWORD_SHAPE_TEXT = "6–12 个字符"
+
 
 class AccountError(Exception):
     def __init__(self, code: str, message: str, status: int = 400):
@@ -42,7 +45,7 @@ def validate_username(username: object) -> str:
 def validate_new_password(password: object) -> str:
     """单个密码的形状校验（管理重置没有确认字段，走这条单参路径）。"""
     if not isinstance(password, str) or not 6 <= len(password) <= 12:
-        raise AccountError("auth.invalid-password", "密码须为 6–12 个字符。")
+        raise AccountError("auth.invalid-password", f"密码须为 {PASSWORD_SHAPE_TEXT}。")
     return password
 
 
