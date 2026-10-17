@@ -50,7 +50,7 @@ class AccountJoinHTTPTests(unittest.TestCase):
 
     async def fill_to(self, code, host_cookie, total, prefix):
         """Join extra accounts until the room holds `total` seats, then start via the host."""
-        current = self.request(f"/api/rooms/{code}")[1]["playerCount"]
+        current = self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"]
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             await self.state_of(code, cookie)
@@ -77,7 +77,7 @@ class AccountJoinHTTPTests(unittest.TestCase):
         self.assertEqual(second["yourPlayerId"], first["yourPlayerId"])
         self.assertEqual(len(second["game"]["players"]), 2)
         self.assertEqual(
-            self.request(f"/api/rooms/{code}")[1]["playerCount"], 2,
+            self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 2,
             "同账号第二会话恢复不能生成重复玩家座位",
         )
 
@@ -113,7 +113,7 @@ class AccountJoinHTTPTests(unittest.TestCase):
         self.assertEqual(rejection["code"], "room.locked")
         self.assertIn("锁定", rejection["message"], "拒绝原因必须是简体中文")
         self.assertIsNone(self.occupancy_of(newcomer_cookie), "被拒新人不能残留幽灵座位占用")
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 2)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 2)
 
     def test_started_room_rejects_newcomer_with_chinese_reason_and_no_ghost_seat(self):
         _, host_cookie = self.signup("开局拒客房主")
@@ -126,7 +126,7 @@ class AccountJoinHTTPTests(unittest.TestCase):
         self.assertEqual(rejection["code"], "room.already-started")
         self.assertIn("开始", rejection["message"], "拒绝原因必须是简体中文")
         self.assertIsNone(self.occupancy_of(newcomer_cookie))
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 6)
 
     def test_full_room_rejects_newcomer_with_reason_and_no_ghost_seat(self):
         _, host_cookie = self.signup("满员房主")
@@ -134,14 +134,14 @@ class AccountJoinHTTPTests(unittest.TestCase):
         for index in range(11):
             _, cookie = self.signup(f"满员成员{index}")
             asyncio.run(self.state_of(code, cookie))
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 12)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 12)
         _, newcomer_cookie = self.signup("满员新人")
         rejection = asyncio.run(self.rejection_of(code, newcomer_cookie))
         self.assertEqual(rejection["type"], "error")
         self.assertEqual(rejection["code"], "room.full", "满员必须给出明确的满员原因")
         self.assertIn("满", rejection["message"])
         self.assertIsNone(self.occupancy_of(newcomer_cookie))
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 12)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 12)
 
     def test_ended_room_rejects_newcomer_with_reason_and_no_ghost_seat(self):
         from scripts.account_client import AccountClient
@@ -158,7 +158,7 @@ class AccountJoinHTTPTests(unittest.TestCase):
         self.assertEqual(rejection["code"], "room.ended", "已结束房间必须与开局中区别解释")
         self.assertIn("结束", rejection["message"])
         self.assertIsNone(self.occupancy_of(newcomer_cookie))
-        self.assertEqual(self.request(f"/api/rooms/{room['code']}")[1]["status"], "ended")
+        self.assertEqual(sessions[0].request(f"/api/rooms/{room['code']}")[1]["status"], "ended")
 
         host_account, host_cookie = self.signup("开局房主")
         code = self.create_room(host_cookie)
@@ -207,7 +207,7 @@ class AccountJoinHTTPTests(unittest.TestCase):
                 return json.loads(await asyncio.wait_for(socket.recv(), 3))
         for action in ["start", "lock", "unlock"]:
             self.assertEqual(asyncio.run(host_attempt(action))["code"], "room.not-host")
-        self.assertFalse(self.request(f"/api/rooms/{code}")[1]["locked"])
+        self.assertFalse(self.request(f"/api/rooms/{code}", None, target_cookie)[1]["locked"])
 
     def test_v04_03_attacker_cannot_observe_targets_private_identity(self):
         _, host_cookie = self.signup("隐私房主")
@@ -277,7 +277,7 @@ class AccountJoinHTTPTests(unittest.TestCase):
             self.assertEqual(state["game"]["viewer"]["identity"], expected_identity, "重启后必须看到自己的私有身份")
             self.assertIn((state["yourPlayerId"], next(
                 name for player_id, name in roster_before if player_id == state["yourPlayerId"])), roster_before)
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["status"], "playing")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["status"], "playing")
         self.assertTrue(after[host_cookie]["isHost"], "重启后房主恢复管理权")
 
     def test_v04_04_restart_restores_six_player_game_seats_and_identities(self):

@@ -70,7 +70,7 @@ class AdminCLITests(unittest.TestCase):
             return await self.hello(socket, **fields)
 
     async def fill_to(self, code, host_cookie, total, prefix):
-        current = self.request(f"/api/rooms/{code}")[1]["playerCount"]
+        current = self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"]
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             await self.state_of(code, cookie)
@@ -458,7 +458,7 @@ class AdminCLITests(unittest.TestCase):
                         hashlib.sha256(path.read_bytes()).hexdigest()
             return digest
 
-        room_before = self.request(f"/api/rooms/{code}")[1]
+        room_before = self.request(f"/api/rooms/{code}", None, host_cookie)[1]
         files_before = directory_digest()
         users = self.run_cli("users")
         rooms = self.run_cli("rooms")
@@ -467,7 +467,7 @@ class AdminCLITests(unittest.TestCase):
         files_after = directory_digest()
         self.assertEqual(files_before, files_after,
                          "查看命令不得写入任何存档、账号库、事件日志或管理配置文件（含计时窗口）")
-        self.assertEqual(room_before, self.request(f"/api/rooms/{code}")[1])
+        self.assertEqual(room_before, self.request(f"/api/rooms/{code}", None, host_cookie)[1])
 
         token = self.admin_token()
         session_value = host_cookie.split("=", 1)[1]
@@ -543,7 +543,7 @@ class AdminCLITests(unittest.TestCase):
                 async with self.connect(code, new_cookie) as resumed_socket:
                     resumed = await self.hello(resumed_socket)
                 self.assertEqual(resumed["yourPlayerId"], target_id, "重登必须恢复原座位")
-                self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6)
+                self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 6)
                 # 其他账号不受影响：补位玩家登录仍有效，房主仍能操作。
                 self.assertEqual(self.request("/api/auth/session", cookie=extras[0][1])[0], 200)
                 await host_socket.send(json.dumps({"type": "host", "action": "unlock"}))
@@ -638,8 +638,8 @@ class AdminCLITests(unittest.TestCase):
                 return guest_id
         guest_id = asyncio.run(scenario())
 
-        # 座位与占用保留。
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 2)
+        # 座位与占用保留（房主会话已被重置撤销，用未受影响的玩家会话查看）。
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, guest_cookie)[1]["playerCount"], 2)
 
         # 服务重启（同一存档目录）后：房主用新密码恢复原房与房主身份。
         self.stop_server()

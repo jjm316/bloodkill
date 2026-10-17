@@ -49,7 +49,7 @@ class ReplayAuthHTTPTests(unittest.TestCase):
 
     async def fill_to(self, code, host_cookie, total, prefix):
         """补足到 total 个座位后由房主开局，返回开局后的 state。"""
-        current = self.request(f"/api/rooms/{code}")[1]["playerCount"]
+        current = self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"]
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             await self.state_of(code, cookie)
@@ -109,10 +109,10 @@ class ReplayAuthHTTPTests(unittest.TestCase):
 
     # ---- V17.01：进行中/未终局/未知房给出明确中文原因 ---------------------
 
-    def unused_code(self):
-        """取一个确实不存在的房号（房间概览 404）用于未知房反例。"""
+    def unused_code(self, cookie):
+        """取一个确实不存在的房号（登录后房间概览 404）用于未知房反例。"""
         for candidate in (f"{index:06d}" for index in range(424242, 424282)):
-            if self.request(f"/api/rooms/{candidate}")[0] == 404:
+            if self.request(f"/api/rooms/{candidate}", None, cookie)[0] == 404:
                 return candidate
         self.fail("找不到不存在的房号")
 
@@ -132,7 +132,7 @@ class ReplayAuthHTTPTests(unittest.TestCase):
         self.assertEqual(body["code"], "room.not-ended")
         self.assertIn("结束", body["message"], "进行房拒绝原因必须是简体中文")
         # 未知房：明确说明房间不存在。
-        unknown = self.unused_code()
+        unknown = self.unused_code(host_cookie)
         status, body, _ = self.request(f"/api/rooms/{unknown}/replay", cookie=host_cookie)
         self.assertEqual(status, 404)
         self.assertEqual(body["code"], "room.not-found")
@@ -285,7 +285,7 @@ class ReplayAuthHTTPTests(unittest.TestCase):
         status, again, _ = self.request(f"/api/rooms/{ended_code}/replay", cookie=player_cookie)
         self.assertEqual(again, replay)
         # 回放读取不给本人任何座位/占用变化，也不影响回放房名册。
-        self.assertEqual(self.request(f"/api/rooms/{ended_code}")[1]["playerCount"], 6)
+        self.assertEqual(self.request(f"/api/rooms/{ended_code}", None, player_cookie)[1]["playerCount"], 6)
         occupied = self.request("/api/account/room", cookie=player_cookie)[1]["room"]
         self.assertEqual((occupied["code"], occupied["status"]), (code, "waiting"),
                          "回放路径不得改变未结束占用归属")

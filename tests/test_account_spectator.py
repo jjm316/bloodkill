@@ -64,8 +64,8 @@ class AccountSpectatorHTTPTests(unittest.TestCase):
     def occupancy_of(self, cookie):
         return self.request("/api/account/room", cookie=cookie)[1]["room"]
 
-    def player_count(self, code):
-        return self.request(f"/api/rooms/{code}")[1]["playerCount"]
+    def player_count(self, code, cookie):
+        return self.request(f"/api/rooms/{code}", None, cookie)[1]["playerCount"]
 
     # ---- V10.03: a seated account cannot spectate, on any device ----------
 
@@ -84,7 +84,7 @@ class AccountSpectatorHTTPTests(unittest.TestCase):
         self.assertIn("旁观", rejection["message"], "拒绝原因必须说明不能旁观")
         self.assertIn("返回原房间", rejection["message"], "拒绝原因必须引导返回原房间")
         self.assertEqual(rejection["details"]["roomCode"], room_a, "details 提供返回原房入口")
-        self.assertEqual(self.player_count(room_b), 1, "被拒旁观不能在目标房留下座位")
+        self.assertEqual(self.player_count(room_b, host_b), 1, "被拒旁观不能在目标房留下座位")
 
         # 跨设备：同一账号的第二会话同样被拒（服务端校验，非仅前端）。
         second_cookie = self.login("互斥成员")
@@ -186,13 +186,13 @@ class AccountSpectatorHTTPTests(unittest.TestCase):
 
         created = asyncio.run(scenario())
         self.assertEqual(self.occupancy_of(watcher_cookie)["code"], created)
-        self.assertEqual(self.player_count(room_b), 1, "建房的账号不能在旁观房留下座位")
+        self.assertEqual(self.player_count(room_b, host_b), 1, "建房的账号不能在旁观房留下座位")
 
     # ---- V10.02: authorization negatives leave the game untouched ---------
 
     async def fill_to(self, code, host_cookie, total, prefix):
         """Join extra accounts until the room holds `total` seats, then start via the host."""
-        current = self.player_count(code)
+        current = self.player_count(code, host_cookie)
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             await self.state_of(code, cookie)
@@ -250,7 +250,7 @@ class AccountSpectatorHTTPTests(unittest.TestCase):
         self.assertEqual(ack["status"], "rejected")
         self.assertEqual(ack["error"]["code"], "player.not-eligible")
         self.assertEqual(host_rejection["code"], "room.not-host", "旁观者不能用房主管理命令")
-        info = self.request(f"/api/rooms/{code}")[1]
+        info = self.request(f"/api/rooms/{code}", None, host_cookie)[1]
         self.assertEqual((info["status"], info["locked"]), ("playing", False), "被拒操作不得改变对局状态")
         after = asyncio.run(self.spectate_of(code, spectator_cookie))
         self.assertEqual(after["game"]["revision"], revision_before, "拒绝路径不推进修订号")
@@ -375,8 +375,8 @@ class AccountSpectatorHTTPTests(unittest.TestCase):
         # 最终归属唯一：占用指向成功加入的房间，无幽灵座位，可恢复。
         self.assertEqual(self.occupancy_of(first_cookie), {"code": room_b, "status": "waiting"})
         self.assertEqual(self.occupancy_of(second_cookie)["code"], room_b)
-        self.assertEqual(self.player_count(room_a), 1, "旁观方不能在旁观房留下座位")
-        self.assertEqual(self.player_count(room_b), 2)
+        self.assertEqual(self.player_count(room_a, host_a), 1, "旁观方不能在旁观房留下座位")
+        self.assertEqual(self.player_count(room_b, host_b), 2)
         resumed = asyncio.run(self.state_of(room_b, first_cookie))
         self.assertEqual(resumed["yourPlayerId"], join["yourPlayerId"], "竞争后仍能恢复唯一座位")
         # 竞争落败的旁观入口对该账号已不可用：再试仍被互斥拒绝。

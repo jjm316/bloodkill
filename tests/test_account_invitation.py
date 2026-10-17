@@ -98,8 +98,8 @@ class AccountInvitationHTTPTests(unittest.TestCase):
         self.assertIn("返回原房间", rejection["message"])
         self.assertEqual(rejection["details"]["roomCode"], original)
         # 邀请不创建第二个座位：目标房只有房主，原房名册不变，成员占用未迁移。
-        self.assertEqual(self.request(f"/api/rooms/{target}")[1]["playerCount"], 1)
-        self.assertEqual(self.request(f"/api/rooms/{original}")[1]["playerCount"], 3)
+        self.assertEqual(self.request(f"/api/rooms/{target}", None, host_cookie)[1]["playerCount"], 1)
+        self.assertEqual(self.request(f"/api/rooms/{original}", None, host_cookie)[1]["playerCount"], 3)
         self.assertEqual(self.occupancy_of(member_cookie)["code"], original)
 
         # 按引导返回原房：恢复的是原座位，房主身份与对照座位保持。
@@ -121,7 +121,7 @@ class AccountInvitationHTTPTests(unittest.TestCase):
         # 房间号。」，见 invitation.test.tsx / joinFailure.test.tsx），不产生
         # 座位或占用。
         _, cookie = self.signup("迷路访客")
-        status, body, _ = self.request("/api/rooms/999999")
+        status, body, _ = self.request("/api/rooms/999999", None, cookie)
         self.assertEqual(status, 404)
         self.assertEqual(body["code"], "room.not-found")
 

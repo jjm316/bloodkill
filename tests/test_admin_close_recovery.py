@@ -146,7 +146,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
     async def fill_and_start(self, code, host_cookie, total, prefix, start_payload=None):
         """Join accounts until the room holds `total` seats, then start via the host."""
         member_cookies = []
-        current = self.request(f"/api/rooms/{code}")[1]["playerCount"]
+        current = self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"]
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             member_cookies.append(cookie)
@@ -312,7 +312,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
 
                 if point in ("before-backup", "after-backup"):
                     # 未完成关闭：房间恢复、占用恢复、可再加入；重试后成功关闭。
-                    self.assertEqual(self.request(f"/api/rooms/{code}")[0], 200)
+                    self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 200)
                     state = asyncio.run(self.state_of(code, host_cookie))
                     self.assertEqual(state["roomStatus"], "waiting")
                     for cookie in (host_cookie, guest_cookie):
@@ -324,7 +324,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
                                          "未提交关闭的 stale closure.json 不得在重启后继续冒充已关闭")
                     retry = self.run_cli("close-room", code, confirmation=f"{code}\n")
                     self.assertEqual(retry.returncode, 0, retry.stderr + retry.stdout)
-                    self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404)
+                    self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404)
                     for cookie in (host_cookie, guest_cookie):
                         self.assertIsNone(self.occupancy_of(cookie), "成功重试后占用必须释放")
                     self.assertFalse(list(saves.glob(f"{game_id}.*")), "成功重试后活动存档必须移出")
@@ -334,7 +334,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
                     self.assertNotEqual(engine.state.status, "ended")
                 else:
                     # 已提交但回复丢失：房间不得复活、占用不得恢复、备份原样。
-                    self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404, "重启不得恢复已关闭房间")
+                    self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404, "重启不得恢复已关闭房间")
                     for cookie in (host_cookie, guest_cookie):
                         self.assertIsNone(self.occupancy_of(cookie), "重启不得重新占用已关房玩家")
                     status, room, _ = self.request("/api/rooms", {}, host_cookie)
@@ -402,14 +402,14 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
             data={"code": code_b, "expectedGameId": game_b, "expectedRevision": 99999})
         self.assertEqual(stale_revision[0], 409, stale_revision[1])
         self.assertEqual(stale_revision[1]["error"], "admin.target-changed")
-        self.assertEqual(self.request(f"/api/rooms/{code_b}")[1]["status"], "waiting")
+        self.assertEqual(self.request(f"/api/rooms/{code_b}", None, host_cookie)[1]["status"], "waiting")
         self.assertEqual(self.occupancy_of(other_cookie), {"code": code_b, "status": "waiting"})
         self.assertTrue((Path(self.tmp.name) / f"{game_b}.json.gz").is_file())
 
         # 重启后同一语义：已关房不再复活，重复处理仍明确报告已关闭。
         self.stop_server()
         self.start_server()
-        self.assertEqual(self.request(f"/api/rooms/{code_a}")[0], 404)
+        self.assertEqual(self.request(f"/api/rooms/{code_a}", None, host_cookie)[0], 404)
         after_restart = self.admin_http(
             "/admin/close-room", token=token, method="POST",
             data={"code": code_a, "expectedGameId": game_a, "expectedRevision": 1})
@@ -495,7 +495,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
         self.assertGreaterEqual(engine.state.revision, accepted_revision,
                                 "已接受动作必须已包含在备份里（不得回退或丢帧）")
         self.assertFalse(list(saves.glob(f"{game_id}.*")), "关闭后不得重建活动存档")
-        self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404)
 
         # (2)(3)(4) 故障门控的确定性交错：关闭停在提交前，玩家流量在窗口里排队。
         self.stop_server()
@@ -605,7 +605,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
                          "提交前排队的玩家命令不得写进已备份的对局")
         self.assertFalse(list(saves.glob(f"{game_race}.*")),
                          "关闭提交后不得因排队流量重建活动存档")
-        self.assertEqual(self.request(f"/api/rooms/{code_race}")[0], 404)
+        self.assertEqual(self.request(f"/api/rooms/{code_race}", None, race_host_cookie)[0], 404)
 
         # (3b) 开局与关闭竞争（同门控）：提交前排队的 start 不生效。
         start_host_account, start_host_cookie = self.signup("开局房主")
@@ -655,7 +655,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
         status, replay, _ = self.request(f"/api/rooms/{code_end}/replay", None, ended_host_cookie)
         self.assertEqual(status, 200, replay)
         self.assertTrue((saves / f"{game_end}.json.gz").is_file(), "终局回放不得被误关清理")
-        self.assertEqual(self.request(f"/api/rooms/{code_end}")[1]["status"], "ended")
+        self.assertEqual(self.request(f"/api/rooms/{code_end}", None, ended_host_cookie)[1]["status"], "ended")
 
     async def play_full_game(self, code, host_cookie, max_commands=120):
         """用真实 WS 命令把一局打到正常终局（与发布 smoke 同一推进策略）。"""
@@ -725,7 +725,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
         # 重启：关闭房不复活、占用不恢复、账号与会话照旧。
         self.stop_server()
         self.start_server()
-        self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404)
         self.assertIsNone(self.occupancy_of(host_cookie))
         self.assertIsNone(self.occupancy_of(guest_cookie))
         self.assertEqual(self.request("/api/auth/session", cookie=host_cookie)[0], 200)
@@ -751,7 +751,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
 
         # 再重启真实服务：关闭房仍然关闭，恢复的只有正常终局房。
         self.start_server()
-        self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404)
         self.assertIsNone(self.occupancy_of(host_cookie))
         metrics = self.request("/metrics")[1]
         self.assertEqual(metrics["activeRooms"], FINISHED_GAMES_TO_KEEP)
@@ -830,7 +830,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
         self.assertIn("未关闭", failed.stderr)
         self.assertFalse(self.lines_with(failed.stdout, "已关闭"))
         # 查询状态与实际结果一致：房间在、占用在、活动存档在。
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["status"], "waiting")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["status"], "waiting")
         self.assertEqual(self.occupancy_of(host_cookie), {"code": code, "status": "waiting"})
         self.assertTrue((saves / f"{game_id}.json.gz").is_file())
         rooms_listing = self.run_cli("rooms")
@@ -843,7 +843,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
         backup_root.unlink()
         self.stop_server()
         self.start_server()
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["status"], "waiting")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["status"], "waiting")
         self.assertEqual(self.occupancy_of(guest_cookie), {"code": code, "status": "waiting"})
 
         # (b) 重试成功：成功摘要与事实一致，查询状态随之更新。
@@ -854,7 +854,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
         closure = json.loads(closure_bytes.decode("utf-8"))
         self.assertEqual(set(closure["affectedPlayers"]), {"一致房主", "一致玩家"})
         self.assertEqual(closure["code"], code)
-        self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404)
         self.assertIsNone(self.occupancy_of(host_cookie))
         self.assertIsNone(self.occupancy_of(guest_cookie))
         users_listing = self.run_cli("users")
@@ -876,7 +876,7 @@ class ClosedRoomRecoveryTests(unittest.TestCase):
         self.assertTrue((backup_dir / "game.json.gz").is_file(), "清理不得删管理备份")
         self.assertTrue((saves / "accounts" / "accounts.sqlite3").is_file(),
                         "清理不得删账号存储")
-        self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404, "清理后关闭房仍不复活")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404, "清理后关闭房仍不复活")
 
 
 if __name__ == "__main__":

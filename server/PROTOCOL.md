@@ -72,7 +72,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 | `GET` | `/metrics` | 无身份信息的进程内运行指标，见“运行指标与公开部署边界”。 |
 | `POST` | `/api/rooms` | 当前登录账号创建房间并立即成为房主、占据自己的座位 → `{"code", "gameId"}`。`code` 为 6 位数字房号；同一房主重试返回既有未结束房间。没有会话 → 401 `auth.login-required`；已有普通玩家占用 → 409 `account.room-occupied`，details.roomCode 提供恢复目标。 |
 | `GET` | `/api/account/room` | 当前登录账号的未结束占用 → `{"room": {"code", "status"} | null}`；用于刷新及创建回复丢失后的恢复。没有会话 → 401。 |
-| `GET` | `/api/rooms/{code}` | 房间概览 → `{"code", "status": "waiting|playing|ended", "locked", "playerCount"}`。不存在 → 404 `room.not-found`。 |
+| `GET` | `/api/rooms/{code}` | 房间概览 → `{"code", "status": "waiting|playing|ended", "locked", "playerCount"}`，需要登录。没有会话 → 401 `auth.login-required`（不区分房间是否存在）；不存在 → 404 `room.not-found`，`message` 为中文。 |
 | `GET` | `/api/rooms/{code}/replay` | 登录可看的终局回放 → `{"gameId", "steps": [GameState]}`，每步都是旁观者投影；任意已登录账号（含非参与者）知道房号即可观看。没有会话 → 401 `auth.login-required`；未正常结束（等待/进行，将来的管理关闭也非正常终局）→ 409 `room.not-ended`；不存在 → 404 `room.not-found`，`message` 均为中文。只保留最近 20 个已结束对局；清理只删除对局存档，不触碰账号、会话、占用或管理备份数据。 |
 
 ## WebSocket

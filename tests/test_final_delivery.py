@@ -279,7 +279,7 @@ class DeploymentLayoutTests(unittest.TestCase):
         self.assertNotEqual(engine.state.status, "ended", "备份存档可读取且不是正常终局")
 
         # 清理只改变目标房间：占用释放，房主能开下一局。
-        self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404)
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404)
         self.assertIsNone(self.request("/api/account/room", cookie=host_cookie)[1]["room"])
         users_after = self.run_cli("users")
         self.assertEqual(users_after.returncode, 0, users_after.stderr + users_after.stdout)
@@ -339,7 +339,7 @@ class DeploymentLayoutTests(unittest.TestCase):
                          "更新不得复活已撤销的登录")
 
         # 房间：正常房恢复（座位与房主归属不变），已关闭房不复活。
-        status, room, _ = self.request(f"/api/rooms/{code}")
+        status, room, _ = self.request(f"/api/rooms/{code}", None, host_cookie)
         self.assertEqual((status, room["status"], room["playerCount"]), (200, "waiting", 2))
         occupied = self.request("/api/account/room", cookie=host_cookie)[1]["room"]
         self.assertEqual((occupied["code"], occupied["status"]), (code, "waiting"))
@@ -348,7 +348,7 @@ class DeploymentLayoutTests(unittest.TestCase):
         member_resumed = asyncio.run(self.seat_of(code, member_cookie))
         self.assertEqual(member_resumed["yourPlayerId"], member_player_id,
                          "既有座位归属不得因更新丢失")
-        self.assertEqual(self.request(f"/api/rooms/{closed_code}")[0], 404,
+        self.assertEqual(self.request(f"/api/rooms/{closed_code}", None, host_cookie)[0], 404,
                           "已管理关闭的房间不得复活")
         self.assertIsNone(self.request("/api/account/room", cookie=closed_cookie)[1]["room"])
         self.assertIsNone(self.request("/api/account/room", cookie=quitter_cookie)[1]["room"])
@@ -420,7 +420,7 @@ class DeploymentLayoutTests(unittest.TestCase):
         self.assertTrue(joined["yourPlayerId"], "释放占用后必须能进新房间入座")
 
         # 其他房间不受影响：对照房照常等待、可锁定；终局回放照常可读。
-        status, room, _ = self.request(f"/api/rooms/{control_code}")
+        status, room, _ = self.request(f"/api/rooms/{control_code}", None, control_cookie)
         self.assertEqual((status, room["status"], room["playerCount"]), (200, "waiting", 2))
 
         async def lock_control():

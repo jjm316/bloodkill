@@ -491,10 +491,14 @@ async def account_room(request: Request) -> Any:
 
 
 @app.get("/api/rooms/{code}")
-async def room_info(code: str) -> Any:
+async def room_info(code: str, request: Request) -> Any:
+    # 规格替代旧匿名访问：服务端必须校验身份，未登录不区分房间是否存在。
+    account = accounts.get_session(request.cookies.get(SESSION_COOKIE))
+    if account is None:
+        return JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
     room = manager.get_room(code)
     if room is None:
-        return JSONResponse(error_message("room.not-found", "Room not found."), status_code=404)
+        return JSONResponse(error_message("room.not-found", "房间不存在，请核对房间号。"), status_code=404)
     return {
         "code": room.code,
         "status": room.status,
@@ -578,7 +582,7 @@ async def ws_endpoint(websocket: WebSocket, code: str) -> None:
     room = manager.get_room(code)
     if room is None:
         # details 键名不能是 code：error_message 首参同名，关键字传参会 TypeError。
-        await send_safe(websocket, error_message("room.not-found", "Room not found.", roomCode=code))
+        await send_safe(websocket, error_message("room.not-found", "房间不存在，请核对房间号。", roomCode=code))
         await websocket.close()
         return
 
@@ -620,7 +624,7 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
         await send_safe(ws, error_message("auth.login-required", "请先登录。"))
         return False
     if not isinstance(raw, dict) or raw.get("type") != "hello":
-        await send_safe(ws, error_message("command.invalid-shape", "First message must be hello."))
+        await send_safe(ws, error_message("command.invalid-shape", "进入房间的第一条消息必须是 hello 握手。"))
         return False
     version = raw.get("protocolVersion")
     if version != PROTOCOL_VERSION:
@@ -628,7 +632,7 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
             ws,
             error_message(
                 "protocol.version-mismatch",
-                "Client and server protocol versions differ.",
+                "客户端与服务端的协议版本不一致，请刷新页面。",
                 expected=PROTOCOL_VERSION,
                 received=version,
             ),
@@ -692,7 +696,7 @@ async def _handle_hello(conn: Conn, ws: WebSocket) -> bool:
 
 async def _handle_message(conn: Conn, raw: Any) -> None:
     if not isinstance(raw, dict):
-        await send_safe(conn.ws, error_message("command.invalid-shape", "Messages must be JSON objects."))
+        await send_safe(conn.ws, error_message("command.invalid-shape", "消息必须是 JSON 对象。"))
         return
     if conn.taken_over:
         # 工单 11：被接管的旧连接不再有任何操作权。迟到消息一律拒绝；
@@ -713,7 +717,7 @@ async def _handle_message(conn: Conn, raw: Any) -> None:
     elif kind == "leave":
         await _handle_leave(conn)
     else:
-        await send_safe(conn.ws, error_message("command.invalid-shape", "Unknown message type."))
+        await send_safe(conn.ws, error_message("command.invalid-shape", "未知的消息类型。"))
 
 
 async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
@@ -732,26 +736,26 @@ async def _handle_command(conn: Conn, raw: dict[str, Any]) -> None:
         "timeout-skill",
         "timeout-return",
     ):
-        error = RuleError("command.server-managed", "This command is managed by the server.")
+        error = RuleError("command.server-managed", "该命令由服务端托管，不能直接发送。")
         await send_safe(conn.ws, rule_error_message(error))
         await send_command_ack(conn, command_id, "rejected", error=error)
         metrics["commandsRejected"] += 1
         return
     actor = conn.player_id
     if actor is None:
-        error = RuleError("player.not-eligible", "Spectators cannot act.")
+        error = RuleError("player.not-eligible", "旁观者不能进行玩家操作。")
         await send_safe(conn.ws, rule_error_message(error))
         await send_command_ack(conn, command_id, "rejected", error=error)
         metrics["commandsRejected"] += 1
         return
     if not isinstance(command_type, str) or not command_type or not isinstance(payload, dict):
-        error = RuleError("command.invalid-shape", "A command must have a type and object payload.")
+        error = RuleError("command.invalid-shape", "命令必须包含类型和对象参数。")
         await send_safe(conn.ws, rule_error_message(error))
         await send_command_ack(conn, command_id, "rejected", error=error)
         metrics["commandsRejected"] += 1
         return
     if not isinstance(expected_revision, int) or isinstance(expected_revision, bool):
-        error = RuleError("command.invalid-shape", "expectedRevision must be an integer.")
+        error = RuleError("command.invalid-shape", "expectedRevision 必须是整数。")
         await send_safe(conn.ws, rule_error_message(error))
         await send_command_ack(conn, command_id, "rejected", error=error)
         metrics["commandsRejected"] += 1
@@ -822,11 +826,11 @@ async def _handle_host(conn: Conn, raw: dict[str, Any]) -> None:
     if action == "start":
         timeout_seconds = raw.get("interventionTimeoutSeconds")
         if timeout_seconds is not None and (isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int)):
-            await send_safe(conn.ws, error_message("command.invalid-shape", "interventionTimeoutSeconds must be an integer."))
+            await send_safe(conn.ws, error_message("command.invalid-shape", "interventionTimeoutSeconds 必须是整数。"))
             return
         single_timeout_seconds = raw.get("singleWindowTimeoutSeconds")
         if single_timeout_seconds is not None and (isinstance(single_timeout_seconds, bool) or not isinstance(single_timeout_seconds, int)):
-            await send_safe(conn.ws, error_message("command.invalid-shape", "singleWindowTimeoutSeconds must be an integer."))
+            await send_safe(conn.ws, error_message("command.invalid-shape", "singleWindowTimeoutSeconds 必须是整数。"))
             return
         try:
             events = manager.start_game(
@@ -847,7 +851,7 @@ async def _handle_host(conn: Conn, raw: dict[str, Any]) -> None:
             await send_safe(conn.ws, rule_error_message(error))
             return
     else:
-        await send_safe(conn.ws, error_message("command.invalid-shape", "Unknown host action."))
+        await send_safe(conn.ws, error_message("command.invalid-shape", "未知的房主操作。"))
         return
     await broadcast_state(room)
 

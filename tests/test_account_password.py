@@ -316,7 +316,7 @@ class AccountPasswordChangeTests(unittest.TestCase):
                 self.assertEqual(resumed_state["yourPlayerId"], a_id, "新密码重登必须恢复原座位")
                 self.assertEqual(resumed_state["hostPlayerId"], a_id, "房主归属保持")
                 self.assertEqual(resumed_state["roomStatus"], "playing")
-                self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6, "改密不得改变座位占用")
+                self.assertEqual(self.request(f"/api/rooms/{code}", None, renewed)[1]["playerCount"], 6, "改密不得改变座位占用")
                 # 补位对照账号不受影响
                 self.assertEqual(self.request("/api/auth/session", cookie=extras[0][1])[0], 200)
             finally:

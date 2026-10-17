@@ -59,7 +59,7 @@ class AdminCloseRoomTests(unittest.TestCase):
 
         Returns the final state broadcast and the newcomers' cookies."""
         member_cookies = []
-        current = self.request(f"/api/rooms/{code}")[1]["playerCount"]
+        current = self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"]
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             member_cookies.append(cookie)
@@ -274,7 +274,7 @@ class AdminCloseRoomTests(unittest.TestCase):
         # -- 被关房不能重新加入，也不能在线回放 --
         for code in (code_waiting, code_playing):
             with self.subTest(closed(code)):
-                self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404)
+                self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404)
                 status, body, _ = self.request(f"/api/rooms/{code}/replay", None, host_cookie)
                 self.assertEqual(status, 404, body)
 
@@ -518,7 +518,7 @@ class AdminCloseRoomTests(unittest.TestCase):
         self.assertEqual(repeat_record[1]["details"].get("backupPath"), backup_path)
 
         # 相邻房间自始至终未受影响。
-        self.assertEqual(self.request(f"/api/rooms/{code_neighbour}")[1]["status"], "waiting")
+        self.assertEqual(self.request(f"/api/rooms/{code_neighbour}", None, neighbour_cookie)[1]["status"], "waiting")
         self.assertEqual(self.occupancy_of(neighbour_cookie),
                          {"code": code_neighbour, "status": "waiting"})
         from pathlib import Path
@@ -762,7 +762,7 @@ class AdminCloseRoomTests(unittest.TestCase):
         self.stop_server()
         self.start_server()
         self.assertEqual(self.request("/health")[0], 200)
-        self.assertEqual(self.request(f"/api/rooms/{code}")[0], 404, "重启不得恢复被关房")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[0], 404, "重启不得恢复被关房")
         self.assertIsNone(self.occupancy_of(host_cookie), "重启不得重新占用被关房玩家")
         status, room, _ = self.request("/api/rooms", {}, host_cookie)
         self.assertEqual(status, 200, "重启后被关房玩家必须仍能开新房")
@@ -778,7 +778,7 @@ class AdminCloseRoomTests(unittest.TestCase):
         closure = json.loads((backup_dir / "closure.json").read_text(encoding="utf-8"))
         self.assertEqual(closure["gameId"], game_id)
         # 新房照常（与被关房互不影响）。
-        self.assertEqual(self.request(f"/api/rooms/{code_new}")[1]["status"], "waiting")
+        self.assertEqual(self.request(f"/api/rooms/{code_new}", None, host_cookie)[1]["status"], "waiting")
 
 
 def closed(code):

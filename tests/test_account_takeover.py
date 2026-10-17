@@ -206,7 +206,7 @@ class SeatTakeoverHTTPTests(unittest.TestCase):
                         }))
                         control_ack = await self.read_until(control, lambda m: m.get("type") == "ack")
                         self.assertEqual(control_ack["status"], "accepted", "接管之外的合法连接必须仍能操作")
-                        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6)
+                        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 6)
 
         asyncio.run(scenario())
         # 旧设备账号仍保持登录，占用指向原房（可返回大厅并恢复）。
@@ -284,7 +284,7 @@ class SeatTakeoverHTTPTests(unittest.TestCase):
                         pass
 
         asyncio.run(scenario())
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6, "并发接管不得增删座位")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 6, "并发接管不得增删座位")
 
     # ---- V05.04 ---------------------------------------------------------
 
@@ -371,7 +371,7 @@ class SeatTakeoverHTTPTests(unittest.TestCase):
                     # 新连接可继续合法的房主操作。
                     await second.send(json.dumps({"type": "host", "action": "lock"}))
                     await self.read_until(second, lambda m: m.get("type") == "state" and m["locked"])
-                    self.assertTrue(self.request(f"/api/rooms/{code}")[1]["locked"])
+                    self.assertTrue(self.request(f"/api/rooms/{code}", None, first_cookie)[1]["locked"])
 
         asyncio.run(scenario())
         # 普通断线（未被接管）：同 cookie 重连恢复原座位，与接管的终止路径可区分。

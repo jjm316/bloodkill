@@ -97,8 +97,26 @@ class AccountRoomHTTPTests(unittest.TestCase):
                     await socket.send(json.dumps({"type": "host", "action": action}))
                     self.assertEqual(json.loads(await socket.recv())["code"], "room.not-host")
         asyncio.run(attack())
-        self.assertEqual(self.request(f"/api/rooms/{room['code']}")[1]["status"], "waiting")
-        self.assertFalse(self.request(f"/api/rooms/{room['code']}")[1]["locked"])
+        self.assertEqual(self.request(f"/api/rooms/{room['code']}", None, host_cookie)[1]["status"], "waiting")
+        self.assertFalse(self.request(f"/api/rooms/{room['code']}", None, host_cookie)[1]["locked"])
+
+    def test_room_overview_requires_login_and_hides_existence_from_anonymous(self):
+        # 规格替代匿名访问：服务端必须校验身份（spec L23），未登录不区分
+        # 房间存在与否，统一 401；登录后照常返回概览或 404 明确原因。
+        _, cookie = self.signup("概览房主")
+        _, room, _ = self.request("/api/rooms", {}, cookie)
+        for target in (room["code"], "999999"):
+            with self.subTest(target=target):
+                status, error, _ = self.request(f"/api/rooms/{target}")
+                self.assertEqual(status, 401)
+                self.assertEqual(error["code"], "auth.login-required")
+        status, info, _ = self.request(f"/api/rooms/{room['code']}", None, cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual(info["status"], "waiting")
+        self.assertFalse(info["locked"])
+        status, error, _ = self.request("/api/rooms/999999", None, cookie)
+        self.assertEqual(status, 404)
+        self.assertEqual(error["code"], "room.not-found")
 
     def test_actual_filesystem_failure_does_not_leave_half_room_and_retry_succeeds(self):
         from pathlib import Path

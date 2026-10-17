@@ -296,10 +296,10 @@ class LegacyCutoverTests(unittest.TestCase):
         # 旧已结束回放保留：活动存档仍在、按原保留规则恢复，登录后可读且是旁观投影。
         self.assertTrue(ended["metaPath"].exists())
         self.assertTrue(ended["savePath"].exists())
-        status, info, _ = self.request(f"/api/rooms/{ended['code']}")
+        account, cookie = self.signup("新账号一")
+        status, info, _ = self.request(f"/api/rooms/{ended['code']}", None, cookie)
         self.assertEqual(status, 200)
         self.assertEqual(info["status"], "ended")
-        account, cookie = self.signup("新账号一")
         status, replay, _ = self.request(f"/api/rooms/{ended['code']}/replay", cookie=cookie)
         self.assertEqual(status, 200, replay)
         self.assertTrue(replay["steps"])
@@ -316,7 +316,7 @@ class LegacyCutoverTests(unittest.TestCase):
 
         # 未结束旧房不能经 HTTP 进入或观看：不存在，也不提供部分回放。
         for legacy in (waiting, playing):
-            status, _, _ = self.request(f"/api/rooms/{legacy['code']}")
+            status, _, _ = self.request(f"/api/rooms/{legacy['code']}", None, cookie)
             self.assertEqual(status, 404)
             status, body, _ = self.request(f"/api/rooms/{legacy['code']}/replay", cookie=cookie)
             self.assertEqual(status, 404, body)
@@ -349,11 +349,12 @@ class LegacyCutoverTests(unittest.TestCase):
         # 首次启动：旧房切换完成；账号方案的新房照常恢复，关闭房不复活、关闭标记不动。
         self.assertIn(f"旧房间切换：房间 {legacy['code']}（对局 {legacy['gameId']}）已备份并停用",
                       self.server_log())
-        status, info, _ = self.request(f"/api/rooms/{new_room.code}")
+        _, overview_cookie = self.signup("切换核对员")
+        status, info, _ = self.request(f"/api/rooms/{new_room.code}", None, overview_cookie)
         self.assertEqual(status, 200)
         self.assertEqual(info["status"], "waiting")
         self.assertEqual(info["playerCount"], 2)
-        status, _, _ = self.request(f"/api/rooms/{closed_room.code}")
+        status, _, _ = self.request(f"/api/rooms/{closed_room.code}", None, overview_cookie)
         self.assertEqual(status, 404, "已管理关闭的房间不因旧房间切换复活")
         self.assertEqual(
             (self.saves / "admin-backup" / closed_room.game_id / "closure.json").read_bytes(),
@@ -382,7 +383,7 @@ class LegacyCutoverTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(occupied["room"], {"code": created["code"], "status": "waiting"},
                              f"第 {restart} 次启动后新房间未恢复")
-            status, info, _ = self.request(f"/api/rooms/{created['code']}")
+            status, info, _ = self.request(f"/api/rooms/{created['code']}", None, friend_cookie)
             self.assertEqual(info["playerCount"], 2, "重启不释放/不重复释放新房间座位")
 
             async def resume() -> str:
@@ -400,7 +401,7 @@ class LegacyCutoverTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in (self.saves / LEGACY_BACKUP_DIRECTORY).iterdir()),
                              backup_entries, "备份目录不增不减")
             # 预置的账号方案新房依旧原样（修订号不变，没有被当成旧房处理）。
-            status, info, _ = self.request(f"/api/rooms/{new_room.code}")
+            status, info, _ = self.request(f"/api/rooms/{new_room.code}", None, overview_cookie)
             self.assertEqual((status, info["status"], info["playerCount"]), (200, "waiting", 2))
         # 存储层核对预置新房的修订号（未被任何切换路径写过）。
         from blood_bound import load_game
@@ -436,9 +437,10 @@ class LegacyCutoverTests(unittest.TestCase):
         self.assertFalse((phase / LEGACY_CUTOVER_MARKER).exists())
         self.assertTrue(legacy["metaPath"].exists(), "既有原文件不丢")
         self.assertTrue(legacy["savePath"].exists(), "既有原文件不丢")
-        status, _, _ = self.request(f"/api/rooms/{legacy['code']}")
+        check_cookie = self.signup("备份失败后开房")[1]
+        status, _, _ = self.request(f"/api/rooms/{legacy['code']}", None, check_cookie)
         self.assertEqual(status, 404, "切换失败的旧房同样不可恢复、不可进入")
-        status, room, _ = self.request("/api/rooms", {}, self.signup("备份失败后开房")[1])
+        status, room, _ = self.request("/api/rooms", {}, check_cookie)
         self.assertEqual(status, 200, "服务对其他操作照常可用")
         # 解除占位后真实重启：进度可恢复，切换补完成。
         self.stop_server()
@@ -564,7 +566,7 @@ class LegacyCutoverTests(unittest.TestCase):
         frame = asyncio.run(legacy_identity_hello())
         self.assertEqual(frame["code"], "protocol.legacy-identity")
         self.assertIn("请刷新页面", frame["message"])
-        status, info, _ = self.request(f"/api/rooms/{room['code']}")
+        status, info, _ = self.request(f"/api/rooms/{room['code']}", None, host_cookie)
         self.assertEqual(info["playerCount"], 1, "被拒的旧身份 hello 不产生任何座位")
 
         # 旧协议版本客户端（protocolVersion=3）：版本不匹配的刷新提示。
@@ -591,7 +593,7 @@ class LegacyCutoverTests(unittest.TestCase):
         names = [player["displayName"] for player in state["game"]["players"]]
         self.assertIn("受邀好友", names)
         self.assertNotIn("旧房主甲", names, "旧姓名不随邀请落座")
-        status, info, _ = self.request(f"/api/rooms/{room['code']}")
+        status, info, _ = self.request(f"/api/rooms/{room['code']}", None, host_cookie)
         self.assertEqual(info["playerCount"], 2)
 
     # ---- V18.05 ------------------------------------------------------------
@@ -631,7 +633,7 @@ class LegacyCutoverTests(unittest.TestCase):
         self.assertEqual(status, 404, "被保留规则清掉的旧回放按原规则不可读")
 
         # 未结束旧局不能经 HTTP/WS 绕过停用：一切入口都只报「不存在」。
-        status, _, _ = self.request(f"/api/rooms/{unfinished['code']}")
+        status, _, _ = self.request(f"/api/rooms/{unfinished['code']}", None, cookie)
         self.assertEqual(status, 404)
         status, body, _ = self.request(f"/api/rooms/{unfinished['code']}/replay", cookie=cookie)
         self.assertEqual((status, body["code"]), (404, "room.not-found"))

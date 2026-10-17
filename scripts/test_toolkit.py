@@ -63,8 +63,9 @@ def log(message: str) -> None:
     print(message, flush=True)
 
 
-def http_json(url: str, method: str = "GET", timeout: float = 3.0) -> dict:
-    request = Request(url, method=method, data=b"" if method == "POST" else None)
+def http_json(url: str, method: str = "GET", timeout: float = 3.0, cookie: str | None = None) -> dict:
+    headers = {"Cookie": cookie} if cookie else {}
+    request = Request(url, method=method, data=b"" if method == "POST" else None, headers=headers)
     with urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -454,12 +455,13 @@ def launch_windows(
         time.sleep(LAUNCH_STAGGER_SECONDS)
 
 
-def wait_until_all_joined(port: int, room_code: str, count: int, timeout: float = 40.0) -> int:
+def wait_until_all_joined(port: int, room_code: str, count: int, cookie: str, timeout: float = 40.0) -> int:
+    # 房间概览要求登录：用建房账号的会话轮询（规格：服务端必须校验身份）。
     deadline = time.time() + timeout
     last = 0
     while time.time() < deadline:
         try:
-            last = int(http_json(f"http://127.0.0.1:{port}/api/rooms/{room_code}")["playerCount"])
+            last = int(http_json(f"http://127.0.0.1:{port}/api/rooms/{room_code}", cookie=cookie)["playerCount"])
             if last >= count:
                 return last
         except (URLError, OSError, ValueError, KeyError):
@@ -524,7 +526,7 @@ def cmd_up(args: argparse.Namespace) -> int:
     launch_windows(browsers[0], profile_root, args.players, cols, room_code, sessions, args.port)
 
     join_timeout = 40.0
-    joined = wait_until_all_joined(args.port, room_code, args.players, timeout=join_timeout)
+    joined = wait_until_all_joined(args.port, room_code, args.players, sessions[0].cookie_header, timeout=join_timeout)
     if joined >= args.players:
         log(f"完成：房间 {room_code} 已有 {joined}/{args.players} 名玩家（玩家 1 = 左上角房主窗口）。")
         if args.players % 2:

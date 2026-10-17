@@ -54,12 +54,12 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
     def occupancy_of(self, cookie):
         return self.request("/api/account/room", cookie=cookie)[1]["room"]
 
-    def player_count(self, code):
-        return self.request(f"/api/rooms/{code}")[1]["playerCount"]
+    def player_count(self, code, cookie):
+        return self.request(f"/api/rooms/{code}", None, cookie)[1]["playerCount"]
 
     async def fill_to(self, code, host_cookie, total, prefix):
         """Join extra accounts until the room holds `total` seats, then start via the host."""
-        current = self.player_count(code)
+        current = self.player_count(code, host_cookie)
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             await self.state_of(code, cookie)
@@ -94,7 +94,7 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
         code = codes.pop()
         self.assertEqual(self.occupancy_of(first_cookie)["code"], code, "并发后占用唯一")
         self.assertEqual(self.occupancy_of(second_cookie)["code"], code, "另一会话看到的也是同一房间")
-        self.assertEqual(self.player_count(code), 1, "不能借并发多建座位")
+        self.assertEqual(self.player_count(code, first_cookie), 1, "不能借并发多建座位")
 
     def test_v06_01_concurrent_join_of_two_rooms_yields_single_occupancy(self):
         _, host_a = self.signup("并加房主A")
@@ -137,7 +137,7 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
         self.assertEqual(occupied["code"], winner_code)
         self.assertEqual(self.occupancy_of(second_cookie)["code"], winner_code)
         loser_code = room_b if winner_code == room_a else room_a
-        self.assertEqual(self.player_count(loser_code), 1, "失败方不能在目标房留下幽灵座位")
+        self.assertEqual(self.player_count(loser_code, first_cookie), 1, "失败方不能在目标房留下幽灵座位")
         # 失败方按引导返回原房仍能恢复座位。
         resumed = asyncio.run(self.state_of(winner_code, second_cookie))
         self.assertEqual(resumed["yourPlayerId"], next(iter(states.values()))["yourPlayerId"])
@@ -177,7 +177,7 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
             # 加入成功：建房被拒，必须给出原房引导。
             self.assertEqual(create_body["code"], "account.room-occupied")
             self.assertEqual(create_body["details"]["roomCode"], occupied["code"])
-            self.assertEqual(self.player_count(other_room), 2)
+            self.assertEqual(self.player_count(other_room, host), 2)
         else:
             # 建房成功：加入被服务端拒绝（错误帧），目标房不残留座位。
             self.assertEqual(occupied["code"], create_body["code"])
@@ -186,7 +186,7 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
             if isinstance(rejection, dict):
                 self.assertEqual(rejection["code"], "account.room-occupied")
                 self.assertEqual(rejection["details"]["roomCode"], create_body["code"])
-            self.assertEqual(self.player_count(other_room), 1, "失败方不能在目标房留下幽灵座位")
+            self.assertEqual(self.player_count(other_room, host), 1, "失败方不能在目标房留下幽灵座位")
 
     # ---- V06.02: second device rejected with a return entry, restart safe --
 
@@ -214,14 +214,14 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
         # 失败方从占用查询获得当前房入口（前端“返回房间”按钮的数据来源）。
         self.assertEqual(self.occupancy_of(second_cookie), {"code": code, "status": "waiting"})
         # 拒绝不产生新房或幽灵座位，重启后占用仍唯一。
-        self.assertEqual(self.player_count(other_room), 1)
-        before = self.player_count(code)
+        self.assertEqual(self.player_count(other_room, host_b), 1)
+        before = self.player_count(code, first_cookie)
         self.stop_server()
         self.start_server()
         self.assertEqual(self.occupancy_of(first_cookie)["code"], code, "重启后占用仍唯一")
         self.assertEqual(self.occupancy_of(second_cookie)["code"], code)
-        self.assertEqual(self.player_count(code), before, "拒绝后重启不能出现幽灵座位或第二个房")
-        self.assertEqual(self.player_count(other_room), 1, "重启后目标房仍无幽灵座位")
+        self.assertEqual(self.player_count(code, first_cookie), before, "拒绝后重启不能出现幽灵座位或第二个房")
+        self.assertEqual(self.player_count(other_room, host_b), 1, "重启后目标房仍无幽灵座位")
         resumed = asyncio.run(self.state_of(code, second_cookie))
         self.assertTrue(resumed["isHost"], "重启后失败方按入口返回原房仍是房主")
 
@@ -240,12 +240,12 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
         rejection = asyncio.run(rejected())
         self.assertEqual(rejection["code"], "account.room-occupied")
         self.assertEqual(rejection["details"]["roomCode"], room_a)
-        self.assertEqual(self.player_count(room_b), 1, "被拒时目标房不残留座位")
+        self.assertEqual(self.player_count(room_b, host_b), 1, "被拒时目标房不残留座位")
 
         self.stop_server()
         self.start_server()
         self.assertEqual(self.occupancy_of(cookie), {"code": room_a, "status": "waiting"}, "重启后占用仍指向原房")
-        self.assertEqual(self.player_count(room_b), 1, "重启后不能出现幽灵座位")
+        self.assertEqual(self.player_count(room_b, host_b), 1, "重启后不能出现幽灵座位")
         resumed = asyncio.run(self.state_of(room_a, cookie))
         self.assertNotIn(resumed["yourPlayerId"], [None], "重启后仍可恢复原座位")
 
@@ -313,7 +313,7 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
             self.assertEqual(status, 200, "终局后必须能进入下一房间")
             self.assertNotEqual(body["code"], room["code"])
         # 原房仍保留结果浏览。
-        info = self.request(f"/api/rooms/{room['code']}")[1]
+        info = self.request(f"/api/rooms/{room['code']}", None, sessions[0].cookie_header)[1]
         self.assertEqual(info["status"], "ended")
 
     # ---- V06.04: the limit is server-enforced, clients cannot bypass it ----
@@ -340,7 +340,7 @@ class AccountOccupancyHTTPTests(unittest.TestCase):
         rejection = asyncio.run(direct())
         self.assertEqual(rejection["code"], "account.room-occupied")
         self.assertEqual(rejection["details"]["roomCode"], room_a)
-        self.assertEqual(self.player_count(room_b), 1, "直接请求不能在别房占座")
+        self.assertEqual(self.player_count(room_b, host_b), 1, "直接请求不能在别房占座")
 
         # 本人恢复原房不算新占用，不因占用限制被误伤。
         resumed = asyncio.run(self.state_of(room_a, cookie))

@@ -248,7 +248,7 @@ class AccountSessionHTTPTests(unittest.TestCase):
                 with self.assertRaises(websockets.ConnectionClosed):
                     await asyncio.wait_for(b_socket.recv(), 1)
                 # 退出不移除座位、不改归属：占用与人数保留
-                self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6)
+                self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 6)
                 # 重新登录同账号恢复原座位（V08.05 的退出路径）
                 b_new = self.login("被撤销玩家")
                 room = self.request("/api/account/room", cookie=b_new)[1]["room"]
@@ -256,7 +256,7 @@ class AccountSessionHTTPTests(unittest.TestCase):
                 async with self.connect(code, b_new) as resumed_socket:
                     resumed = await self.hello(resumed_socket)
                 self.assertEqual(resumed["yourPlayerId"], b_id, "重新登录必须恢复原座位")
-                self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 6, "恢复不得新建重复玩家")
+                self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["playerCount"], 6, "恢复不得新建重复玩家")
                 # 其他账号的独立登录不受影响（补位玩家仍有效）
                 self.assertEqual(self.request("/api/auth/session", cookie=extras[0][1])[0], 200)
                 # 房主归属不变：房主自己的连接仍持有管理权
@@ -341,7 +341,7 @@ class AccountSessionHTTPTests(unittest.TestCase):
         self.assertEqual(resumed["yourPlayerId"], before["yourPlayerId"], "重新登录必须恢复原座位")
         host_resumed = asyncio.run(self.state_of(code, host_new))
         self.assertTrue(host_resumed["isHost"], "重新登录必须恢复房主身份")
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["playerCount"], 2, "恢复不得新建重复玩家")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_new)[1]["playerCount"], 2, "恢复不得新建重复玩家")
 
 
 if __name__ == "__main__":

@@ -167,7 +167,7 @@ describe("进房失败态", () => {
       ws.open();
     });
     act(() => {
-      ws.receive({ type: "error", code: "room.not-found", message: "Room not found.", details: {} });
+      ws.receive({ type: "error", code: "room.not-found", message: "房间不存在，请核对房间号。", details: {} });
       ws.drop();
     });
 
@@ -201,7 +201,7 @@ describe("账号加入拒绝", () => {
       first.drop();
     });
     expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
-    expect(screen.getByText("房间已锁定。")).toBeInTheDocument();
+    expect(screen.getByText("房间已锁定，暂不能加入。")).toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(120_000);
     });

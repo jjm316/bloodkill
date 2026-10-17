@@ -214,8 +214,13 @@ class ReleaseFailureTests(unittest.IsolatedAsyncioTestCase):
         async def create():
             return room
 
-        @fixture.get("/api/rooms/123456")
-        async def info():
+        @fixture.get("/api/rooms/{code}")
+        async def info(code: str, request: Request):
+            # 与真实服务一致的顺序：无有效会话先拒 401，再区分未知房。
+            if request.cookies.get("bloodbound_session") != "fixture-session":
+                return JSONResponse({"code": "auth.login-required"}, status_code=401)
+            if code != "123456":
+                return JSONResponse({"code": "room.not-found"}, status_code=404)
             return {"status": "waiting"}
 
         @fixture.get("/api/rooms/{code}/replay")

@@ -55,11 +55,11 @@ class SeatExitHTTPTests(unittest.TestCase):
     def occupancy_of(self, cookie):
         return self.request("/api/account/room", cookie=cookie)[1]["room"]
 
-    def player_count(self, code):
-        return self.request(f"/api/rooms/{code}")[1]["playerCount"]
+    def player_count(self, code, cookie):
+        return self.request(f"/api/rooms/{code}", None, cookie)[1]["playerCount"]
 
     async def fill_to(self, code, host_cookie, total, prefix):
-        current = self.player_count(code)
+        current = self.player_count(code, host_cookie)
         for index in range(total - current):
             _, cookie = self.signup(f"{prefix}{index}")
             await self.state_of(code, cookie)
@@ -121,11 +121,11 @@ class SeatExitHTTPTests(unittest.TestCase):
         old_player_id = asyncio.run(scenario())
         # 占用释放：可查询、可加入别的房间；原房人数收缩。
         self.assertIsNone(self.occupancy_of(member_cookie), "退座释放占用")
-        self.assertEqual(self.player_count(code), 2)
+        self.assertEqual(self.player_count(code, host_cookie), 2)
         # 重进原房：新的玩家引用，名册无重复。
         again = asyncio.run(self.state_of(code, member_cookie))
         self.assertNotEqual(again["yourPlayerId"], old_player_id, "重进生成新玩家引用")
-        self.assertEqual(self.player_count(code), 3)
+        self.assertEqual(self.player_count(code, host_cookie), 3)
         names = [player["displayName"] for player in again["game"]["players"]]
         self.assertEqual(names.count("退座玩家"), 1, "名册无重复条目")
         # 再次退座后，还能加入别的房间。
@@ -159,7 +159,7 @@ class SeatExitHTTPTests(unittest.TestCase):
         self.assertEqual(rejection["code"], "room.host-seat-kept")
         self.assertIn("房主", rejection["message"], "拒绝理由必须是简体中文并说明房主保留")
         self.assertEqual(self.occupancy_of(host_cookie), {"code": code, "status": "waiting"}, "房主座位与占用保留")
-        self.assertEqual(self.player_count(code), 1)
+        self.assertEqual(self.player_count(code, host_cookie), 1)
         # 界面的“返回大厅”（直接断开，不发 leave）同样保留座位与身份。
         async def lobby_return():
             async with self.connect(code, host_cookie) as socket:
@@ -229,7 +229,7 @@ class SeatExitHTTPTests(unittest.TestCase):
         self.start_server()
 
         # 重启即完整重放（load_game 逐命令重放并校验事件/快照一致）。
-        self.assertEqual(self.player_count(code), 4, "重启后人数与退出重加后的名册一致")
+        self.assertEqual(self.player_count(code, host_cookie), 4, "重启后人数与退出重加后的名册一致")
         host_after = asyncio.run(self.state_of(code, host_cookie))
         roster_before = [(player["displayName"], player["playerId"], player["seat"]) for player in host_before["game"]["players"]]
         roster_after = [(player["displayName"], player["playerId"], player["seat"]) for player in host_after["game"]["players"]]
@@ -253,7 +253,7 @@ class SeatExitHTTPTests(unittest.TestCase):
             _, members[name] = self.signup(name)
         for name, cookie in members.items():
             asyncio.run(self.state_of(code, cookie))
-        self.assertEqual(self.player_count(code), 6)
+        self.assertEqual(self.player_count(code, host_cookie), 6)
         async def leave(room_code, cookie):
             async with self.connect(room_code, cookie) as socket:
                 await self.hello(socket)
@@ -278,7 +278,7 @@ class SeatExitHTTPTests(unittest.TestCase):
         # 退出后 5 人：不能开始。
         rejected = asyncio.run(try_start())
         self.assertEqual(rejected["code"], "game.player-count")
-        self.assertEqual(self.request(f"/api/rooms/{code}")[1]["status"], "waiting")
+        self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["status"], "waiting")
         # 补齐至 6 人：可以开始，且开局名册用当时的实际玩家集合。
         _, refill = self.signup("边界补员")
         asyncio.run(self.state_of(code, refill))
@@ -314,7 +314,7 @@ class SeatExitHTTPTests(unittest.TestCase):
         for index in range(4):
             _, filler = self.signup(f"竞争成员{index}")
             asyncio.run(self.state_of(code, filler))
-        self.assertEqual(self.player_count(code), 6)
+        self.assertEqual(self.player_count(code, host_cookie), 6)
         barrier = Barrier(2)
         outcomes: dict[str, object] = {}
 
@@ -367,12 +367,12 @@ class SeatExitHTTPTests(unittest.TestCase):
         if left:
             # 成功退座后不在局中：开局因 5 人被拒，占用已释放。
             self.assertEqual(outcomes["start"]["code"], "game.player-count")
-            self.assertEqual(self.request(f"/api/rooms/{code}")[1]["status"], "waiting")
+            self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["status"], "waiting")
             self.assertIsNone(self.occupancy_of(member_cookie))
         else:
             # 已开局拒绝退座：座位与占用保留，拒绝码 room.in-progress。
             self.assertEqual(outcomes["leave"]["code"], "room.in-progress")
-            self.assertEqual(self.request(f"/api/rooms/{code}")[1]["status"], "playing")
+            self.assertEqual(self.request(f"/api/rooms/{code}", None, host_cookie)[1]["status"], "playing")
             self.assertEqual(self.occupancy_of(member_cookie), {"code": code, "status": "playing"})
 
 
