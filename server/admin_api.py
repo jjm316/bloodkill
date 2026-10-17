@@ -28,6 +28,8 @@ import time
 from typing import Any, Awaitable, Callable
 from urllib.parse import parse_qs, urlparse
 
+from .accounts import AccountError
+
 ADMIN_DIRECTORY = "admin"
 INSTALLATION_NAME = "installation.json"
 TOKEN_NAME = "admin-token"
@@ -269,7 +271,8 @@ class AdminEndpoint:
 
         请求体只经本机回环传输且从不落日志；用户名之外唯一敏感字段是待设置的
         新密码本身，响应与错误信息都不回显它。body 由传输层 ``_read_body``
-        解析（JSON 对象或 None），格式校验同样只在本回环端点内完成。
+        解析（JSON 对象或 None）；用户名格式在本端点内检查，密码形状校验复用
+        账号校验器（唯一权威），失败时透传其错误码与中文消息。
         """
         if method != "POST":
             return 405, {"error": "admin.method-not-allowed", "message": "重置密码必须以 POST 提交。"}
@@ -282,10 +285,11 @@ class AdminEndpoint:
         password = payload.get("password")
         if not isinstance(username, str) or not username:
             return 400, {"error": "admin.bad-request", "message": "重置请求缺少用户名。"}
-        if not isinstance(password, str) or not 6 <= len(password) <= 12:
-            return 400, {"error": "admin.bad-request", "message": "密码须为 6–12 个字符。"}
         try:
             outcome = self._accounts.reset_password(username, password)
+        except AccountError as error:
+            # 密码形状等校验失败：透传账号校验器的错误码与中文消息（规则单源化）。
+            return error.status, {"error": error.code, "message": str(error)}
         except sqlite3.Error:
             # 持久化或会话撤销失败：同一事务回滚，不返回成功。
             return 500, {"error": "admin.service-unavailable",

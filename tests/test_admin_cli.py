@@ -776,3 +776,39 @@ class AdminCLITests(unittest.TestCase):
             self.request("/api/auth/login", {"username": "注入玩家", "password": "123456"})[0], 401)
         _, new_cookie = self.login("注入玩家", "Inject9P")
         self.assertEqual(self.request("/api/auth/session", cookie=new_cookie)[0], 200)
+
+    # ---- 账号清理 spec 票 01：密码形状校验单源化 --------------------------
+
+    def test_v14_06_same_illegal_password_same_message_across_three_entrances(self):
+        """票 01 回归：同一非法密码（过短/超长/非字符串）经注册、改密、管理
+        重置三个入口得到同一错误码与同一中文消息；全部失败不改动原密码。"""
+        expected = "密码须为 6–12 个字符。"
+        _, cookie = self.signup("一致玩家")
+        token = self.admin_token()
+        for label, password in (("过短", "12345"), ("超长", "1234567890123"),
+                                ("非字符串", 123456)):
+            with self.subTest(kind=label):
+                # 注册入口：password 与 confirmPassword 同值，仅密码形状非法。
+                status, body, _ = self.request("/api/auth/register", {
+                    "username": f"一致{label}", "password": password,
+                    "confirmPassword": password})
+                self.assertEqual(status, 400)
+                self.assertEqual(body["code"], "auth.invalid-password")
+                self.assertEqual(body["message"], expected)
+                # 改密入口：已登录且旧密码正确，仅新密码形状非法。
+                status, body, _ = self.request("/api/auth/password", {
+                    "oldPassword": "123456", "newPassword": password,
+                    "confirmPassword": password}, cookie)
+                self.assertEqual(status, 400)
+                self.assertEqual(body["code"], "auth.invalid-password")
+                self.assertEqual(body["message"], expected)
+                # 管理重置入口：正确管理凭证，密码形状非法同样按账号校验器拒绝。
+                status, body = self.admin_post(
+                    "/admin/reset-password", {"username": "一致玩家", "password": password},
+                    token=token)
+                self.assertEqual(status, 400)
+                self.assertEqual(body["error"], "auth.invalid-password")
+                self.assertEqual(body["message"], expected)
+        # 三轮非法输入均被拒绝：原密码未被任何入口改动。
+        self.assertEqual(
+            self.request("/api/auth/login", {"username": "一致玩家", "password": "123456"})[0], 200)

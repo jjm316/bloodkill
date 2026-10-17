@@ -28,6 +28,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 
+from .accounts import AccountError, validate_new_password
 from .admin_api import AdminInstallation, canonical_saves_dir
 
 TROUBLE_SHOOTING = "请确认服务正在运行、--saves-dir 与服务启动时的存档目录一致。"
@@ -246,13 +247,19 @@ def _read_secret(prompt: str) -> str | None:
 
 
 def _prompt_new_password() -> str | None:
-    """交互读取并校验新密码；校验失败的中文提示后可重试，空输入取消。"""
+    """交互读取并校验新密码；校验失败的中文提示后可重试，空输入取消。
+
+    形状判定与提示复用账号校验器（与服务端同一权威），CLI 校验仅为
+    提前反馈；确认一致由本函数的二次读入循环完成，不走带确认的包装。
+    """
     while True:
         password = _read_secret("请输入新密码（6–12 个字符，直接回车取消）：")
         if password is None:
             return None
-        if not 6 <= len(password) <= 12:
-            print("密码须为 6–12 个字符，请重新输入。")
+        try:
+            validate_new_password(password)
+        except AccountError as error:
+            print(f"{error}，请重新输入。")
             continue
         confirmation = _read_secret("请再次输入新密码确认（直接回车取消）：")
         if confirmation is None:
