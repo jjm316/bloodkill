@@ -109,7 +109,7 @@ class Room:
     game_id: str
     host_account_id: str
     locked: bool
-    status: str  # waiting | playing | ended
+    status: str  # waiting | playing | ended | closed（管理关闭，工单 21）
     engine: RulesEngine
     created_at: float
     finished_at: float | None = None

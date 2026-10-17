@@ -232,7 +232,7 @@ describe("邀请链接深链（工单 17）", () => {
 
   it.each([
     ["room.not-found", "房间不存在，请核对房间号。"],
-    ["room.locked", "房间已锁定。"],
+    ["room.locked", "房间已锁定，暂不能加入。"],
     ["room.already-started", "游戏已经开始。"],
     ["room.full", "房间已满员（12 人），不能加入。"],
     ["room.ended", "对局已结束，不能加入；可观看回放。"],

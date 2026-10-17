@@ -39,12 +39,18 @@ def validate_username(username: object) -> str:
     return username
 
 
-def validate_password(password: object, confirmation: object) -> str:
+def validate_new_password(password: object) -> str:
+    """单个密码的形状校验（管理重置没有确认字段，走这条单参路径）。"""
     if not isinstance(password, str) or not 6 <= len(password) <= 12:
         raise AccountError("auth.invalid-password", "密码须为 6–12 个字符。")
-    if password != confirmation:
-        raise AccountError("auth.password-mismatch", "两次输入的密码不一致。")
     return password
+
+
+def validate_password(password: object, confirmation: object) -> str:
+    raw_password = validate_new_password(password)
+    if raw_password != confirmation:
+        raise AccountError("auth.password-mismatch", "两次输入的密码不一致。")
+    return raw_password
 
 
 def password_digest(password: str, salt: bytes) -> bytes:
@@ -165,7 +171,7 @@ class AccountStore:
 
         返回 (账号, 撤销的登录会话数)；用户名不存在返回 None，不自动创建账号。
         """
-        raw_password = validate_password(password, password)
+        raw_password = validate_new_password(password)
         if not isinstance(username, str):
             return None
         salt = secrets.token_bytes(16)

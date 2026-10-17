@@ -24,6 +24,7 @@ import json
 import os
 import secrets
 import sqlite3
+import time
 from typing import Any, Awaitable, Callable
 from urllib.parse import parse_qs, urlparse
 
@@ -39,6 +40,32 @@ _MAX_BODY_BYTES = 64 * 1024
 # 工单 21：close-room 的执行器由 server.app 注入（同进程内完成备份、停用、
 # 取消计时器与断开连接）；这里只做鉴权、错误映射与中文报错。
 CloseExecutor = Callable[[str, str | None, int | None], Awaitable[dict[str, Any]]]
+
+
+def close_target_rejection(manager: Any, code: str) -> tuple[int, str, str, dict[str, Any]] | None:
+    """close-room 预览与执行共用的目标判定（工单 21）。
+
+    返回 ``(HTTP 状态, 错误码, 中文消息, details)``；房间是可关闭的未结束
+    等待/进行房时返回 ``None``。已管理关闭的房号给出重复处理说明，并附
+    备份路径（存在时）；不存在与已正常结束同样明确拒绝。
+    """
+    room = manager.get_room(code)
+    if room is None:
+        record = manager.closed_room_record(code)
+        if record is not None:
+            closed_at = record.get("closedAt")
+            when = (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(closed_at))
+                    if isinstance(closed_at, (int, float)) else "时间未知")
+            details: dict[str, Any] = {}
+            if isinstance(record.get("backupPath"), str):
+                details["backupPath"] = record["backupPath"]
+            return 409, "room.admin-closed", f"房间 {code} 已于 {when} 被管理关闭，无需重复处理。", details
+        return 404, "room.not-found", f"房间 {code} 不存在，请核对房间号。", {}
+    if room.status == "ended":
+        return 409, "room.ended", f"房间 {code} 已正常结束，无需管理关闭；回放照常保留。", {}
+    if room.status not in {"waiting", "playing"}:
+        return 409, "room.admin-closed", f"房间 {code} 已被管理关闭，无需重复处理。", {}
+    return None
 
 
 @dataclass
@@ -305,28 +332,15 @@ class AdminEndpoint:
 
     def close_room_preview(self, code: str) -> tuple[int, dict[str, Any]]:
         """close-room 预览：单房允许字段 + 修订号；拒绝不存在/已结束/已关闭。"""
-        import time as time_module
+        rejection = close_target_rejection(self._manager, code)
+        if rejection is not None:
+            status, error_code, message, details = rejection
+            payload: dict[str, Any] = {"error": error_code, "message": message}
+            if details:
+                payload["details"] = details
+            return status, payload
         room = self._manager.get_room(code)
-        if room is None:
-            record = self._manager.closed_room_record(code)
-            if record is not None:
-                closed_at = record.get("closedAt")
-                when = (time_module.strftime("%Y-%m-%d %H:%M:%S", time_module.localtime(closed_at))
-                        if isinstance(closed_at, (int, float)) else "时间未知")
-                payload: dict[str, Any] = {
-                    "error": "room.admin-closed",
-                    "message": f"房间 {code} 已于 {when} 被管理关闭，无需重复处理。",
-                }
-                if isinstance(record.get("backupPath"), str):
-                    payload["details"] = {"backupPath": record["backupPath"]}
-                return 409, payload
-            return 404, {"error": "room.not-found", "message": f"房间 {code} 不存在，请核对房间号。"}
-        if room.status == "ended":
-            return 409, {"error": "room.ended",
-                         "message": f"房间 {code} 已正常结束，无需管理关闭；回放照常保留。"}
-        if room.status not in {"waiting", "playing"}:
-            return 409, {"error": "room.admin-closed",
-                         "message": f"房间 {code} 已被管理关闭，无需重复处理。"}
+        assert room is not None  # 判定通过即存在可关闭的未结束房间。
         row = self._room_row(room)
         row["revision"] = room.engine.state.revision
         return 200, row
@@ -358,7 +372,7 @@ class AdminEndpoint:
         )
 
 
-# ---- 回环监听（手写最小 HTTP/1.1，仅 GET、单请求、无 body） -----------------
+# ---- 回环监听（手写最小 HTTP/1.1：单请求短连接；GET 查询与带 JSON body 的 POST） ----
 
 
 async def start_admin_server(endpoint: AdminEndpoint) -> asyncio.AbstractServer:

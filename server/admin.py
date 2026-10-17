@@ -49,7 +49,8 @@ _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedire
 
 
 def _admin_request(port: int, path: str, token: str | None = None, *,
-                   method: str = "GET", payload: dict | None = None) -> tuple[int, dict]:
+                   method: str = "GET", payload: dict | None = None,
+                   timeout: float = 10) -> tuple[int, dict]:
     """对回环管理端口发一次请求；POST 的请求体只含允许经回环传输的数据。"""
     data = None
     headers: dict[str, str] = {}
@@ -61,7 +62,7 @@ def _admin_request(port: int, path: str, token: str | None = None, *,
     if token is not None:
         request.add_header("X-Admin-Token", token)
     try:
-        with _OPENER.open(request, timeout=10) as response:
+        with _OPENER.open(request, timeout=timeout) as response:
             return response.status, json.load(response)
     except urllib.error.HTTPError as error:
         try:
@@ -120,31 +121,13 @@ def _fetch_query(port: int, token: str, command: str) -> dict:
     return body
 
 
-def _admin_post(port: int, path: str, token: str, payload: dict) -> tuple[int, dict]:
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}{path}",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "X-Admin-Token": token},
-        method="POST",
-    )
-    try:
-        with _OPENER.open(request, timeout=30) as response:
-            return response.status, json.load(response)
-    except urllib.error.HTTPError as error:
-        try:
-            body = json.load(error)
-        except (ValueError, OSError):
-            body = {}
-        return error.code, body if isinstance(body, dict) else {}
-    except urllib.error.URLError as error:
-        raise AdminCliError(
-            f"无法连接 127.0.0.1:{port} 上的管理端口（{error.reason}）。"
-            f"服务可能未运行或端口已变化。{TROUBLE_SHOOTING}"
-        ) from None
-    except (TimeoutError, OSError) as error:
-        raise AdminCliError(
-            f"连接 127.0.0.1:{port} 上的管理端口超时或中断（{error}）。{TROUBLE_SHOOTING}"
-        ) from None
+_CLOSE_ROOM_TIMEOUT = 30  # 关闭要在锁内完成整房备份与存档搬移，放宽到 30 秒。
+
+
+def _admin_post(port: int, path: str, token: str, payload: dict,
+                timeout: float = _CLOSE_ROOM_TIMEOUT) -> tuple[int, dict]:
+    """POST 写操作：统一走 _admin_request，默认用较长的关闭超时。"""
+    return _admin_request(port, path, token, method="POST", payload=payload, timeout=timeout)
 
 
 def run_close_room(port: int, token: str, room_code: str) -> int:

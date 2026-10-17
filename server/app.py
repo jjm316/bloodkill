@@ -276,45 +276,33 @@ async def admin_close_room(code: str, expected_game_id: str | None,
                            expected_revision: int | None) -> dict[str, Any]:
     """close-room 执行器：同进程内校验、备份、停用、取消计时并断开连接。
 
+    与预览共用 :func:`server.admin_api.close_target_rejection` 的目标判定；
     校验在 :meth:`RoomManager.admin_close` 的锁内再次发生，这里的早期校验
     只负责给出可操作的中文错误（不存在/已结束/已关闭/目标变化）。目标变
     化用预览时记下的对局引用与修订号双重核对，防止把确认落到预览之后变
     化的房间（或复用了同一房号的新房间）上。
     """
-    import time as time_module
-    from .admin_api import AdminCloseError
+    from .admin_api import AdminCloseError, close_target_rejection
 
-    def close_error(status: int, error_code: str, message: str, **details: Any) -> AdminCloseError:
-        return AdminCloseError(status, error_code, message, details)
-
+    rejection = close_target_rejection(manager, code)
+    if rejection is not None:
+        status, error_code, message, details = rejection
+        raise AdminCloseError(status, error_code, message, details)
     room = manager.get_room(code)
-    if room is None:
-        record = manager.closed_room_record(code)
-        if record is not None:
-            closed_at = record.get("closedAt")
-            when = (time_module.strftime("%Y-%m-%d %H:%M:%S", time_module.localtime(closed_at))
-                    if isinstance(closed_at, (int, float)) else "时间未知")
-            raise close_error(409, "room.admin-closed",
-                              f"房间 {code} 已于 {when} 被管理关闭，无需重复处理。",
-                              backupPath=record.get("backupPath"))
-        raise close_error(404, "room.not-found", f"房间 {code} 不存在，请核对房间号。")
-    if room.status == "ended":
-        raise close_error(409, "room.ended", f"房间 {code} 已正常结束，无需管理关闭；回放照常保留。")
-    if room.status not in {"waiting", "playing"}:
-        raise close_error(409, "room.admin-closed", f"房间 {code} 已被管理关闭，无需重复处理。")
+    assert room is not None  # 判定通过即存在可关闭的未结束房间。
     if expected_game_id is not None and room.game_id != expected_game_id:
-        raise close_error(409, "admin.target-changed",
-                          f"房间 {code} 的当前对局（{room.game_id}）与预览时（{expected_game_id}）不一致，"
-                          "房号可能已被新房间使用；已拒绝关闭，请重新预览确认。")
+        raise AdminCloseError(409, "admin.target-changed",
+                              f"房间 {code} 的当前对局（{room.game_id}）与预览时（{expected_game_id}）不一致，"
+                              "房号可能已被新房间使用；已拒绝关闭，请重新预览确认。")
     if expected_revision is not None and room.engine.state.revision != expected_revision:
-        raise close_error(409, "admin.target-changed",
-                          f"房间 {code} 在预览后已发生变化（修订号 {expected_revision} → "
-                          f"{room.engine.state.revision}）；已拒绝关闭，请重新预览确认。")
+        raise AdminCloseError(409, "admin.target-changed",
+                              f"房间 {code} 在预览后已发生变化（修订号 {expected_revision} → "
+                              f"{room.engine.state.revision}）；已拒绝关闭，请重新预览确认。")
     try:
         result = manager.admin_close(room)
     except RuleError as error:
         status = 503 if error.code in {"admin.backup-failed", "admin.close-failed"} else 409
-        raise close_error(status, error.code, str(error), **error.details) from None
+        raise AdminCloseError(status, error.code, str(error), error.details) from None
     # 工单 22 故障注入钩子：关闭已提交、回复尚未发出的边界（验证用真实
     # 进程终止在此模拟「关闭成功但回复丢失」）。
     from .rooms import admin_close_fault_pause
