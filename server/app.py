@@ -146,6 +146,26 @@ def rule_error_message(error: RuleError) -> dict[str, Any]:
     return {"type": "error", "code": error.code, "message": str(error), "details": error.details}
 
 
+def _origin_rejection(request: Request, action: str) -> JSONResponse | None:
+    """跨站表单守门：请求带 Origin 且非本站时返回中文 403（action 为中文动作短语）。"""
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return JSONResponse(error_message("auth.invalid-origin", f"请从本站页面{action}。"), status_code=403)
+    return None
+
+
+async def _request_json_object(request: Request, noun: str) -> dict[str, Any] | JSONResponse:
+    """读 JSON 对象请求体；解析失败或不是对象时返回中文 400（noun 为中文主体名词）。"""
+    message = f"{noun}格式不正确，请重新填写。"
+    try:
+        payload = await request.json()
+    except (ValueError, UnicodeError):
+        return JSONResponse(error_message("auth.invalid-input", message), status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse(error_message("auth.invalid-input", message), status_code=400)
+    return payload
+
+
 def event_to_dict(event: Any) -> dict[str, Any]:
     return {
         "eventId": event.event_id,
@@ -321,15 +341,12 @@ async def admin_close_room(code: str, expected_game_id: str | None,
 
 @app.post("/api/auth/register")
 async def register_account(request: Request) -> JSONResponse:
-    origin = request.headers.get("origin")
-    if origin and origin != str(request.base_url).rstrip("/"):
-        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面提交注册。"), status_code=403)
-    try:
-        payload = await request.json()
-    except (ValueError, UnicodeError):
-        return JSONResponse(error_message("auth.invalid-input", "注册信息格式不正确，请重新填写。"), status_code=400)
-    if not isinstance(payload, dict):
-        return JSONResponse(error_message("auth.invalid-input", "注册信息格式不正确，请重新填写。"), status_code=400)
+    rejection = _origin_rejection(request, "提交注册")
+    if rejection is not None:
+        return rejection
+    payload = await _request_json_object(request, "注册信息")
+    if isinstance(payload, JSONResponse):
+        return payload
     try:
         account, token = await run_in_threadpool(accounts.register, payload.get("username"), payload.get("password"), payload.get("confirmPassword"))
     except AccountError as error:
@@ -344,15 +361,12 @@ async def register_account(request: Request) -> JSONResponse:
 
 @app.post("/api/auth/login")
 async def login_account(request: Request) -> JSONResponse:
-    origin = request.headers.get("origin")
-    if origin and origin != str(request.base_url).rstrip("/"):
-        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面提交登录。"), status_code=403)
-    try:
-        payload = await request.json()
-    except (ValueError, UnicodeError):
-        return JSONResponse(error_message("auth.invalid-input", "登录信息格式不正确，请重新填写。"), status_code=400)
-    if not isinstance(payload, dict):
-        return JSONResponse(error_message("auth.invalid-input", "登录信息格式不正确，请重新填写。"), status_code=400)
+    rejection = _origin_rejection(request, "提交登录")
+    if rejection is not None:
+        return rejection
+    payload = await _request_json_object(request, "登录信息")
+    if isinstance(payload, JSONResponse):
+        return payload
     try:
         account, token = await run_in_threadpool(accounts.login, payload.get("username"), payload.get("password"))
     except AccountError as error:
@@ -383,9 +397,9 @@ async def logout_account(request: Request) -> JSONResponse:
     The revoked session's established room connections are stopped (told why
     in Chinese, then closed) without removing seats or host ownership.
     """
-    origin = request.headers.get("origin")
-    if origin and origin != str(request.base_url).rstrip("/"):
-        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面退出登录。"), status_code=403)
+    rejection = _origin_rejection(request, "退出登录")
+    if rejection is not None:
+        return rejection
     token = request.cookies.get(SESSION_COOKIE)
     account = accounts.get_session(token)
     if account is None or not await run_in_threadpool(accounts.revoke_session, token):
@@ -406,15 +420,12 @@ async def change_password(request: Request) -> JSONResponse:
     房间 WebSocket 收到 auth.password-changed 中文说明后关闭。不改座位
     与房主归属；任何校验或存储失败都不改变原密码与会话。
     """
-    origin = request.headers.get("origin")
-    if origin and origin != str(request.base_url).rstrip("/"):
-        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面修改密码。"), status_code=403)
-    try:
-        payload = await request.json()
-    except (ValueError, UnicodeError):
-        return JSONResponse(error_message("auth.invalid-input", "密码修改信息格式不正确，请重新填写。"), status_code=400)
-    if not isinstance(payload, dict):
-        return JSONResponse(error_message("auth.invalid-input", "密码修改信息格式不正确，请重新填写。"), status_code=400)
+    rejection = _origin_rejection(request, "修改密码")
+    if rejection is not None:
+        return rejection
+    payload = await _request_json_object(request, "密码修改信息")
+    if isinstance(payload, JSONResponse):
+        return payload
     try:
         account, revoked = await run_in_threadpool(
             accounts.change_password,
@@ -452,9 +463,9 @@ async def create_room(request: Request) -> Any:
     account = accounts.get_session(request.cookies.get(SESSION_COOKIE))
     if account is None:
         return JSONResponse(error_message("auth.login-required", "请先登录。"), status_code=401)
-    origin = request.headers.get("origin")
-    if origin and origin != str(request.base_url).rstrip("/"):
-        return JSONResponse(error_message("auth.invalid-origin", "请从本站页面创建房间。"), status_code=403)
+    rejection = _origin_rejection(request, "创建房间")
+    if rejection is not None:
+        return rejection
     body = await request.body()
     if body and body.strip() != b"{}":
         return JSONResponse(error_message("protocol.legacy-identity", "请刷新页面，房间使用当前登录账号。"), status_code=400)
