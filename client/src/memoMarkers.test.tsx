@@ -37,7 +37,7 @@ describe("useMemoMarkers", () => {
   });
 
   it("自动填充右邻徽记颜色：只填色不填数、未动过", () => {
-    const { result, rerender } = renderHook(({ game }) => useMemoMarkers(ROOM, game), {
+    const { result, rerender } = renderHook(({ game }) => useMemoMarkers("account-fixture", ROOM, game), {
       initialProps: { game: gameWith("g1") },
     });
     rerender({ game: gameWith("g1", { playerId: "p7", icon: "beast" }) });
@@ -45,7 +45,7 @@ describe("useMemoMarkers", () => {
   });
 
   it("无法判色的徽记（null）不自动填充", () => {
-    const { result, rerender } = renderHook(({ game }) => useMemoMarkers(ROOM, game), {
+    const { result, rerender } = renderHook(({ game }) => useMemoMarkers("account-fixture", ROOM, game), {
       initialProps: { game: gameWith("g1") },
     });
     rerender({ game: gameWith("g1", { playerId: "p7", icon: null }) });
@@ -53,7 +53,7 @@ describe("useMemoMarkers", () => {
   });
 
   it("清空后本局不再被自动重填（Q9 粘性）", () => {
-    const { result, rerender } = renderHook(({ game }) => useMemoMarkers(ROOM, game), {
+    const { result, rerender } = renderHook(({ game }) => useMemoMarkers("account-fixture", ROOM, game), {
       initialProps: { game: gameWith("g1") },
     });
     rerender({ game: gameWith("g1", { playerId: "p7", icon: null }) });
@@ -63,7 +63,7 @@ describe("useMemoMarkers", () => {
   });
 
   it("换局清空后即使右邻与徽记色与上局相同也重新自动填充", () => {
-    const { result, rerender } = renderHook(({ game }) => useMemoMarkers(ROOM, game), {
+    const { result, rerender } = renderHook(({ game }) => useMemoMarkers("account-fixture", ROOM, game), {
       initialProps: { game: gameWith("g1") },
     });
     rerender({ game: gameWith("g1", { playerId: "p7", icon: "beast" }) });
@@ -73,7 +73,7 @@ describe("useMemoMarkers", () => {
   });
 
   it("只选数字时颜色灰兜底，已有颜色则保留（Q8）", () => {
-    const { result } = renderHook(() => useMemoMarkers(ROOM, gameWith("g1")));
+    const { result } = renderHook(() => useMemoMarkers("account-fixture", ROOM, gameWith("g1")));
     act(() => result.current.change("p3", { mark: 5 }));
     expect(result.current.markers["p3"]).toMatchObject({ color: "gray", mark: 5 });
     act(() => result.current.change("p3", { color: "rose" }));
@@ -83,21 +83,21 @@ describe("useMemoMarkers", () => {
   });
 
   it("备忘按房间+对局落盘，重挂载读回", () => {
-    const { result, unmount } = renderHook(() => useMemoMarkers(ROOM, gameWith("g1")));
+    const { result, unmount } = renderHook(() => useMemoMarkers("account-fixture", ROOM, gameWith("g1")));
     act(() => result.current.change("p2", { color: "rose", mark: "审" }));
     unmount();
-    const reopened = renderHook(() => useMemoMarkers(ROOM, gameWith("g1")));
+    const reopened = renderHook(() => useMemoMarkers("account-fixture", ROOM, gameWith("g1")));
     expect(reopened.result.current.markers["p2"]).toEqual({ color: "rose", mark: "审", touched: true });
   });
 
-  it("gameId 变化清空备忘并删除旧局存储", () => {
-    const { result, rerender } = renderHook(({ game }) => useMemoMarkers(ROOM, game), {
+  it("gameId 变化清空备忘并删除旧局存储（只删本账号的旧局键）", () => {
+    const { result, rerender } = renderHook(({ game }) => useMemoMarkers("account-fixture", ROOM, game), {
       initialProps: { game: gameWith("g1") },
     });
     act(() => result.current.change("p2", { color: "rose" }));
-    expect(localStorage.getItem(`bloodbound:memo:${ROOM}:g1`)).not.toBeNull();
+    expect(localStorage.getItem(`bloodbound:account:account-fixture:memo:${ROOM}:g1`)).not.toBeNull();
     rerender({ game: gameWith("g2") });
     expect(result.current.markers).toEqual({});
-    expect(localStorage.getItem(`bloodbound:memo:${ROOM}:g1`)).toBeNull();
+    expect(localStorage.getItem(`bloodbound:account:account-fixture:memo:${ROOM}:g1`)).toBeNull();
   });
 });

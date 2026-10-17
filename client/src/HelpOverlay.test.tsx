@@ -78,7 +78,7 @@ describe("RulesOverlay 浮层", () => {
 
 describe("大厅怎么玩折叠块", () => {
   it("展开后渲染简介与指路句，不含等级表与图例内容", () => {
-    const { container } = render(<Lobby onJoin={() => {}} onReplay={() => {}} />);
+    const { container } = render(<Lobby account={{ accountId: "fixture-ui-account", username: "测试玩家" }} onJoin={() => {}} onReplay={() => {}} />);
     const details = container.querySelector("details.how-to") as HTMLDetailsElement;
     expect(details).not.toBeNull();
     fireEvent.click(screen.getByText("怎么玩"));
@@ -162,7 +162,7 @@ describe("对局页页头？入口", () => {
   });
 
   it("等待房点？打开规则浮层，Escape 关闭", () => {
-    render(<GameScreen credentials={{ code: "123456", name: "阿玫", token: null }} onLeave={() => {}} />);
+    render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(screen.queryByRole("dialog", { name: "规则与图例" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "规则与图例" }));
     expect(screen.getByRole("dialog", { name: "规则与图例" })).toBeInTheDocument();
@@ -171,7 +171,7 @@ describe("对局页页头？入口", () => {
   });
 
   it("点击遮罩同样关闭浮层", () => {
-    const { container } = render(<GameScreen credentials={{ code: "123456", name: "阿玫", token: null }} onLeave={() => {}} />);
+    const { container } = render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "规则与图例" }));
     fireEvent.click(container.querySelector(".modal-overlay")!);
     expect(screen.queryByRole("dialog", { name: "规则与图例" })).toBeNull();

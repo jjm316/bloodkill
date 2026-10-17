@@ -235,6 +235,7 @@ class RulesEngine:
     def _dispatch(self, state: EngineState, command: Command) -> list[Event]:
         handlers = {
             "join-game": self._join,
+            "leave-game": self._leave,
             "start-game": self._start,
             "pass-dagger": self._pass_dagger,
             "attack": self._attack,
@@ -276,6 +277,20 @@ class RulesEngine:
         name = str(command.payload.get("displayName", player_id))
         state.players[player_id] = Player(player_id, seat, name)
         return [self._event(state, command, "PlayerJoined", {"playerId": player_id, "seat": seat})]
+
+    def _leave(self, state: EngineState, command: Command) -> list[Event]:
+        # 工单 13：等待阶段的主动退座。与 join 对称：只允许 setup 阶段，
+        # 玩家集合的收缩必须经过事件（PlayerLeft），ADR 0001 不允许直接
+        # 删引擎玩家字段绕过事件历史；座位号随之释放，供后续加入复用；
+        # 开局（_start）用 state.players 的实际集合，退出的玩家自然不在局中。
+        if state.status != "setup":
+            raise RuleError("game.not-setup")
+        player_id = str(command.payload.get("playerId", command.actor_player_id or ""))
+        player = state.players.get(player_id)
+        if player is None:
+            raise RuleError("target.not-found", player_id=player_id)
+        del state.players[player_id]
+        return [self._event(state, command, "PlayerLeft", {"playerId": player_id, "seat": player.seat})]
 
     def _start(self, state: EngineState, command: Command) -> list[Event]:
         if state.status != "setup":

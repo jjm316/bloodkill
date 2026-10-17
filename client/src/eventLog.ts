@@ -90,6 +90,7 @@ const EVENT_DEFINITIONS: Record<string, EventDefinition> = {
   ResourceReturned: { category: "resource", describe: (p, n) => `${n(p.playerId)} 的${displayResource(String(p.resource))}已归还` },
 
   PlayerJoined: { category: "flow", describe: (p, n) => `${n(p.playerId)} 加入了房间` },
+  PlayerLeft: { category: "flow", describe: (p, n) => `${n(p.playerId)} 退出了房间` },
   GameStarted: { category: "flow", describe: (p) => `对局开始，共 ${p.playerCount} 名玩家` },
   GameEnded: {
     category: "flow",
@@ -122,17 +123,41 @@ export function isLogVisible(eventType: string): boolean {
   return !definitionOf(eventType).hidden;
 }
 
-export function describeEvent(event: GameEvent, players?: PlayerView[]): string {
-  const name: PlayerName = (id) => players?.find((player) => player.playerId === id)?.displayName ?? String(id);
+export function describeEvent(
+  event: GameEvent,
+  players?: PlayerView[],
+  knownNames?: ReadonlyMap<string, string>,
+): string {
+  // 名册是权威来源；退座者已被移出名册时退到「最后已知名字」（见
+  // rememberPlayerNames），两者都没有才展示原始 playerId。
+  const name: PlayerName = (id) =>
+    players?.find((player) => player.playerId === id)?.displayName
+    ?? knownNames?.get(String(id))
+    ?? String(id);
   return definitionOf(event.eventType).describe(event.payload, name);
 }
 
-// 屏蔽偏好：设备级全局阅读偏好，跨房间、跨对局保留（与备忘标记按对局清空刻意不同）。
-const PREF_KEY = "bloodbound:event-log-filter";
+// 最后已知名字：事件载荷只有 {playerId, seat} 不含用户名，服务端也不回填
+// 历史事件，退座者一旦移出名册，其日志行只能靠客户端记住的名字描述。
+// 纯函数：把当前名册的名字合并进先前记忆，退座前见过的名字不会丢失。
+export function rememberPlayerNames(
+  previous: ReadonlyMap<string, string>,
+  players?: PlayerView[],
+): ReadonlyMap<string, string> {
+  if (!players?.length) return previous;
+  const merged = new Map(previous);
+  for (const player of players) merged.set(player.playerId, player.displayName);
+  return merged;
+}
 
-export function loadMutedCategories(): Set<EventCategoryId> {
+// 屏蔽偏好：本设备、按账号隔离的阅读偏好（工单 18），跨房间、跨对局保留
+// （与备忘标记按对局清空刻意不同）。键含稳定账号引用；旧的无账号全局键
+// （bloodbound:event-log-filter）不读取、不迁移，新账号从全选默认开始。
+const prefKey = (accountId: string) => `bloodbound:account:${accountId}:event-log-filter`;
+
+export function loadMutedCategories(accountId: string): Set<EventCategoryId> {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(PREF_KEY) ?? "[]");
+    const parsed: unknown = JSON.parse(localStorage.getItem(prefKey(accountId)) ?? "[]");
     if (!Array.isArray(parsed)) return new Set();
     const known = new Set(EVENT_CATEGORIES.map((c) => c.id));
     return new Set(parsed.filter((x): x is EventCategoryId => typeof x === "string" && known.has(x as EventCategoryId)));
@@ -141,9 +166,9 @@ export function loadMutedCategories(): Set<EventCategoryId> {
   }
 }
 
-export function saveMutedCategories(muted: Iterable<EventCategoryId>): void {
+export function saveMutedCategories(accountId: string, muted: Iterable<EventCategoryId>): void {
   try {
-    localStorage.setItem(PREF_KEY, JSON.stringify([...muted]));
+    localStorage.setItem(prefKey(accountId), JSON.stringify([...muted]));
   } catch {
     // 隐私模式等存储不可用场景：屏蔽仅在本次会话生效
   }

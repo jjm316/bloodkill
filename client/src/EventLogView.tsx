@@ -1,14 +1,23 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GameEvent, PlayerView } from "./types";
 import type { EventCategoryId } from "./eventLog";
 import {
   EVENT_CATEGORIES, categoryOf, describeEvent, isLogVisible,
-  loadMutedCategories, saveMutedCategories,
+  loadMutedCategories, rememberPlayerNames, saveMutedCategories,
 } from "./eventLog";
 
 // 日志模块拥有整份阅读视图及本机筛选偏好，房间页面只提供公开事件与玩家名单。
-export function EventLog({ events, players }: { events: GameEvent[]; players?: PlayerView[] }) {
-  const [muted, setMuted] = useState<Set<EventCategoryId>>(loadMutedCategories);
+// 筛选偏好按账号隔离（工单 18）：accountId 变化时重读该账号自己的偏好。
+export function EventLog({ accountId, events, players }: { accountId: string; events: GameEvent[]; players?: PlayerView[] }) {
+  const [muted, setMuted] = useState<Set<EventCategoryId>>(() => loadMutedCategories(accountId));
+  useEffect(() => {
+    setMuted(loadMutedCategories(accountId));
+  }, [accountId]);
+  // 最后已知名字：每次渲染都并入当前名册；退座者随后被移出名册时，
+  // 日志行仍用记住的用户名描述（纯合并，重复渲染幂等）。
+  const knownNamesRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const knownNames = rememberPlayerNames(knownNamesRef.current, players);
+  knownNamesRef.current = knownNames;
   if (!events.length) return null;
 
   const shown = events
@@ -19,7 +28,7 @@ export function EventLog({ events, players }: { events: GameEvent[]; players?: P
   const allSelected = muted.size === 0;
   const applyMuted = (next: Set<EventCategoryId>) => {
     setMuted(next);
-    saveMutedCategories(next);
+    saveMutedCategories(accountId, next);
   };
   const toggleCategory = (id: EventCategoryId) => {
     const next = new Set(muted);
@@ -49,7 +58,7 @@ export function EventLog({ events, players }: { events: GameEvent[]; players?: P
         const category = categoryOf(event.eventType);
         return <li key={event.eventId}>
           <span className={`cat-tag ${category.className}`}>{category.label}</span>
-          {describeEvent(event, players)}
+          {describeEvent(event, players, knownNames)}
         </li>;
       })}</ol>}
   </details>;

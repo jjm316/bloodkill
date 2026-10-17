@@ -2,7 +2,7 @@
 import engineSource from "../../blood_bound/engine.py?raw";
 import protocolSource from "../../server/protocol.py?raw";
 import { afterEach, describe, expect, it } from "vitest";
-import { categoryOf, describeEvent, isLogVisible, loadMutedCategories, saveMutedCategories } from "./eventLog";
+import { categoryOf, describeEvent, isLogVisible, loadMutedCategories, rememberPlayerNames, saveMutedCategories } from "./eventLog";
 import type { EventCategoryId } from "./eventLog";
 import type { GameEvent, PlayerView } from "./types";
 
@@ -29,7 +29,7 @@ const expectedCategories: Record<EventCategoryId, string[]> = {
   ],
   reveal: ["ClueRevealed", "RevealWindowOpened"],
   resource: ["ResourceGranted", "ResourceSpent", "ResourceReturned"],
-  flow: ["PlayerJoined", "GameStarted", "GameEnded", "PhaseChanged", "ClueIconsShown"],
+  flow: ["PlayerJoined", "PlayerLeft", "GameStarted", "GameEnded", "PhaseChanged", "ClueIconsShown"],
 };
 
 describe("事件日志完整性", () => {
@@ -123,22 +123,45 @@ describe("事件日志中文描述", () => {
   });
 });
 
+describe("最后已知名字（玩家已不在名册）", () => {
+  it("退座/加入事件引用已移出名册的玩家时，用记住的用户名描述", () => {
+    const known = new Map([["p9", "阿离"]]);
+    expect(describeEvent(event("PlayerLeft", { playerId: "p9", seat: 2 }), [], known)).toBe("阿离 退出了房间");
+    expect(describeEvent(event("PlayerJoined", { playerId: "p9", seat: 2 }), [], known)).toBe("阿离 加入了房间");
+  });
+
+  it("当前名册优先于陈旧记忆；从未见过的玩家保留 playerId 回退", () => {
+    const stale = new Map([["p2", "旧名"]]);
+    expect(describeEvent(event("PlayerLeft", { playerId: "p2" }), players, stale)).toBe("阿兽 退出了房间");
+    expect(describeEvent(event("PlayerLeft", { playerId: "p3" }), players, stale)).toBe("p3 退出了房间");
+  });
+
+  it("rememberPlayerNames 合并名册且不丢历史，无名册时原样返回", () => {
+    const before = new Map([["p9", "阿离"]]);
+    expect(rememberPlayerNames(before)).toBe(before);
+    const merged = rememberPlayerNames(before, players);
+    expect(merged.get("p9")).toBe("阿离");
+    expect(merged.get("p1")).toBe("阿玫");
+    expect(merged.get("p2")).toBe("阿兽");
+  });
+});
+
 describe("屏蔽偏好存取", () => {
   afterEach(() => localStorage.clear());
 
   it("存取往返一致", () => {
-    saveMutedCategories(["dagger", "flow"]);
-    expect([...loadMutedCategories()].sort()).toEqual(["dagger", "flow"]);
+    saveMutedCategories("fixture-log-account", ["dagger", "flow"]);
+    expect([...loadMutedCategories("fixture-log-account")].sort()).toEqual(["dagger", "flow"]);
   });
 
   it("无存储时默认全选（空屏蔽集）", () => {
-    expect(loadMutedCategories().size).toBe(0);
+    expect(loadMutedCategories("fixture-log-account").size).toBe(0);
   });
 
   it("存储里的非法/未知 id 被过滤，坏 JSON 不抛错", () => {
-    localStorage.setItem("bloodbound:event-log-filter", JSON.stringify(["dagger", "nope", 42]));
-    expect([...loadMutedCategories()]).toEqual(["dagger"]);
-    localStorage.setItem("bloodbound:event-log-filter", "{not json");
-    expect(loadMutedCategories().size).toBe(0);
+    localStorage.setItem("bloodbound:account:fixture-log-account:event-log-filter", JSON.stringify(["dagger", "nope", 42]));
+    expect([...loadMutedCategories("fixture-log-account")]).toEqual(["dagger"]);
+    localStorage.setItem("bloodbound:account:fixture-log-account:event-log-filter", "{not json");
+    expect(loadMutedCategories("fixture-log-account").size).toBe(0);
   });
 });

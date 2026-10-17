@@ -30,7 +30,12 @@ export interface MemoApi {
   clear: (playerId: string) => void;
 }
 
-const memoKey = (roomCode: string, gameId: string) => `bloodbound:memo:${roomCode}:${gameId}`;
+// 账号作用域键前缀（工单 18 / ADR 0004）：备忘仍是纯本机私有状态，但按
+// 账号隔离——键含稳定账号引用（accountId），同一浏览器切换账号互不可见；
+// 旧的无账号全局键（bloodbound:memo:<room>:<game>）不读取、不迁移，避免
+// 把旧数据自动导入任意新账号。
+const accountMemoKey = (accountId: string, roomCode: string, gameId: string) =>
+  `bloodbound:account:${accountId}:memo:${roomCode}:${gameId}`;
 
 function readStore(key: string): Record<string, MemoEntry> {
   try {
@@ -57,34 +62,39 @@ function clueColor(icon: string | null): MemoColor | null {
 }
 
 /**
- * 备忘状态：按房间码 + gameId 存取，gameId 变化即清空重读；
+ * 备忘状态：按账号 + 房间码 + gameId 存取，gameId 变化即清空重读；
  * seenNeighbourClue 指向的玩家若完全没有记录，开局自动填其徽记颜色。
+ * 账号隔离（工单 18）：调用方（GameScreen）以 accountId 为 key 强制重挂载；
+ * accountId 同时进入 effect 依赖与存储键，防止任何同挂载身份切换把旧账号
+ * 备忘写进新账号的作用域。
  */
-export function useMemoMarkers(roomCode: string, game: GameState | null | undefined): MemoApi {
+export function useMemoMarkers(accountId: string, roomCode: string, game: GameState | null | undefined): MemoApi {
   const gameId = game?.gameId ?? null;
   const [markers, setMarkers] = useState<Record<string, MemoEntry>>({});
 
-  // 首次拿到对局或换局：重读本局存储，并清掉同房间旧局残留
+  // 首次拿到对局或换局：重读本局存储，并清掉**本账号**同房间旧局残留；
+  // 其他账号（包括此前在本浏览器活跃过的账号）的备忘键一律不动。
   useEffect(() => {
     if (!gameId) {
       setMarkers({});
       return;
     }
-    const key = memoKey(roomCode, gameId);
+    const key = accountMemoKey(accountId, roomCode, gameId);
+    const stalePrefix = `bloodbound:account:${accountId}:memo:${roomCode}:`;
     for (let i = localStorage.length - 1; i >= 0; i -= 1) {
       const stored = localStorage.key(i);
-      if (stored && stored.startsWith(`bloodbound:memo:${roomCode}:`) && stored !== key) {
+      if (stored && stored.startsWith(stalePrefix) && stored !== key) {
         localStorage.removeItem(stored);
       }
     }
     setMarkers(readStore(key));
-  }, [roomCode, gameId]);
+  }, [accountId, roomCode, gameId]);
 
   // 备忘变化落盘；无对局时无处可存
   useEffect(() => {
     if (!gameId) return;
-    writeStore(memoKey(roomCode, gameId), markers);
-  }, [markers, roomCode, gameId]);
+    writeStore(accountMemoKey(accountId, roomCode, gameId), markers);
+  }, [markers, accountId, roomCode, gameId]);
 
   // 自动填充：仅当该玩家完全没有记录（含已清空）时填色，只填色不填数；
   // gameId 入依赖：换局清空后即使右邻与徽记色与上局完全相同也必须重填

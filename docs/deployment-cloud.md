@@ -37,6 +37,21 @@ ssh root@<IP> systemctl restart bloodkill       # 重启
 scp -r root@<IP>:/opt/bloodkill/saves ./backup  # 备份存档（房间元数据 + 引擎快照）
 ```
 
+账号管理命令也在部署根目录运行（查看账号与房间、重置玩家密码、确认并备份
+关闭弃局房间），完整用法见 [账号管理工具使用指南](account-admin.md)：
+
+```bash
+ssh root@<IP>
+cd /opt/bloodkill
+.venv/bin/python -m server.admin users
+.venv/bin/python -m server.admin rooms
+.venv/bin/python -m server.admin reset-password 小明
+.venv/bin/python -m server.admin close-room 123456
+```
+
+`saves/` 不在打包清单里，更新不会触碰：账号、登录会话、房间占用、管理凭证
+（`admin/`）与管理备份（`admin-backup/`、`legacy-backup/`）在更新后全部保留。
+
 ## 公网风险面（朋友局先观察）
 
 与局域网的本质差异：`POST /api/rooms` 建房无门槛，且 waiting/playing 房间不回收（`server/rooms.py` 只清已结束局），扫描器批量建房会撑大 saves 目录。先上线观察，真遇到再加建房口令。`/health` 端点已具备，需要时可接监控。升级路径（域名 + TLS 终止）作为加分项保留，不阻塞上线。

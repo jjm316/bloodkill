@@ -14,20 +14,66 @@
 此字段。个人胜负读取 `result.ranking[].score`（1 胜、0 负），`place` 是排序序号，
 不是角色等级。新增字段不改变存档或胜负规则。
 
-协议版本：当前 v3（2026-10-04，ADR 0012）。v2 → v3 硬切：干涉投票前新增被攻击者
+协议版本：当前 v4（2026-10-13，ADR 0016）。v3 → v4 切换到 Cookie 账号会话，
+旧姓名/房主令牌握手及缺失版本均须刷新客户端。此前 v2 → v3（ADR 0012）在干涉投票前新增被攻击者
 挡刀请求门控（`answer-intervention-request` 命令、`InterventionGate*` 三个事件、
 pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-target`），
 旧版本客户端与旧服务端互拒。
 
 ## REST API
 
+### 注册与登录身份
+
+`POST /api/auth/register` 接收 JSON `{username, password, confirmPassword}`。用户名为
+2–16 个中文、ASCII 英文字母、数字或下划线，英文字母不区分大小写，公开名字保留注册写法。
+密码为 6–12 个原字符，确认须完全相同，不截断、不去空白。
+成功返回 201 `{account: {accountId, username}}`，同时设置 `bloodbound_session` Cookie
+（HttpOnly、SameSite=strict、Path=/、Max-Age=2592000）。服务端固定 30 天到期，不滚动续期。
+账号与会话持久化在存档目录独立的 `accounts/accounts.sqlite3`，与房间清理隔离。
+
+`GET /api/auth/session` 使用 Cookie 恢复身份，成功返回相同公开账号对象，未登录或过期返回
+401 `auth.login-required`。响应不含密码摘要或会话凭证，身份响应禁用缓存。
+注册错误为 400 `auth.invalid-username` / `auth.invalid-password` / `auth.password-mismatch`
+/ `auth.invalid-input`，重名为 409 `auth.username-taken`，存储不可用为
+503 `auth.service-unavailable`；`message` 均为中文且不回显输入。
+
+`POST /api/auth/login` 接收 JSON `{username, password}`，用户名英文大小写变体登录同一账号，
+密码精确匹配原字符。成功返回 200 `{account: {accountId, username}}`，用户名保留注册写法，
+并建立新的固定 30 天 Cookie 会话；独立设备的既有会话仍有效，查询身份不会续期。
+未知账号、错误密码或缺失凭证均返回 401 `auth.invalid-credentials`，反馈为“账号或密码不正确”。
+非对象或无效 JSON 返回 400 `auth.invalid-input`，存储不可用返回 503 `auth.service-unavailable`。
+失败不设置或替换 Cookie，也不改变已有有效身份。注册与登录均拒绝非本站 Origin（403
+`auth.invalid-origin`）；密码只放 JSON 请求体，不进入 URL 或响应。
+
+`POST /api/auth/logout` 撤销**当前设备**的登录会话：成功返回 200 `{account}` 并以 Max-Age=0
+清除浏览器 Cookie；其他设备的独立登录不受影响。退出同时停止该会话已建立的房间 WebSocket
+（连接收到 `auth.session-revoked` 错误帧后关闭），但不移除座位、不改变房主归属；重新登录
+同账号可恢复原座位。无会话或已退出的凭证返回 401 `auth.login-required`，重放不能恢复身份。
+
+`POST /api/auth/password` 接收 JSON `{oldPassword, newPassword, confirmPassword}`，验证旧密码后
+设置新密码（6–12 个字符、确认完全相同，规则与注册一致）。成功返回 200 `{account}`：**当前
+登录保留原有效期**（Cookie 与固定 30 天到期点均不变），同账号**其他设备的全部登录被撤销**
+并停止其已建立的房间 WebSocket（连接收到 `auth.password-changed` 中文错误帧后关闭）；座位
+与房主归属不变，其他设备用新密码重新登录即可恢复原身份。旧密码不正确返回 400
+`auth.wrong-old-password`；新密码越界/确认不一致返回 400 `auth.invalid-password` /
+`auth.password-mismatch`；未登录 401 `auth.login-required`；非本站 Origin 403
+`auth.invalid-origin`；存储不可用 503 `auth.service-unavailable`。任何失败都不改变原密码与
+既有会话；密码只放 JSON 请求体，不进入 URL、日志或响应。
+
+会话到期（固定 30 天，不滚动续期）后所有 HTTP 请求视为未登录；**此前已建立的 WebSocket**
+在下一条消息或房间广播时被终止（`auth.session-expired` 错误帧 + 关闭），旧连接不能再发送
+合法动作、也收不到后续私有投影；同房其他有效会话的连接不受影响。
+
+本节覆盖工单 07–08 注册、登录、身份恢复、工单 14 退出/过期切片与工单 15 主动改密；管理重置密码由后续账号工单扩展。
+
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/health` | `{"status": "ok"}` |
 | `GET` | `/metrics` | 无身份信息的进程内运行指标，见“运行指标与公开部署边界”。 |
-| `POST` | `/api/rooms` | 创建房间 → `{"code", "hostToken", "gameId"}`。`code` 为 6 位数字房号；`hostToken` 由房主浏览器保存在 localStorage。 |
-| `GET` | `/api/rooms/{code}` | 房间概览 → `{"code", "status": "waiting|playing|ended", "locked", "playerCount"}`。不存在 → 404 `room.not-found`。 |
-| `GET` | `/api/rooms/{code}/replay` | 终局回放 → `{"gameId", "steps": [GameState]}`，每步都是旁观者投影。未结束 → 409 `room.not-ended`。只保留最近 20 个已结束对局。 |
+| `POST` | `/api/rooms` | 当前登录账号创建房间并立即成为房主、占据自己的座位 → `{"code", "gameId"}`。`code` 为 6 位数字房号；同一房主重试返回既有未结束房间。没有会话 → 401 `auth.login-required`；已有普通玩家占用 → 409 `account.room-occupied`，details.roomCode 提供恢复目标。 |
+| `GET` | `/api/account/room` | 当前登录账号的未结束占用 → `{"room": {"code", "status"} | null}`；用于刷新及创建回复丢失后的恢复。没有会话 → 401。 |
+| `GET` | `/api/rooms/{code}` | 房间概览 → `{"code", "status": "waiting|playing|ended", "locked", "playerCount"}`，需要登录。没有会话 → 401 `auth.login-required`（不区分房间是否存在）；不存在 → 404 `room.not-found`，`message` 为中文。 |
+| `GET` | `/api/rooms/{code}/replay` | 登录可看的终局回放 → `{"gameId", "steps": [GameState]}`，每步都是旁观者投影；任意已登录账号（含非参与者）知道房号即可观看。没有会话 → 401 `auth.login-required`；未正常结束（等待/进行，将来的管理关闭也非正常终局）→ 409 `room.not-ended`；不存在 → 404 `room.not-found`，`message` 均为中文。只保留最近 20 个已结束对局；清理只删除对局存档，不触碰账号、会话、占用或管理备份数据。 |
 
 ## WebSocket
 
@@ -38,16 +84,40 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ### 客户端 → 服务器
 
 ```json
-{"type": "hello", "name": "小明", "token": "<hostToken 或省略>", "clientRevision": 12, "protocolVersion": "3"}
+{"type": "hello", "mode": "player", "clientRevision": 12, "protocolVersion": "4"}
 ```
 
-- `name` 为空字符串 → 旁观者（`yourPlayerId = null`，不可操作）。
-- `token` 等于房主的 `hostToken` → 该连接获得 `isHost`。
-- `name` 已存在于房间 → 断线重连，恢复座位（`roomStatus = playing` 时也可恢复）。
-- 同一座位被新连接以同名登录 → 旧连接收到 `taken-over` 并关闭。
+- WebSocket 握手必须携带有效 `bloodbound_session` Cookie；身份不放 URL 或 hello。
+- 会话过期或被退出撤销后：重连被 `auth.login-required` 拒绝；**此前已建立的连接**在发送任何
+  消息或房间下一次广播时收到 `auth.session-expired`（过期）或 `auth.session-revoked`（退出撤销，
+  工单 14）错误帧并关闭，不能再发送合法动作、收不到后续私有投影；同房其他有效会话不受影响。
+  改密撤销（工单 15）同理：其他设备的已建立连接收到 `auth.password-changed` 后关闭，
+  当前设备的连接照常使用。
+- `mode="spectator"` → 公开投影（`yourPlayerId = null`，不可发送玩家命令）。在线旁观必须登录；
+  旁观只针对未结束（等待/进行）房间。账号在**任何**未结束房间持有玩家座位时禁止同时旁观
+  （工单 16，服务端校验、跨设备一致）→ `spectator.seat-held`（你已有未结束房间的玩家座位，
+  不能同时旁观；请返回原房间），details.roomCode 提供返回原房入口；被拒账号在原房走玩家恢复
+  路径。房间已结束时 → `room.ended`（对局已结束，不能旁观；可观看回放）；已结束对局按房号
+  走公开回放入口，不受实时旁观限制影响。
+- **旁观中的账号成为玩家（加入或创建房间即占座）时，其已建立的旁观连接被停止**：收到
+  `spectator.became-player`（当前账号已作为玩家进入房间，本旁观连接已停止。）错误帧后关闭，
+  不再收到任何新帧，也不能再发送动作；同房其他账号的旁观连接不受影响。防止「先旁观、后加入」
+  绕过互斥。
+- 房主账号的稳定引用与房间 hostAccountId 相等 → `isHost`；其他账号不能开始或锁定。
+- `mode="player"` 按当前账号恢复或建立座位，不按客户端姓名认领；同账号已有座位在锁房/开局后可恢复。
+- hello 中出现旧 `name` 或 `token` 字段 → `protocol.legacy-identity`，中文提示刷新。
+- 同一座位只允许一个活动玩家连接：新设备/新会话以 player 进入后接管座位，旧连接收到
+  `taken-over` 并被关闭，不再有后续投影、事件或私有帧；接管不撤销旧设备的账号登录，
+  旧设备返回大厅后可再进入（再次接管）。旧连接在关闭竞态窗口内挤入的命令或房主消息
+  一律收到 `seat.taken-over` 拒绝（命令拒绝仍带 ack），不改变引擎状态。
 - `clientRevision` 为客户端最后收到的 `game.revision`，只用于诊断；服务端始终以 `state` 全量投影完成恢复。
-- `protocolVersion` 与服务端不匹配时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本；缺省仅用于兼容早期客户端。
-- `name` 是新人：房间已开始 → 400 `room.already-started`；房间已锁定 → 403 `room.locked`；名字为空 → 400 `player.name-required`。
+- `protocolVersion` 与服务端不匹配或缺失时连接被拒绝，返回 `protocol.version-mismatch` 及期望版本。
+- 当前账号没有本房座位时按新人加入判断：账号在**其他**未结束房间已占座 → `account.room-occupied`（你已有未结束房间，请返回原房间），details.roomCode 提供恢复目标；
+  房间已结束 → `room.ended`（对局已结束，不能加入；可观看回放）；
+  已开始 → `room.already-started`（游戏已开始，不能加入；若已在房间，返回原房间即可恢复座位）；
+  已锁定 → `room.locked`（房间已锁定，暂不能加入）；已满 12 人 → `room.full`（房间已满员，不能加入）。
+  拒绝均为中文 `message`，被拒连接随即关闭且不产生座位或占用。
+- 一个账号同时最多占据一个未结束房间的玩家座位（工单 12）：创建与加入共用同一原子占用检查，多个设备并发创建或加入不同房间时最终只有一次有效占用；本人恢复原房不算新占用。正常终局自动释放该房全部玩家的占用。
 
 ```json
 {"type": "command", "command": "pass-dagger", "payload": {"targetPlayerId": "p-…"}, "commandId": "uuid", "expectedRevision": 12}
@@ -66,6 +136,14 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 - 仅 `isHost` 连接可用；否则 → `room.not-host`。
 - `start` 需要 6–12 名玩家，不足 → 引擎 `game.player-count`；`start` 可在消息上附带 `interventionTimeoutSeconds`（干涉投票时限）与 `singleWindowTimeoutSeconds`（单人窗口超时，ADR 0011）两个字段（各自在开局接受一次，可选 30/60/90/120/180，缺省 90）。整数但不在可选集 → `game.invalid-timeout`；非整数类型 → `command.invalid-shape`。开始后固定。
 
+```json
+{"type": "leave"}
+```
+
+- 等待阶段**普通玩家**的主动退座（工单 13）：服务端经引擎 `leave-game` 命令移除座位（公开事件 `PlayerLeft {playerId, seat}` 广播全房），释放该账号的未结束占用；成功后发送 `{"type": "left", "roomCode"}` 确认帧并关闭该连接。客户端收到 `left` 才回大厅（真退座，不是本地离开）。
+- 房主发送 → 拒绝 `room.host-seat-kept`（房主返回大厅不退座，座位/房主身份/占用保留；界面上的「返回大厅」是直接断开，不发本消息）；对局进行中 → 拒绝 `room.in-progress`（返回大厅仅断开连接，座位保留，正常结束或管理员关闭前不能加入新房间）；旁观者或无座位连接 → `seat.not-held`。拒绝时连接保持并显示中文原因。
+- `leave-game` 引擎命令由服务器托管，客户端直接发送 → `command.server-managed`；断线、刷新、退出登录、临时关闭页面都不构成退座（座位保留），重进生成新的玩家引用。
+
 **命令清单**（其余全部由引擎拒绝）：
 
 | 命令 | payload | 说明 |
@@ -82,7 +160,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 规则版本 0.4 起（ADR 0003），旧的全时段常驻 `distribute-curse` 命令已移除：
 诅咒分发只由审判者技能窗口内的 `choose-skill` 承载，旧命令将得到 `command.unknown`。
 
-`start-game`、`join-game`、`timeout-intervention`、`timeout-reveal`、`timeout-skill`、
+`start-game`、`join-game`、`leave-game`（工单 13，经 `{"type":"leave"}` 消息托管）、`timeout-intervention`、`timeout-reveal`、`timeout-skill`、
 `timeout-return` 由服务器托管：直接发送会得到 `command.server-managed`。
 `timeout-intervention` 是干涉三段窗口到期时由服务端定时器（`server/deadlines.py`，可复用抽象）
 代为提交的系统命令，payload 为 `{"stage": "gate"|"poll"|"choice"}`；门控阶段到期未确认
@@ -135,11 +213,12 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 | 类型 | 说明 |
 | --- | --- |
-| `state` | 每次命令/主持操作/进出后向房间内所有连接广播，每人收到按自己视角投影的 `game`，并附服务端墙钟 `serverTime`（倒计时对齐用）。 |
+| `state` | 每次命令/主持操作/进出后向房间内所有**已完成 hello** 的连接广播（未完成握手的连接不参与，不会收到空视角投影），每人收到按自己视角投影的 `game`，并附服务端墙钟 `serverTime`（倒计时对齐用）。 |
 | `event` | `{"events": [...]}`，仅公开事件；`CurseViewed`（保留字）被过滤。诅咒归属已公开（ADR 0014）：`CurseDistributed` 为公开广播，payload 只含 `{"recipientPlayerId": "p-…"}`（每卡一条，不含 curseId，真/假之分不进公开事件流）。开局批量事件 `ClueIconsShown` 为公开事件，但 payload 只含"谁向谁展示"的关系（`pairs`），不含任何徽记内容。干涉的请求门控事件（`InterventionGateOpened` / `InterventionGateAccepted` / `InterventionGateDeclined`）与投票表态事件（`InterventionResponded` 等）全部公开。 |
 | `error` | `{"code", "message", "details"}`。 |
 | `ack` | `{"commandId", "status": "accepted|rejected", "revision", "error"?}`，只确认对应客户端命令。 |
-| `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭。 |
+| `taken-over` | `{"reason": "seat taken over by a new connection"}`，随后连接被关闭；旧连接不再收到任何后续帧，客户端必须停止操作与自动重连（与普通断线的退避重连是不同路径）。 |
+| `left` | `{"roomCode": "123456"}`：退座确认（工单 13）。仅等待普通玩家的 `leave` 成功后发送，随后连接被服务端关闭；客户端停止重连并回大厅。 |
 
 ### `state` 消息形状
 
@@ -151,7 +230,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
   "locked": false,
   "isHost": true,
   "yourPlayerId": "p-… | null（旁观者）",
-  "hostPlayerId": "p-… | null（房主尚未以玩家身份连接时为 null）",
+  "hostPlayerId": "p-…（创建时建立的房主座位）",
   "connected": {"p-…": true},
   "hostActions": [{"type": "start-game"}, {"type": "lock"}],
   "game": { /* GameState 投影；waiting 时也有（setup 阶段） */ },
@@ -161,7 +240,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 ### 断线恢复与命令确认
 
-1. 浏览器在连接关闭后以退避重连；同名 `hello` 恢复原座位。房主离开不会结束或转移房间，持有原 `hostToken` 的重连仍为房主。房主令牌持有者以玩家身份 `hello` 时，服务器把该座位记为 `hostPlayerId`（写入房间 meta，重启后保留），所有客户端据此显示房主标记。
+1. 浏览器在连接关闭后以退避重连；有效登录账号恢复其原座位。房主离开不会结束或转移房间，房主账号重连仍为房主。创建时即建立 hostPlayerId、hostAccountId 与 seatAccounts，写入房间 meta，重启后保留；所有客户端显示同一房主座位。
 2. `hello` 后服务器总会发送完整、按接收者投影的 `state`。客户端以它替换本地状态，不尝试补造事件；因此重连前后的 `game.revision` 与状态哈希以服务器为准。
 3. 客户端仅保留尚未收到 `ack` 的命令，并以原 `commandId`、原 `expectedRevision` 重传。相同命令重复到达时服务端返回 `accepted`，但不再次广播事件或结算。
 4. 新 `commandId` 携带过期 `expectedRevision` 时服务端返回 `game.revision-conflict`、`ack.status = rejected` 和最新 `state`；客户端丢弃该命令，等待用户基于新状态再次操作。
@@ -170,7 +249,7 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 ### 运行指标与公开部署边界
 
 - `GET /metrics` 返回无身份信息的进程内计数：连接数、座位恢复/接管数、命令接受/拒绝数及当前连接、房间数量；进程重启后清零。它用于观察重连风暴和非法命令，不记录昵称、令牌、命令内容或私密状态。
-- 局域网可使用 HTTP/WS；任何内网穿透或公网入口必须由 HTTPS/WSS 终止 TLS。不要将明文隧道、`hostToken`、存档目录或调试端点暴露到公网。
+- 本次按 ADR 0016 延续 HTTP/WS 部署；账号存储、会话凭证、存档目录与调试端点不提供公网访问。
 
 ### GameState 投影形状（`blood_bound/projection.py`）
 
@@ -240,9 +319,19 @@ pending `stage:"gate"`、错误码 `intervention.not-gate` / `intervention.not-t
 
 ### 错误码
 
-**服务器层**：`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
-`room.already-started`、`player.name-required`、`player.not-eligible`（旁观者操作）、
-`command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`。
+**服务器层**：`auth.login-required`（未登录访问需要会话的接口，如回放）、`room.not-found`、`room.not-ended`、`room.not-host`、`room.locked`、
+`room.already-started`、`room.full`、`room.ended`、`room.host-seat-kept`（房主退座请求被拒：返回大厅保留座位/身份/占用，工单 13）、
+`room.in-progress`（对局中退座请求被拒：仅断开连接保留座位，工单 13）、`seat.not-held`（无座位连接的退座请求被拒，工单 13）、
+`seat.taken-over`（座位已被新连接接管后，
+旧连接迟到的命令/房主消息一律以此拒绝，命令拒绝仍带 ack）、`player.name-required`、`player.not-eligible`（旁观者操作）、
+`spectator.seat-held`（账号持有未结束玩家座位时旁观被拒，details.roomCode 给返回原房入口，工单 16）、
+`spectator.became-player`（旁观中的账号成为玩家，其已建立旁观连接被停止，工单 16）、
+`command.server-managed`、`command.invalid-shape`、`protocol.version-mismatch`、
+`auth.session-expired`（会话到期后已建立 WS 连接被终止，工单 14）、
+`auth.session-revoked`（退出撤销当前登录并停止其连接，工单 14；管理员重置密码撤销该账号
+全部登录并停止其全部已建立连接时同样使用，工单 20）、
+`auth.password-changed`（改密撤销其他设备登录并停止其连接，工单 15）、
+`auth.wrong-old-password`（改密时旧密码不正确，工单 15）。
 
 **引擎层**（`RuleError` 原样转发）：`state.invalid`、`game.not-found`、`command.id-reuse`、
 `game.already-ended`、`command.unknown`、`game.not-setup`、`game.duplicate-player`、

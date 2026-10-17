@@ -16,6 +16,8 @@ client/dist/
 .scratch/chrome-profiles/
 .scratch/run-server.cmd
 .scratch/uvicorn.log
+# isolated toolkit data (test accounts, admin credential, ownership marker)
+.scratch/toolkit-saves/
 .zcode
 # curse e2e local runtime state (room code/host token) and server log
 .scratch/e2e-curse.json

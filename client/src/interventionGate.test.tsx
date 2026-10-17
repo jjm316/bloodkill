@@ -132,7 +132,7 @@ function makeGateGame(viewerIsTarget: boolean, deadlineOffset = 30): GameState {
 describe("干涉决策入口：门控弹窗（被攻击者视角）", () => {
   it("标题/正文/名单行/倒计时按 Q6 拍板文案渲染（攻击者优先取 pending.attackerPlayerId）", () => {
     const serverTime = Date.now() / 1000;
-    const { container } = render(<InterventionHarness game={makeGateGame(true)} serverTime={serverTime} send={vi.fn()} />);
+    const { container } = render(<InterventionHarness accountId="fixture-ui-account" game={makeGateGame(true)} serverTime={serverTime} send={vi.fn()} />);
     const dialog = container.querySelector(".modal");
     expect(dialog?.getAttribute("aria-labelledby")).toBe("modal-title");
     expect(container.querySelector("#modal-title")?.textContent).toBe("是否需要他人为你挡刀？");
@@ -147,13 +147,13 @@ describe("干涉决策入口：门控弹窗（被攻击者视角）", () => {
 
   it("wire 缺 attackerPlayerId 时退回公开 AttackDeclared 事件点名", () => {
     const game = { ...makeGateGame(true), pending: { ...makeGateGame(true).pending!, attackerPlayerId: undefined } };
-    const { container } = render(<InterventionHarness game={game} events={gateEvents} serverTime={Date.now() / 1000} send={vi.fn()} />);
+    const { container } = render(<InterventionHarness accountId="fixture-ui-account" game={game} events={gateEvents} serverTime={Date.now() / 1000} send={vi.fn()} />);
     expect(container.querySelector(".modal-body")?.textContent).toContain("阿攻 对你发起攻击。");
   });
 
   it("wire 与事件都缺失（极端重连）时退化为不点名正文，也不误把匕首持有者当攻击者", () => {
     const game = { ...makeGateGame(true), pending: { ...makeGateGame(true).pending!, attackerPlayerId: undefined } };
-    const { container } = render(<InterventionHarness game={game} serverTime={Date.now() / 1000} send={vi.fn()} />);
+    const { container } = render(<InterventionHarness accountId="fixture-ui-account" game={game} serverTime={Date.now() / 1000} send={vi.fn()} />);
     const body = container.querySelector(".modal-body")?.textContent ?? "";
     expect(body).toContain("一次攻击对你发起。");
     expect(body).not.toContain("小标 对你发起攻击");
@@ -161,7 +161,7 @@ describe("干涉决策入口：门控弹窗（被攻击者视角）", () => {
 
   it("「请求挡刀」发送 answer-intervention-request need=true，「自己承受」发送 need=false", () => {
     const send = vi.fn();
-    const { container } = render(<InterventionHarness game={makeGateGame(true)} serverTime={Date.now() / 1000} send={send} />);
+    const { container } = render(<InterventionHarness accountId="fixture-ui-account" game={makeGateGame(true)} serverTime={Date.now() / 1000} send={send} />);
     fireEvent.click(container.querySelector<HTMLButtonElement>(".modal-confirm")!);
     expect(send).toHaveBeenCalledWith("answer-intervention-request", { need: true });
     fireEvent.click(container.querySelector<HTMLButtonElement>(".modal-cancel")!);
@@ -169,8 +169,8 @@ describe("干涉决策入口：门控弹窗（被攻击者视角）", () => {
   });
 
   it("no-assist 偏好开启时门控窗不弹，入口自动代发", () => {
-    localStorage.setItem("bloodbound:no-assist", "1");
-    const { container } = render(<InterventionHarness game={makeGateGame(true)} serverTime={Date.now() / 1000} send={vi.fn()} />);
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-assist", "1");
+    const { container } = render(<InterventionHarness accountId="fixture-ui-account" game={makeGateGame(true)} serverTime={Date.now() / 1000} send={vi.fn()} />);
     expect(container.querySelector(".modal")).toBeNull();
     expect(container.querySelector(".waiting-banner")).toBeNull();
   });
@@ -179,7 +179,7 @@ describe("干涉决策入口：门控弹窗（被攻击者视角）", () => {
 describe("干涉决策入口：等待横幅与其余视角", () => {
   it("非当事人（攻击者/有资格者/旁观）看到等待横幅与倒计时，不弹窗", () => {
     const serverTime = Date.now() / 1000;
-    const { container } = render(<InterventionHarness game={makeGateGame(false)} serverTime={serverTime} send={vi.fn()} />);
+    const { container } = render(<InterventionHarness accountId="fixture-ui-account" game={makeGateGame(false)} serverTime={serverTime} send={vi.fn()} />);
     expect(container.querySelector(".modal")).toBeNull();
     const banner = container.querySelector(".waiting-banner");
     expect(banner?.textContent).toContain("等待 小标 确认是否需要他人挡刀…（剩 30 秒）");
@@ -189,12 +189,12 @@ describe("干涉决策入口：等待横幅与其余视角", () => {
   it("切换到投票时显示投票等待横幅，无 pending 时不显示提示", () => {
     const serverTime = Date.now() / 1000;
     const pollGame: GameState = { ...makeGateGame(false), pending: { ...makeGateGame(false).pending!, stage: "poll" } };
-    const { container, unmount } = render(<InterventionHarness game={pollGame} serverTime={serverTime} send={vi.fn()} />);
+    const { container, unmount } = render(<InterventionHarness accountId="fixture-ui-account" game={pollGame} serverTime={serverTime} send={vi.fn()} />);
     expect(container.querySelector(".modal")).toBeNull();
     expect(container.querySelector(".waiting-banner")).not.toBeNull();
     unmount();
     const noPending: GameState = { ...makeGateGame(true), pending: null };
-    const { container: empty } = render(<InterventionHarness game={noPending} serverTime={serverTime} send={vi.fn()} />);
+    const { container: empty } = render(<InterventionHarness accountId="fixture-ui-account" game={noPending} serverTime={serverTime} send={vi.fn()} />);
     expect(empty.querySelector(".waiting-banner")).toBeNull();
   });
 });
@@ -231,7 +231,7 @@ function makeGateRoomState(revision: number, deadline: number, viewerIsTarget = 
 }
 
 function renderGame() {
-  return render(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+  return render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
 }
 
 function makePollRoomState(revision: number, deadline: number): RoomState {
@@ -257,7 +257,7 @@ describe("「默认不让他人挡刀」偏好（Q7/Q10:A）", () => {
   afterEach(() => localStorage.clear());
 
   it("偏好开启：门控窗不弹，自动代发一次 need=false", () => {
-    localStorage.setItem("bloodbound:no-assist", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-assist", "1");
     socketMock.state = makeGateRoomState(12, Date.now() / 1000 + 90);
     const { container } = renderGame();
     expect(container.querySelector(".modal")).toBeNull();
@@ -265,24 +265,24 @@ describe("「默认不让他人挡刀」偏好（Q7/Q10:A）", () => {
   });
 
   it("防重复：同一窗口（revision+deadline 不变）重渲染不重复代发，新窗口再代发一次", () => {
-    localStorage.setItem("bloodbound:no-assist", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-assist", "1");
     const deadline = Date.now() / 1000 + 90;
     socketMock.state = makeGateRoomState(12, deadline);
     const view = renderGame();
     expect(gateSends()).toHaveLength(1);
     // 服务器重播同一窗口（状态对象全新、键不变）
     socketMock.state = makeGateRoomState(12, deadline);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(gateSends()).toHaveLength(1);
     // 下一次攻击开出新门控窗（revision 与 deadline 都变了）
     socketMock.state = makeGateRoomState(20, deadline + 95);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(gateSends()).toHaveLength(2);
     expect(gateSends()[1]).toEqual(["answer-intervention-request", { need: false }]);
   });
 
   it("代发键按 stage 区分：poll 阶段不代发门控命令", () => {
-    localStorage.setItem("bloodbound:no-assist", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-assist", "1");
     const pollState = makeGateRoomState(12, Date.now() / 1000 + 90);
     pollState.game!.pending!.stage = "poll";
     pollState.game!.legalActions = [
@@ -301,7 +301,7 @@ describe("「默认不让他人挡刀」偏好（Q7/Q10:A）", () => {
     expect(container.querySelector("#modal-title")?.textContent).toBe("是否需要他人为你挡刀？");
   });
 
-  it("页头开关与「默认不挡刀」并排且相互独立，写入 bloodbound:no-assist", () => {
+  it("页头开关与「默认不挡刀」并排且相互独立，写入本账号的 no-assist 键", () => {
     socketMock.state = makeGateRoomState(12, Date.now() / 1000 + 90);
     const { container } = renderGame();
     const toggles = Array.from(container.querySelectorAll<HTMLLabelElement>("label.pref-toggle"));
@@ -310,8 +310,8 @@ describe("「默认不让他人挡刀」偏好（Q7/Q10:A）", () => {
     expect(noAssistInput.checked).toBe(false);
     fireEvent.click(noAssistInput);
     expect(noAssistInput.checked).toBe(true);
-    expect(localStorage.getItem("bloodbound:no-assist")).toBe("1");
-    expect(localStorage.getItem("bloodbound:no-block")).toBeNull();
+    expect(localStorage.getItem("bloodbound:account:fixture-ui-account:no-assist")).toBe("1");
+    expect(localStorage.getItem("bloodbound:account:fixture-ui-account:no-block")).toBeNull();
     // 打开后当前门控窗立即收起并代发
     expect(gateSends()).toEqual([["answer-intervention-request", { need: false }]]);
     expect(container.querySelector(".modal")).toBeNull();
@@ -354,17 +354,17 @@ describe("门控/投票/单人窗口互斥（渲染顺序）", () => {
 
 describe("干涉投票的操作与本机偏好", () => {
   it("默认不挡刀自动代发，重播不重复，新窗口再次代发", () => {
-    localStorage.setItem("bloodbound:no-block", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-block", "1");
     const deadline = Date.now() / 1000 + 90;
     socketMock.state = makePollRoomState(13, deadline);
     const view = renderGame();
     expect(view.container.querySelector(".modal")).toBeNull();
     expect(socketMock.send.mock.calls).toEqual([["respond-intervention", { volunteer: false }]]);
     socketMock.state = makePollRoomState(13, deadline);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(socketMock.send).toHaveBeenCalledTimes(1);
     socketMock.state = makePollRoomState(24, deadline + 95);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(socketMock.send.mock.calls).toEqual([
       ["respond-intervention", { volunteer: false }],
       ["respond-intervention", { volunteer: false }],
@@ -378,8 +378,8 @@ describe("干涉投票的操作与本机偏好", () => {
     fireEvent.click(view.getByRole("checkbox", { name: "默认不挡刀" }));
     expect(view.container.querySelector(".modal")).toBeNull();
     expect(socketMock.send.mock.calls).toEqual([["respond-intervention", { volunteer: false }]]);
-    expect(localStorage.getItem("bloodbound:no-block")).toBe("1");
-    expect(localStorage.getItem("bloodbound:no-assist")).toBeNull();
+    expect(localStorage.getItem("bloodbound:account:fixture-ui-account:no-block")).toBe("1");
+    expect(localStorage.getItem("bloodbound:account:fixture-ui-account:no-assist")).toBeNull();
     expect(view.getByRole("checkbox", { name: "默认不让他人挡刀" })).not.toBeChecked();
   });
 
@@ -391,14 +391,14 @@ describe("干涉投票的操作与本机偏好", () => {
   });
 
   it("同时开启两个偏好，门控到投票只发送各自的拒绝命令", () => {
-    localStorage.setItem("bloodbound:no-block", "1");
-    localStorage.setItem("bloodbound:no-assist", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-block", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-assist", "1");
     const deadline = Date.now() / 1000 + 90;
     socketMock.state = makeGateRoomState(12, deadline);
     const view = renderGame();
     expect(socketMock.send.mock.calls).toEqual([["answer-intervention-request", { need: false }]]);
     socketMock.state = makePollRoomState(13, deadline + 90);
-    view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     expect(socketMock.send.mock.calls).toEqual([
       ["answer-intervention-request", { need: false }],
       ["respond-intervention", { volunteer: false }],
@@ -406,13 +406,13 @@ describe("干涉投票的操作与本机偏好", () => {
   });
 
   it("初始无状态时保持 Hook 顺序，短暂失去状态后不重复代发同一窗口", () => {
-    localStorage.setItem("bloodbound:no-block", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-block", "1");
     const deadline = Date.now() / 1000 + 90;
     socketMock.state = null;
     const view = renderGame();
     expect(view.getByRole("status").textContent).toBe("正在连接……");
     socketMock.state = makePollRoomState(13, deadline);
-    const rerender = () => view.rerender(<GameScreen credentials={{ code: "123456", name: "小标", token: null }} onLeave={() => {}} />);
+    const rerender = () => view.rerender(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode: "player" }} onLeave={() => {}} />);
     rerender();
     expect(socketMock.send).toHaveBeenCalledTimes(1);
     socketMock.state = null;
@@ -459,8 +459,8 @@ describe("干涉三选一保持现有动作入口", () => {
   });
 
   it.each(["p0", "p2", null])("非目标视角 %s 只见公开提示，没有选择按钮或代发", (viewerId) => {
-    localStorage.setItem("bloodbound:no-assist", "1");
-    localStorage.setItem("bloodbound:no-block", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-assist", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-block", "1");
     socketMock.state = makeChoiceRoomState(viewerId);
     const view = renderGame();
     expect(view.container.querySelector(".pending")?.textContent).toContain("等待其选择其一或全部拒绝");
@@ -472,8 +472,8 @@ describe("干涉三选一保持现有动作入口", () => {
 
 describe("回放只消费公开干涉提示", () => {
   it("请求、投票、选择快照可切换，不读本机偏好或启用实时交互", async () => {
-    localStorage.setItem("bloodbound:no-assist", "1");
-    localStorage.setItem("bloodbound:no-block", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-assist", "1");
+    localStorage.setItem("bloodbound:account:fixture-ui-account:no-block", "1");
     const steps = [
       makeGateRoomState(12, Date.now() / 1000 + 90).game!,
       makePollRoomState(13, Date.now() / 1000 + 90).game!,

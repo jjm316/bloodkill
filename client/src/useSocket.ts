@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandAck, GameEvent, RoomState, ServerError } from "./types";
 
-const PROTOCOL_VERSION = "3";
+const PROTOCOL_VERSION = "4";
 // 初始进房超时：从未收到过状态投影的连接，超过此时长仍未应答视为进房失败
 // （房间号错误 / 服务器未启动 / 网络不通）。已收到过状态的断线重连不受影响。
 const JOIN_TIMEOUT_MS = 10_000;
@@ -22,8 +22,12 @@ export interface SocketHandle {
   takenOver: boolean;
   /** 初始进房超时：从未收到状态且 10 秒无应答，已停止重连，只能返回大厅。 */
   failed: boolean;
+  /** 服务端已确认退座（工单 13）：连接终止、不再重连，界面回大厅。 */
+  left: boolean;
   send: (command: string, payload?: Record<string, unknown>) => void;
   sendHost: (action: string, payload?: Record<string, unknown>) => void;
+  /** 等待普通玩家的主动退座：发 leave，等服务端 left 确认（拒绝则显示原因）。 */
+  sendLeave: () => void;
 }
 
 /**
@@ -31,7 +35,7 @@ export interface SocketHandle {
  * latest authoritative room state. The server pushes a fresh projection after
  * every accepted command, so the UI never needs local rules.
  */
-export function useGameSocket(code: string, name: string, token: string | null): SocketHandle {
+export function useGameSocket(code: string, accountId: string, mode: "player" | "spectator"): SocketHandle {
   const [state, setState] = useState<RoomState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [error, setError] = useState<ServerError | null>(null);
@@ -39,8 +43,12 @@ export function useGameSocket(code: string, name: string, token: string | null):
   const [reconnecting, setReconnecting] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [left, setLeft] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const stateRef = useRef<RoomState | null>(null);
+  // 工单 11：座位被新设备接管后，本连接的一切活动终止——不再重连、不再
+  // 补发待确认命令、迟到的旧 socket 帧一律忽略，避免污染接管后的状态。
+  const takenOverRef = useRef(false);
   const pendingCommandsRef = useRef(
     new Map<string, { command: string; payload: Record<string, unknown>; expectedRevision: number }>(),
   );
@@ -52,6 +60,9 @@ export function useGameSocket(code: string, name: string, token: string | null):
     let joinTimer: number | undefined;
     let reconnectAttempt = 0;
     let canReconnect = true;
+    takenOverRef.current = false;
+    setTakenOver(false);
+    setLeft(false);
 
     const flushPendingCommands = () => {
       const ws = wsRef.current;
@@ -72,8 +83,7 @@ export function useGameSocket(code: string, name: string, token: string | null):
         ws.send(
           JSON.stringify({
             type: "hello",
-            name,
-            token: token ?? undefined,
+            mode,
             clientRevision: stateRef.current?.game?.revision,
             protocolVersion: PROTOCOL_VERSION,
           }),
@@ -88,6 +98,23 @@ export function useGameSocket(code: string, name: string, token: string | null):
         }
         if (typeof message !== "object" || message === null) return;
         const typed = message as { type?: string };
+        if (typed.type === "taken-over") {
+          // 接管是终止性的：丢弃待确认命令（旧连接没有资格补发），停止重连。
+          canReconnect = false;
+          takenOverRef.current = true;
+          pendingCommandsRef.current.clear();
+          setTakenOver(true);
+          return;
+        }
+        if (takenOverRef.current) return; // 旧 socket 的迟到帧不得污染接管后的状态
+        if (typed.type === "left") {
+          // 工单 13：服务端确认退座——终止性事件：停止重连并主动关闭，
+          // 后续 close 不触发退避重连；界面据 left 状态回大厅。
+          canReconnect = false;
+          setLeft(true);
+          ws.close();
+          return;
+        }
         if (typed.type === "state") {
           const next = message as RoomState;
           if (joinTimer !== undefined) {
@@ -118,10 +145,25 @@ export function useGameSocket(code: string, name: string, token: string | null):
             setError({ type: "error", ...ack.error });
           }
         } else if (typed.type === "error") {
-          setError(message as ServerError);
-        } else if (typed.type === "taken-over") {
-          canReconnect = false;
-          setTakenOver(true);
+          const failure = message as ServerError;
+          setError(failure);
+          // 加入阶段（尚未收到任何状态投影）的房间错误是终止性的：
+          // 锁定、开局、满员、结束、占用等拒绝后不再自动重连，避免反复撞墙。
+          // spectator.*（工单 16）同样是终止性的：占座互斥拒绝、账号成为
+          // 玩家后的旁观停止都不允许再以旁观身份重连。
+          // 已进入房间后的命令错误（如房主操作被拒）不影响断线重连。
+          // 管理关闭（工单 21）同样终止：房间已不存在，重连只会撞 404。
+          if (
+            !stateRef.current ||
+            failure.code.startsWith("auth.") ||
+            failure.code.startsWith("protocol.") ||
+            failure.code.startsWith("spectator.") ||
+            failure.code === "room.admin-closed"
+          ) {
+            canReconnect = false;
+            setFailed(true);
+            ws.close();
+          }
         }
       };
       ws.onclose = () => {
@@ -155,9 +197,10 @@ export function useGameSocket(code: string, name: string, token: string | null):
       if (joinTimer !== undefined) window.clearTimeout(joinTimer);
       wsRef.current?.close();
     };
-  }, [code, name, token]);
+  }, [code, accountId, mode]);
 
   const send = useCallback((command: string, payload: Record<string, unknown> = {}) => {
+    if (takenOverRef.current) return; // 座位已被接管：本连接没有资格再发命令
     const commandId = newCommandId();
     pendingCommandsRef.current.set(commandId, {
       command,
@@ -172,8 +215,16 @@ export function useGameSocket(code: string, name: string, token: string | null):
   }, []);
 
   const sendHost = useCallback((action: string, payload: Record<string, unknown> = {}) => {
+    if (takenOverRef.current) return; // 座位已被接管：房主操作同样停止
     wsRef.current?.send(JSON.stringify({ type: "host", action, ...payload }));
   }, []);
 
-  return { state, events, error, closed, reconnecting, takenOver, failed, send, sendHost };
+  // 工单 13：等待普通玩家的主动退座。没有命令载荷/确认重传语义：服务端
+  // 以 left 帧确认或错误帧拒绝（拒绝时 error 已显示，界面停留在房间）。
+  const sendLeave = useCallback(() => {
+    if (takenOverRef.current) return; // 座位已被接管：本连接没有资格退座
+    wsRef.current?.send(JSON.stringify({ type: "leave" }));
+  }, []);
+
+  return { state, events, error, closed, reconnecting, takenOver, failed, left, send, sendHost, sendLeave };
 }

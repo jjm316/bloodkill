@@ -7,7 +7,7 @@ import type { GameState, PlayerView, RoomState } from "./types";
 // 初始连接 10 秒无状态应答 → 失败 Banner + 可返回大厅；已收到过状态的断线只重连、
 // 永不进入失败态；服务端 room.not-found 错误帧 → 立即显示具体原因。
 
-class MockWebSocket {
+export class MockWebSocket {
   static CONNECTING = 0 as const;
   static OPEN = 1 as const;
   static CLOSING = 2 as const;
@@ -51,7 +51,7 @@ class MockWebSocket {
   }
 }
 
-function makeState(): RoomState {
+export function makeState(): RoomState {
   const player: PlayerView = {
     playerId: "p1",
     seat: 0,
@@ -90,9 +90,14 @@ function makeState(): RoomState {
   };
 }
 
-function renderGameScreen(onLeave = vi.fn()) {
-  render(<GameScreen credentials={{ code: "123456", name: "阿玫", token: null }} onLeave={onLeave} />);
+function renderGameScreen(onLeave = vi.fn(), onReturnToRoom = vi.fn(), mode: "player" | "spectator" = "player") {
+  render(<GameScreen credentials={{ code: "123456", accountId: "fixture-ui-account", mode }} onLeave={onLeave} onReturnToRoom={onReturnToRoom} />);
   return onLeave;
+}
+
+function makeSpectatorState(): RoomState {
+  // 旁观连接的公开投影：无自己的座位、无私有视角块。
+  return { ...makeState(), yourPlayerId: null };
 }
 
 describe("进房失败态", () => {
@@ -162,11 +167,188 @@ describe("进房失败态", () => {
       ws.open();
     });
     act(() => {
-      ws.receive({ type: "error", code: "room.not-found", message: "Room not found.", details: {} });
+      ws.receive({ type: "error", code: "room.not-found", message: "房间不存在，请核对房间号。", details: {} });
       ws.drop();
     });
 
     expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
     expect(screen.getByText("房间不存在，请核对房间号。")).toBeInTheDocument();
+  });
+});
+
+// 工单 10：账号加入房间——加入阶段的房间错误帧必须终止初始重连并给出中文原因；
+// 已进入对局后的 error（如房主操作被拒）不影响断线重连。
+describe("账号加入拒绝", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    MockWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", MockWebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("锁定房间拒绝后停止初始重连：不再建立新的 WebSocket，只保留返回大厅入口", () => {
+    renderGameScreen();
+    const first = MockWebSocket.instances[0];
+    act(() => {
+      first.open();
+    });
+    act(() => {
+      first.receive({ type: "error", code: "room.locked", message: "房间已锁定，暂不能加入。", details: {} });
+      first.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText("房间已锁定，暂不能加入。")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(120_000);
+    });
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it.each([
+    ["room.full", "房间已满员（12 人），不能加入。"],
+    ["room.ended", "对局已结束，不能加入；可观看回放。"],
+    ["account.room-occupied", "你已有未结束房间，请返回原房间。"],
+  ])("%s 显示中文原因并可返回大厅", (code, text) => {
+    renderGameScreen();
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive({ type: "error", code, message: text, details: {} });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText(text)).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  // 工单 12：占用拒绝帧携带 details.roomCode，失败页直接提供“返回房间”入口，
+  // 与创建路径（大厅的返回房间按钮）一致，不必先回大厅再查询。
+  it("占用拒绝携带 roomCode 时直接提供返回原房入口", () => {
+    const onReturnToRoom = vi.fn();
+    renderGameScreen(vi.fn(), onReturnToRoom);
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive({ type: "error", code: "account.room-occupied", message: "你已有未结束房间，请返回原房间。", details: { roomCode: "654321" } });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText("你已有未结束房间，请返回原房间。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "返回房间 654321" }));
+    expect(onReturnToRoom).toHaveBeenCalledWith("654321");
+  });
+
+  it("对局中收到房主操作被拒的 error 不停止断线重连", () => {
+    renderGameScreen();
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive(makeState());
+    });
+    act(() => {
+      ws.receive({ type: "error", code: "room.not-host", message: "只有房主可以执行此操作。", details: {} });
+    });
+    expect(screen.getByText("操作未完成，请检查当前阶段和操作条件。")).toBeInTheDocument();
+    act(() => {
+      ws.drop();
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(MockWebSocket.instances.length).toBeGreaterThan(1);
+  });
+
+  it("座位被接管显示已在其他设备进入房间，而不是旧的姓名文案", () => {
+    renderGameScreen();
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive(makeState());
+      ws.receive({ type: "taken-over", reason: "seat taken over by a new connection" });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "座位已被接管" })).toBeInTheDocument();
+    expect(screen.getByText(/已在其他设备进入房间/)).toBeInTheDocument();
+    expect(screen.queryByText(/使用其他姓名/)).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+});
+
+// 工单 16：登录旁观与玩家旁观互斥——占座账号旁观被服务端拒绝时给中文原因
+// 与返回原房入口；旁观中的账号成为玩家后旧旁观连接停止且不再重连；
+// 结束房的旁观拒绝按旁观语境指向回放。
+describe("旁观互斥与停止", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    MockWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", MockWebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("占座互斥拒绝携带 roomCode 时直接提供返回原房入口", () => {
+    const onReturnToRoom = vi.fn();
+    renderGameScreen(vi.fn(), onReturnToRoom, "spectator");
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive({ type: "error", code: "spectator.seat-held", message: "你已有未结束房间的玩家座位，不能同时旁观；请返回原房间。", details: { roomCode: "654321" } });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText("你已有未结束房间的玩家座位，不能同时旁观。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "返回房间 654321" }));
+    expect(onReturnToRoom).toHaveBeenCalledWith("654321");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it("旁观模式下结束房拒绝按旁观语境指向回放，而不是加入文案", () => {
+    renderGameScreen(vi.fn(), vi.fn(), "spectator");
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive({ type: "error", code: "room.ended", message: "对局已结束，不能旁观；可观看回放。", details: {} });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "无法加入房间" })).toBeInTheDocument();
+    expect(screen.getByText("对局已结束，不能旁观；可观看回放。")).toBeInTheDocument();
+    expect(screen.queryByText("对局已结束，不能加入；可观看回放。")).not.toBeInTheDocument();
+  });
+
+  it("成为玩家后旧旁观连接停止：显示旁观已停止且不再自动重连", () => {
+    const onLeave = renderGameScreen(vi.fn(), vi.fn(), "spectator");
+    const ws = MockWebSocket.instances[0];
+    act(() => {
+      ws.open();
+      ws.receive(makeSpectatorState());
+    });
+    expect(screen.getByText("你正在旁观。")).toBeInTheDocument();
+    act(() => {
+      ws.receive({ type: "error", code: "spectator.became-player", message: "当前账号已作为玩家进入房间，本旁观连接已停止。", details: {} });
+      ws.drop();
+    });
+    expect(screen.getByRole("heading", { name: "旁观已停止" })).toBeInTheDocument();
+    expect(screen.getByText("当前账号已作为玩家进入房间，本旁观连接已停止。")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(120_000);
+    });
+    // 停止是终止性的：不得再以旁观身份重连。
+    expect(MockWebSocket.instances).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "返回大厅" }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,8 +5,11 @@ import { actionToCommand } from "./types";
 import { useDeadlineSeconds } from "./useDeadlineSeconds";
 
 type Send = (command: string, payload?: Record<string, unknown>) => void;
-const NO_BLOCK_KEY = "bloodbound:no-block";
-const NO_ASSIST_KEY = "bloodbound:no-assist";
+// 账号作用域键（工单 18）：偏好仍是本设备状态，但按账号隔离——键含稳定
+// 账号引用（accountId）。旧的无账号全局键（bloodbound:no-block 等）不读取、
+// 不迁移，新账号一律从默认值开始。
+const noBlockKey = (accountId: string) => `bloodbound:account:${accountId}:no-block`;
+const noAssistKey = (accountId: string) => `bloodbound:account:${accountId}:no-assist`;
 const INTERVENTION_ACTIONS = new Set([
   "answer-intervention-request", "respond-intervention", "choose-intervention", "decline-intervention",
 ]);
@@ -96,14 +99,25 @@ function InterventionPrompt({ view, game, events, serverTime, noAssist, noBlock,
  * 实时干涉入口。必须在房间页面所有条件 return 之前调用，保证偏好与代发
  * 去重记录随页面存活，而不是随请求、投票弹窗的挂载重置。
  * 命令可靠发送仍由 useGameSocket 负责；本模块不维护另一份重试队列。
+ * 偏好按账号隔离（工单 18）：调用方（GameScreen）以 accountId 为 key 强制
+ * 重挂载；accountId 变化时这里同步重读偏好并清空代发去重键，确保 A 的
+ * 偏好永不驱动 B 的自动命令。
  */
-export function useIntervention({ game, events = [], serverTime, send }: {
-  game: GameState | null | undefined; events?: GameEvent[]; serverTime: number | undefined; send: Send;
+export function useIntervention({ accountId, game, events = [], serverTime, send }: {
+  accountId: string; game: GameState | null | undefined; events?: GameEvent[]; serverTime: number | undefined; send: Send;
 }) {
-  const [noBlock, setNoBlock] = useState(() => localStorage.getItem(NO_BLOCK_KEY) === "1");
-  const [noAssist, setNoAssist] = useState(() => localStorage.getItem(NO_ASSIST_KEY) === "1");
+  const [noBlock, setNoBlock] = useState(() => localStorage.getItem(noBlockKey(accountId)) === "1");
+  const [noAssist, setNoAssist] = useState(() => localStorage.getItem(noAssistKey(accountId)) === "1");
   const lastAutoPollKey = useRef<string | null>(null);
   const lastAutoGateKey = useRef<string | null>(null);
+  // 防御性身份边界：App 层重挂载已保证账号切换重建状态；万一发生同挂载
+  // accountId 变化，这里立刻丢弃旧账号偏好与去重记录，不让旧偏好代发新账号命令。
+  useEffect(() => {
+    setNoBlock(localStorage.getItem(noBlockKey(accountId)) === "1");
+    setNoAssist(localStorage.getItem(noAssistKey(accountId)) === "1");
+    lastAutoPollKey.current = null;
+    lastAutoGateKey.current = null;
+  }, [accountId]);
   const view = describeWindow(game?.pending ?? null, game?.players ?? []);
   const respondAction = game?.legalActions.find((a) => a.type === "respond-intervention");
   const answerAction = game?.legalActions.find((a) => a.type === "answer-intervention-request");
@@ -127,8 +141,8 @@ export function useIntervention({ game, events = [], serverTime, send }: {
   const nameOf = (id: string | undefined) => game?.players.find((p) => p.playerId === id)?.displayName ?? "?";
   return {
     preferences: <>
-      <label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => { setNoBlock(e.target.checked); localStorage.setItem(NO_BLOCK_KEY, e.target.checked ? "1" : "0"); }} />默认不挡刀</label>
-      <label className="pref-toggle" title="开启后被攻击时不再弹出挡刀请求确认，自动视为不需要他人挡刀"><input type="checkbox" checked={noAssist} onChange={(e) => { setNoAssist(e.target.checked); localStorage.setItem(NO_ASSIST_KEY, e.target.checked ? "1" : "0"); }} />默认不让他人挡刀</label>
+      <label className="pref-toggle" title="开启后不再弹出挡刀确认，自动视为不干涉"><input type="checkbox" checked={noBlock} onChange={(e) => { setNoBlock(e.target.checked); try { localStorage.setItem(noBlockKey(accountId), e.target.checked ? "1" : "0"); } catch { /* 存储不可用：仅本次会话生效 */ } }} />默认不挡刀</label>
+      <label className="pref-toggle" title="开启后被攻击时不再弹出挡刀请求确认，自动视为不需要他人挡刀"><input type="checkbox" checked={noAssist} onChange={(e) => { setNoAssist(e.target.checked); try { localStorage.setItem(noAssistKey(accountId), e.target.checked ? "1" : "0"); } catch { /* 存储不可用：仅本次会话生效 */ } }} />默认不让他人挡刀</label>
     </>,
     prompt: game && view ? <InterventionPrompt view={view} game={game} events={events} serverTime={serverTime} noAssist={noAssist} noBlock={noBlock} send={send} /> : null,
     choiceActions: <>
